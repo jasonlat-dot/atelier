@@ -3,13 +3,42 @@
   "private": true,
   "version": "0.3.0",
   "type": "module",
-  "scripts": {"dev":"vite --host 127.0.0.1","build":"tsc -b && vite build","preview":"vite preview --host 127.0.0.1","typecheck":"tsc --noEmit"},
-  "dependencies": {
-    "@xyflow/react":"^12.10.0",
-    "lucide-react":"^0.468.0",
-    "react":"^18.3.1",
-    "react-dom":"^18.3.1",
-    "react-router-dom":"^6.30.0"
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "typecheck": "tsc --noEmit",
+    "build:mock": "tsc --noEmit && vite build --mode mock-preview",
+    "lint": "eslint .",
+    "format": "prettier --write src vite.config.ts playwright.config.ts tests package.json tsconfig.json eslint.config.js",
+    "format:check": "prettier --check src vite.config.ts playwright.config.ts tests package.json tsconfig.json eslint.config.js",
+    "test:mock": "node ../../tests/verify_source.cjs",
+    "test:e2e": "playwright test",
+    "api:generate": "openapi-typescript ../../docs/openapi.json -o src/lib/generated/api.d.ts"
   },
-  "devDependencies": {"@types/node":"^22.10.0","@types/react":"^18.3.18","@types/react-dom":"^18.3.5","@vitejs/plugin-react":"^4.3.4","typescript":"~5.7.3","vite":"^6.0.5"}
+  "dependencies": {
+    "@xyflow/react": "^12.10.0",
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^7.18.4"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@playwright/test": "^1.64.1",
+    "@types/node": "^22.10.0",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "eslint": "^9.39.5",
+    "openapi-typescript": "^7.13.0",
+    "prettier": "^3.9.10",
+    "typescript": "~5.7.3",
+    "typescript-eslint": "^8.72.0",
+    "vite": "^6.0.5"
+  },
+  "engines": {
+    "node": ">=22.13.0",
+    "npm": ">=10"
+  }
 }

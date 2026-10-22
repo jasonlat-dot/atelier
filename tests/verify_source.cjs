@@ -1,4 +1,4 @@
-const ts=require('/opt/nvm/versions/node/v22.16.0/lib/node_modules/typescript');
+const ts=require(require.resolve('typescript', {paths:[require('node:path').join(__dirname,'../apps/web')]}));
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const web=path.join(__dirname,'../apps/web/src');
 let files=[];function walk(dir){for(const f of fs.readdirSync(dir)){const x=path.join(dir,f);if(fs.statSync(x).isDirectory())walk(x);else if(/\.tsx?$/.test(x) && !x.endsWith('.d.ts'))files.push(x);}}walk(web);
@@ -12,3 +12,14 @@ const rev=first.revision;const saved=m.saveGraph(first.id,first.graph,rev);check
 m.switchUser('admin-demo');check(!m.userProjects().some(p=>p.id===first.id),'isolate projects');let foreign=false;try{m.createJob(base,'other');}catch{foreign=true;}check(foreign,'forbid foreign project');m.addCredits('user-demo',125);check(m.snapshot().users.find(u=>u.id==='user-demo').credits===balance+125,'admin credits');
 m.switchUser('user-demo');let deny=false;try{m.addCredits('user-demo',1000);}catch{deny=true;}check(deny,'deny user admin operation');
 console.log('Mock transaction / idempotency / refund / version conflict / isolation tests passed');
+
+// M0 keeps the original Mock contract, not production financial guarantees.
+m.resetDemo();
+const initial=m.currentUser().credits;
+check(m.checkIn()===true,'first mock checkin');
+check(m.checkIn()===false,'repeat mock checkin');
+check(m.currentUser().credits===initial+20,'mock checkin grants once');
+for(const operation of [()=>m.addCredits('user-demo',1),()=>m.toggleUser('admin-demo'),()=>m.toggleModel('image-demo')]){let rejected=false;try{operation();}catch{rejected=true;}check(rejected,'ordinary user cannot perform mock admin mutation');}
+m.switchUser('admin-demo');
+for(const delta of [NaN,Infinity,100001,-100001]){let rejected=false;try{m.addCredits('user-demo',delta);}catch{rejected=true;}check(rejected,'invalid mock adjustment');}
+console.log('Mock checkin and admin permission regressions passed');

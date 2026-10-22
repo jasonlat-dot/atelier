@@ -1,0 +1,41 @@
+name: Atelier checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - run: npm ci
+        working-directory: apps/web
+      - run: cargo fmt --all --check
+        working-directory: services/api
+      - run: cargo clippy --locked --workspace --all-targets -- -D warnings
+        working-directory: services/api
+      - run: cargo test --locked --workspace
+        working-directory: services/api
+      - run: cargo check --locked --workspace
+        working-directory: services/api
+      - run: npm run typecheck && npm run lint && npm run format:check && npm run test:mock && npm run build
+        working-directory: apps/web
+      - run: python scripts/check_contract.py
+      - run: node --test tests/baseline.test.cjs
+      - run: npx playwright install --with-deps chromium
+        working-directory: apps/web
+      - run: npm run test:e2e
+        working-directory: apps/web
+      - run: cargo install cargo-audit --locked
+      - run: cargo audit
+        working-directory: services/api
+      # Keep the complete report, including moderate findings, in CI logs.
+      - run: npm audit
+        working-directory: apps/web

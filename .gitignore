@@ -7,3 +7,9 @@ target/
 .DS_Store
 .idea/
 .vscode/
+
+dist-mock/
+.tools/
+playwright-report/
+test-results/
+*.tsbuildinfo

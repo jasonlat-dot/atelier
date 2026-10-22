@@ -1,0 +1,11 @@
+[package]
+name = "atelier-auth"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+atelier-common.workspace = true

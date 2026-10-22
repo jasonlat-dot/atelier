@@ -1,4 +1,208 @@
-import{useState,useRef,useEffect}from'react';import{ArrowUp,Plus,Ellipsis,PanelRightClose,Paperclip,MessageSquare,CornerDownRight,Sparkles}from'lucide-react';
-type Message={id:string;role:'user'|'assistant';body:string;timestamp:string};
-const initial:Message[]=[{id:'a',role:'assistant',body:'你好！我可以帮你整理创作思路、规划图像和视频镜头，也可以把提示词转为画布工作流。',timestamp:'10:12'}];
-export default function ChatPage(){const [threads,setThreads]=useState<Record<string,Message[]>>({'创作方案讨论':initial});const [thread,setThread]=useState('创作方案讨论');const [input,setInput]=useState('');const [loading,setLoading]=useState(false);const bottom=useRef<HTMLDivElement>(null);const msgs=threads[thread]||[];useEffect(()=>bottom.current?.scrollIntoView({behavior:'smooth'}),[msgs.length]);const send=()=>{const text=input.trim();if(!text||loading)return;const current:Message={id:crypto.randomUUID(),role:'user',body:text,timestamp:new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})};setThreads(t=>({...t,[thread]:[...(t[thread]||[]),current]}));setInput('');setLoading(true);window.setTimeout(()=>{const isVideo=/视频|镜头|运镜|短片/.test(text);const isImage=/图片|海报|生图|画面/.test(text);const reply=isVideo?'识别到视频创作意图。建议先建立参考帧节点，再连接视频生成配置节点，设置 16:9、720p 和 6 秒时长。你可以在无限画布中开始编排。':isImage?'识别到图像创作意图。建议先明确主体、光线、构图和风格，再选择画质、比例与参考图；在画布中可继续生成变体。':'我可以继续帮你拆解需求。你可以说明目标用户、画面风格、交付形式，随后将计划转入无限画布。';setThreads(t=>({...t,[thread]:[...(t[thread]||[]),{id:crypto.randomUUID(),role:'assistant',body:reply,timestamp:new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})}]}));setLoading(false);},850);};return <div className="chat-layout"><aside className="thread-sidebar"><div className="mini-head"><strong>历史对话</strong><button className="icon-btn" onClick={()=>{const id=`新会话 ${Object.keys(threads).length}`;setThreads(t=>({...t,[id]:[]}));setThread(id);}} aria-label="创建对话"><Plus size={17}/></button></div><div className="thread-list">{Object.keys(threads).map(name=><button key={name} className={thread===name?'selected':''} onClick={()=>setThread(name)}><MessageSquare size={15}/><span>{name}</span></button>)}</div></aside><section className="conversation"><div className="chat-header"><div><strong>{thread}</strong><p>智能意图识别 · 上下文摘要 · 模拟会话</p></div><button className="btn btn-light"><PanelRightClose size={15}/> 智能上下文</button></div><div className="chat-messages">{msgs.map(m=><div key={m.id} className={`chat-msg ${m.role}`}><div className="message-avatar">{m.role==='assistant'?<Sparkles size={16}/>:<span>我</span>}</div><div><div className="message-bubble">{m.body}</div><small>{m.role==='assistant'?'Atelier AI':'你'} · {m.timestamp}</small></div></div>)}{loading&&<div className="chat-msg assistant"><div className="message-avatar"><Sparkles size={16}/></div><div className="message-bubble">正在整理创作建议…</div></div>}<div ref={bottom}/></div><div className="composer"><textarea placeholder="描述你的创意，或让 AI 帮你整理工作流…" value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();send();}}}/><div className="composer-actions"><span><Paperclip size={16}/> Atlas Chat · Ctrl + Enter 发送</span><button className="btn btn-dark" onClick={send} disabled={!input.trim()||loading}><ArrowUp size={15}/> 发送</button></div></div></section><aside className="context-sidebar"><div className="mini-head"><strong>智能上下文</strong><Ellipsis size={18}/></div><div className="context-card"><div className="context-icon"><CornerDownRight size={15}/></div><strong>意图识别</strong><p>识别对话中的创作目标，自动建议画布中的生成路径。</p><span>自动</span></div><div className="context-card"><strong>上下文窗口</strong><p>演示 6.2k / 32k tokens</p><div className="meter"><i style={{width:'19%'}}/></div></div><div className="context-card"><strong>Agent 能力</strong><p>✓ 意图识别<br/>✓ 对话历史摘要<br/>✓ 图片与视频创作规划</p></div><small className="empty-caption">此处为 UI Mock，尚未连接你的 Rust Agent 或真实模型接口。</small></aside></div>}
+import { useState, useRef, useEffect } from 'react';
+import {
+  ArrowUp,
+  Plus,
+  Ellipsis,
+  PanelRightClose,
+  Paperclip,
+  MessageSquare,
+  CornerDownRight,
+  Sparkles,
+} from 'lucide-react';
+type Message = {
+  id: string;
+  role: 'user' | 'assistant';
+  body: string;
+  timestamp: string;
+};
+const initial: Message[] = [
+  {
+    id: 'a',
+    role: 'assistant',
+    body: '你好！我可以帮你整理创作思路、规划图像和视频镜头，也可以把提示词转为画布工作流。',
+    timestamp: '10:12',
+  },
+];
+export default function ChatPage() {
+  const [threads, setThreads] = useState<Record<string, Message[]>>({
+    创作方案讨论: initial,
+  });
+  const [thread, setThread] = useState('创作方案讨论');
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const bottom = useRef<HTMLDivElement>(null);
+  const msgs = threads[thread] || [];
+  useEffect(
+    () => bottom.current?.scrollIntoView({ behavior: 'smooth' }),
+    [msgs.length],
+  );
+  const send = () => {
+    const text = input.trim();
+    if (!text || loading) return;
+    const current: Message = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      body: text,
+      timestamp: new Date().toLocaleTimeString('zh-CN', {
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+    };
+    setThreads((t) => ({ ...t, [thread]: [...(t[thread] || []), current] }));
+    setInput('');
+    setLoading(true);
+    window.setTimeout(() => {
+      const isVideo = /视频|镜头|运镜|短片/.test(text);
+      const isImage = /图片|海报|生图|画面/.test(text);
+      const reply = isVideo
+        ? '识别到视频创作意图。建议先建立参考帧节点，再连接视频生成配置节点，设置 16:9、720p 和 6 秒时长。你可以在无限画布中开始编排。'
+        : isImage
+          ? '识别到图像创作意图。建议先明确主体、光线、构图和风格，再选择画质、比例与参考图；在画布中可继续生成变体。'
+          : '我可以继续帮你拆解需求。你可以说明目标用户、画面风格、交付形式，随后将计划转入无限画布。';
+      setThreads((t) => ({
+        ...t,
+        [thread]: [
+          ...(t[thread] || []),
+          {
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            body: reply,
+            timestamp: new Date().toLocaleTimeString('zh-CN', {
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
+          },
+        ],
+      }));
+      setLoading(false);
+    }, 850);
+  };
+  return (
+    <div className="chat-layout">
+      <aside className="thread-sidebar">
+        <div className="mini-head">
+          <strong>历史对话</strong>
+          <button
+            className="icon-btn"
+            onClick={() => {
+              const id = `新会话 ${Object.keys(threads).length}`;
+              setThreads((t) => ({ ...t, [id]: [] }));
+              setThread(id);
+            }}
+            aria-label="创建对话"
+          >
+            <Plus size={17} />
+          </button>
+        </div>
+        <div className="thread-list">
+          {Object.keys(threads).map((name) => (
+            <button
+              key={name}
+              className={thread === name ? 'selected' : ''}
+              onClick={() => setThread(name)}
+            >
+              <MessageSquare size={15} />
+              <span>{name}</span>
+            </button>
+          ))}
+        </div>
+      </aside>
+      <section className="conversation">
+        <div className="chat-header">
+          <div>
+            <strong>{thread}</strong>
+            <p>智能意图识别 · 上下文摘要 · 模拟会话</p>
+          </div>
+          <button className="btn btn-light">
+            <PanelRightClose size={15} /> 智能上下文
+          </button>
+        </div>
+        <div className="chat-messages">
+          {msgs.map((m) => (
+            <div key={m.id} className={`chat-msg ${m.role}`}>
+              <div className="message-avatar">
+                {m.role === 'assistant' ? (
+                  <Sparkles size={16} />
+                ) : (
+                  <span>我</span>
+                )}
+              </div>
+              <div>
+                <div className="message-bubble">{m.body}</div>
+                <small>
+                  {m.role === 'assistant' ? 'Atelier AI' : '你'} · {m.timestamp}
+                </small>
+              </div>
+            </div>
+          ))}
+          {loading && (
+            <div className="chat-msg assistant">
+              <div className="message-avatar">
+                <Sparkles size={16} />
+              </div>
+              <div className="message-bubble">正在整理创作建议…</div>
+            </div>
+          )}
+          <div ref={bottom} />
+        </div>
+        <div className="composer">
+          <textarea
+            placeholder="描述你的创意，或让 AI 帮你整理工作流…"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                send();
+              }
+            }}
+          />
+          <div className="composer-actions">
+            <span>
+              <Paperclip size={16} /> Atlas Chat · Ctrl + Enter 发送
+            </span>
+            <button
+              className="btn btn-dark"
+              onClick={send}
+              disabled={!input.trim() || loading}
+            >
+              <ArrowUp size={15} /> 发送
+            </button>
+          </div>
+        </div>
+      </section>
+      <aside className="context-sidebar">
+        <div className="mini-head">
+          <strong>智能上下文</strong>
+          <Ellipsis size={18} />
+        </div>
+        <div className="context-card">
+          <div className="context-icon">
+            <CornerDownRight size={15} />
+          </div>
+          <strong>意图识别</strong>
+          <p>识别对话中的创作目标，自动建议画布中的生成路径。</p>
+          <span>自动</span>
+        </div>
+        <div className="context-card">
+          <strong>上下文窗口</strong>
+          <p>演示 6.2k / 32k tokens</p>
+          <div className="meter">
+            <i style={{ width: '19%' }} />
+          </div>
+        </div>
+        <div className="context-card">
+          <strong>Agent 能力</strong>
+          <p>
+            ✓ 意图识别
+            <br />✓ 对话历史摘要
+            <br />✓ 图片与视频创作规划
+          </p>
+        </div>
+        <small className="empty-caption">
+          此处为 UI Mock，尚未连接你的 Rust Agent 或真实模型接口。
+        </small>
+      </aside>
+    </div>
+  );
+}
