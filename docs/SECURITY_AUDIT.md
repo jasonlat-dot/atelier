@@ -1,33 +1,32 @@
 # 依赖审计记录 · 2026-10-22
 
-当前结论：RUSTSEC-2023-0071 对项目的影响已通过移除漏洞依赖解决。当前锁文件没有 rsa 或 openidconnect；本地 cargo audit 0 漏洞、0 警告、退出码 0，npm audit 0 漏洞。未使用任何公告豁免。完整 M1 登录功能与第 8 章安全清单仍未完成。
+当前结论：项目已移除触发 RUSTSEC-2023-0071 的 rsa 依赖，当前完整锁文件没有 rsa 或 openidconnect。M1 最终源码 `1683788` 的 [CI #6](https://github.com/jasonlat-dot/atelier/actions/runs/39759708282) 全部通过，cargo audit 与 npm audit 均为 0 漏洞，未设置公告豁免。M1 认证自动化验收已完成；实际 Google 部署回归和 M10 全量上线安全验收尚待完成。
 
-## 原因与处理
+## 原因与处理历史
 
-旧提交 32691c3 的路径为 rsa ← sqlx-mysql ← sqlx/sqlx-macros-core；e788463 又通过 openidconnect 4.0.1 引入 rsa。旧版本均命中 [RUSTSEC-2023-0071](https://rustsec.org/advisories/RUSTSEC-2023-0071.html)，CVSS 5.9。官方无已修复的 rsa 版本，故不采用降级或审计豁免。
+旧提交 `32691c3` 的路径为 rsa ← sqlx-mysql ← sqlx/sqlx-macros-core；`e788463` 又通过 openidconnect 4.0.1 引入 rsa。两者均命中 [RUSTSEC-2023-0071](https://rustsec.org/advisories/RUSTSEC-2023-0071.html)，CVSS 5.9。处理时没有可升级修复的 rsa 版本，因此消除全部依赖路径，不降级或豁免。
 
-本次变更：
+1. `71f138f` 将 SQLx 0.8.6 升为 0.9.0，只启用项目所需 PostgreSQL/Tokio/rustls-ring 等功能。新版 MySQL RSA 功能拆为可选，正常生成的锁文件不再包含 rsa。
+2. 移除 openidconnect，使用 oauth2 5.0.0 构造授权 URL/state/S256 PKCE，nonce 独立随机生成。当时尚未接通登录；随后 M1 完成了 ring 的 Google RS256 公钥验签、声明校验、注册事务和 Session 签发。
+3. `tests/baseline.test.cjs` 先增加锁文件无 rsa 的失败断言，依赖替换后通过，阻止漏洞库回流。
 
-1. SQLx 0.8.6 → 0.9.0，使用 PostgreSQL/Tokio/rustls-ring；新版本 MySQL 的 RSA 功能已拆分为可选，当前锁文件中的 sqlx-mysql 不再依赖 rsa。
-2. 移除 openidconnect，现有授权准备改用 oauth2 5.0.0 处理 URL/state/PKCE；nonce 为独立 32 字节随机值。该组件尚未实现 token 验证或发放 Session，仍未开放登录。
-3. `tests/baseline.test.cjs` 增加锁文件回归检查，修改前实际失败，完成替换后通过，阻止 rsa 重新进入依赖。
+移除的是有漏洞的 Rust rsa 库，RSA 签名算法仍由 ring 实现的 RS256 公钥验证使用；没有省略 Google 签名验证。这不是修复 rsa 上游，也不改写旧提交历史。
 
-这是移除有漏洞的库，不是宣称修复了 rsa 上游实现。正常提交保留历史，历史锁文件中的告警记录不改写。
+## 审计证据
 
-## 本地审计证据
-
-工具位于忽略目录 `.tools/cargo/bin`；公告库从官方 RustSec 仓库经现有本机代理克隆至 `.tools/advisory-db`。cargo-audit 直接拉取曾因网络失败，对本日新鲜官方库执行：
+本地工具位于忽略目录 `.tools/cargo/bin`；官方 RustSec 公告库经现有本机代理克隆到 `.tools/advisory-db`。直接拉取曾网络失败，改为对本日新鲜的官方库执行审计，未禁用漏洞匹配：
 
 ```powershell
 .tools/cargo/bin/cargo-audit.exe audit --file services/api/Cargo.lock --db .tools/advisory-db --no-fetch --json
 ```
 
-实际报告：1348 条公告，270 个锁文件依赖，`vulnerabilities.count = 0`、`warnings = {}`、退出码 0。此前 e788463 的同一命令扫描 346 个依赖，1 个 rsa 漏洞，退出码 1。两次使用同一官方公告库，检查规则未放宽。
+- 旧 `e788463`：扫描 346 个依赖，1 个 rsa 漏洞，退出码 1。
+- 移除漏洞路径后 `71f138f`：扫描 270 个依赖，0 漏洞、0 警告，退出码 0。
+- M1 登录/TOTP 完成后：扫描 282 个依赖、1348 条官方公告，`vulnerabilities.count = 0`、`warnings = {}`、退出码 0；npm audit 为 0 漏洞。新增 ring、totp-rs 6、chacha20poly1305 0.11、reqwest 未重新引入 rsa。
+- 最终 CI #6 同时通过完整 cargo audit 与 npm audit；Rust 审计失败不会阻止 JavaScript 审计执行，任一失败仍使作业失败。
 
-锁文件使用 Cargo 正常解析生成；对其结构化解析确认 rsa/openidconnect 包不存在，sqlx=0.9.0、oauth2=5.0.0。CI 仍运行完整 cargo audit 与 npm audit。
+Cargo 正常解析生成锁文件，未手删传递依赖；没有 ignore、continue-on-error 或降低审计阈值。
 
 ## 验证边界
 
-真实 PostgreSQL/Redis 测试按用户要求在本机跳过，由 CI 隔离服务执行，结果另见 PROGRESS.md。用户此前截图中 identity-schema 成功只适用于旧提交，不能代替新版本真实实例验证。未据本地审计通过宣称整条远端 CI 已绿。
-
-M1 登录/TOTP 增量后再次审计：完整锁文件 282 个依赖，1348 条官方公告，cargo audit 退出码 0、无漏洞；npm audit 0。新增 ring、totp-rs 6、chacha20poly1305 0.11 与 reqwest；未重新引入 rsa。
+CI 的 11 项真实 PostgreSQL/Redis 回归与 2 项认证浏览器测试均通过，详见 `PROGRESS.md`。本机按要求不安装/启动基础服务。实际 Google 实账号与负责人目标环境见 `M1_VALIDATION.md`；依赖审计通过不代表 M10 全量生产安全清单已完成。

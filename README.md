@@ -2,7 +2,7 @@
 
 按根目录《Atelier AI 创作平台 · 产品与工程开发规格书（AI 开发版）》逐里程碑开发。
 当前状态以 [docs/PROGRESS.md](docs/PROGRESS.md) 为准；假设见 [docs/DECISIONS.md](docs/DECISIONS.md)。
-原始原型保存在提交 `c3384c5`，已完成 M0 基线整理（`b3cc451`），M1 的 Google 登录、注册控制、会话/权限守卫、账号设置与管理员 TOTP 已接线，当前完整验收状态见进度文档；本轮 M1 完成后停止。
+原始原型保存在提交 `c3384c5`。M0 基线与 M1 认证权限已完成自动化验收；Google 登录、注册控制、会话/权限守卫、账号设置与管理员 TOTP 的 [CI 全部通过](https://github.com/jasonlat-dot/atelier/actions/runs/39759708282)。按要求停在 M1，不进入 M2；实际部署与 Google 实账号回归见 [docs/M1_VALIDATION.md](docs/M1_VALIDATION.md)。
 
 ## 本地 Mock UI
 
