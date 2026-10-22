@@ -1,7 +1,75 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { Check, QrCode } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { sessionApi, SessionError, type Me } from './sessionApi';
 import './MfaPage.css';
+
+function VerificationCode({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  const [cursor, setCursor] = useState(0);
+  return (
+    <>
+      <label className="mfa-code-label" htmlFor="mfa-code">
+        六位验证码
+      </label>
+      <div className="mfa-code-entry">
+        <input
+          ref={input}
+          id="mfa-code"
+          className="mfa-code-input"
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          pattern="[0-9]{6}"
+          value={value}
+          disabled={disabled}
+          onChange={(event) =>
+            onChange(event.target.value.replace(/[^0-9]/g, '').slice(0, 6))
+          }
+          onSelect={(event) =>
+            setCursor(event.currentTarget.selectionStart ?? 0)
+          }
+          onPointerDown={(event) => {
+            if (disabled) return;
+            event.preventDefault();
+            const bounds = event.currentTarget.getBoundingClientRect();
+            const index = Math.min(
+              value.length,
+              5,
+              Math.floor((event.clientX - bounds.left) / (bounds.width / 6)),
+            );
+            input.current?.focus();
+            input.current?.setSelectionRange(index, index);
+            setCursor(index);
+          }}
+          aria-describedby="mfa-code-help"
+          required
+        />
+        <div className="mfa-code-cells" aria-hidden="true">
+          {Array.from({ length: 6 }, (_, index) => (
+            <span
+              key={index}
+              className={
+                index === Math.min(cursor, 5)
+                  ? 'mfa-digit mfa-digit-current'
+                  : 'mfa-digit'
+              }
+            >
+              {value[index] || ''}
+            </span>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
 
 export default function MfaPage({
   me,
@@ -41,15 +109,67 @@ export default function MfaPage({
       );
   };
   const secret = uri ? new URL(uri).searchParams.get('secret') || '' : '';
+  const ready = me.user.mfa_enabled || Boolean(uri);
+  const verificationForm = (
+    <form
+      className="mfa-form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (busy || !ready || code.length !== 6) return;
+        setBusy(true);
+        setError('');
+        void sessionApi
+          .mfaVerify(code, me.csrf_token)
+          .then(() => {
+            setUri('');
+            setCode('');
+            setCopyMessage('');
+            onVerified();
+          })
+          .catch((reason: unknown) => fail(reason, 'verify'))
+          .finally(() => setBusy(false));
+      }}
+    >
+      <VerificationCode
+        value={code}
+        disabled={!ready || busy}
+        onChange={setCode}
+      />
+      {ready && (
+        <p id="mfa-code-help" className="mfa-help">
+          验证码每 30
+          秒更新，请使用手机验证器中的最新数字，不是邮箱或短信验证码。
+        </p>
+      )}
+      {!ready && (
+        <p id="mfa-code-help" className="mfa-code-label">
+          请先点击绑定验证器，再输入手机生成的验证码。
+        </p>
+      )}
+      <button
+        className="btn btn-dark mfa-verify-button"
+        type="submit"
+        disabled={busy || !ready || code.length !== 6}
+      >
+        {busy ? '正在验证…' : '验证并继续'}
+      </button>
+    </form>
+  );
   return (
     <main className="signin-screen mfa-screen">
       <section className="signin-card mfa-card" aria-labelledby="mfa-title">
-        <div className="mfa-eyebrow">ATELIER · 账号安全</div>
+        <div className="mfa-heading-row">
+          <div className="mfa-eyebrow">ATELIER · 账号安全</div>
+          <span className="mfa-login-complete">
+            <Check size={14} aria-hidden="true" />
+            Google 登录已完成
+          </span>
+        </div>
         <h1 id="mfa-title">管理员身份验证</h1>
         <p className="mfa-intro">
           {me.user.mfa_enabled
             ? '打开手机验证器，找到 Atelier 账号，输入当前显示的六位验证码。'
-            : 'Google 登录已完成。你的账号拥有管理员权限，请绑定手机验证器后继续。'}
+            : '你的账号拥有管理员权限，请绑定手机验证器后继续。'}
         </p>
         {error && (
           <p className="mfa-error" role="alert">
@@ -101,6 +221,7 @@ export default function MfaPage({
                       .finally(() => setBusy(false));
                   }}
                 >
+                  <QrCode size={18} aria-hidden="true" />
                   {busy ? '正在生成二维码…' : '绑定验证器'}
                 </button>
               )}
@@ -186,58 +307,11 @@ export default function MfaPage({
                 添加成功后，将手机 App 中 Atelier
                 对应的六位数字填入下方，点击「验证并继续」。
               </p>
+              {verificationForm}
             </li>
           </ol>
         )}
-        {(me.user.mfa_enabled || uri) && (
-          <form
-            className="mfa-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (busy) return;
-              setBusy(true);
-              setError('');
-              void sessionApi
-                .mfaVerify(code, me.csrf_token)
-                .then(() => {
-                  setUri('');
-                  setCode('');
-                  setCopyMessage('');
-                  onVerified();
-                })
-                .catch((reason: unknown) => fail(reason, 'verify'))
-                .finally(() => setBusy(false));
-            }}
-          >
-            <label>
-              六位验证码
-              <input
-                className="input mfa-code"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                pattern="[0-9]{6}"
-                maxLength={6}
-                value={code}
-                onChange={(event) =>
-                  setCode(event.target.value.replace(/[^0-9]/g, '').slice(0, 6))
-                }
-                aria-describedby="mfa-code-help"
-                required
-              />
-            </label>
-            <p id="mfa-code-help" className="mfa-help">
-              验证码每 30
-              秒更新，请使用手机验证器中的最新数字，不是邮箱或短信验证码。
-            </p>
-            <button
-              className="btn btn-dark"
-              type="submit"
-              disabled={busy || code.length !== 6}
-            >
-              {busy ? '正在验证…' : '验证并继续'}
-            </button>
-          </form>
-        )}
+        {me.user.mfa_enabled && verificationForm}
         <div className="mfa-footer">
           <span>绑定后请保留手机验证器，后续管理员验证仍需使用。</span>
           <button

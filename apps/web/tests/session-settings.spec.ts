@@ -204,6 +204,11 @@ test('administrator enrolls MFA through CSRF protected endpoints and returns to 
     page.getByRole('list', { name: '验证器绑定步骤' }),
   ).toBeVisible();
   await expect(page.getByRole('link', { name: '查看安装说明' })).toBeVisible();
+  await expect(
+    page.getByText('Google 登录已完成', { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByLabel('六位验证码')).toBeDisabled();
+  await expect(page.getByRole('button', { name: '验证并继续' })).toBeDisabled();
   page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: '绑定验证器' }).click();
   const qr = page.getByRole('img', { name: 'Atelier 验证器绑定二维码' });
@@ -216,7 +221,24 @@ test('administrator enrolls MFA through CSRF protected endpoints and returns to 
   await page.getByRole('button', { name: '返回二维码绑定' }).click();
   await expect(qr).toBeVisible();
   await expect(page.getByLabel('验证器密钥')).toHaveCount(0);
-  await page.getByLabel('六位验证码').fill('123456');
+  const codeInput = page.getByLabel('六位验证码');
+  await codeInput.focus();
+  await codeInput.pressSequentially('12a3456');
+  await expect(codeInput).toHaveValue('123456');
+  await expect(page.locator('.mfa-digit')).toHaveText([
+    '1',
+    '2',
+    '3',
+    '4',
+    '5',
+    '6',
+  ]);
+  await codeInput.press('ArrowLeft');
+  await codeInput.press('Backspace');
+  await expect(codeInput).toHaveValue('12346');
+  await expect(page.getByRole('button', { name: '验证并继续' })).toBeDisabled();
+  await codeInput.press('5');
+  await expect(codeInput).toHaveValue('123456');
   await page.getByRole('button', { name: '验证并继续' }).click();
   await expect(page.getByRole('heading', { name: '账号设置' })).toBeVisible();
 });
