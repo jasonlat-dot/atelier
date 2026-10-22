@@ -8,6 +8,15 @@
 
 已接入 PostgreSQL 16（127.0.0.1:15432）、Redis 7（127.0.0.1:16380）。独立业务库 atelier 已应用 M0–M2 迁移；测试库 atelier_test 及 CREATEDB 测试角色独立。连接配置在 Git 忽略的 services/api/.env 与 .env.test.local，禁止提交凭据。
 
+真实开发模式可在仓库根目录用一个终端启动前后端：
+
+```powershell
+cd E:\project\AIShellTerminal\atelier
+npm run dev
+```
+
+打开 http://127.0.0.1:5173 。脚本自动加载后端 `.env`，前端强制 HTTP 模式；Ctrl+C 同时停止两端。首次需先运行 `npm --prefix apps/web ci` 安装前端依赖，并配置后端凭据。若之前已分别启动服务，先在原终端 Ctrl+C 退出。需要单独启动时，根目录提供 `npm run dev:api` / `npm run dev:web`。该入口不需要在根目录安装额外依赖。
+
 ```powershell
 ./scripts/api.ps1 -Action infrastructure
 ./scripts/api.ps1 -Action test-infrastructure

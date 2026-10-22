@@ -17,6 +17,7 @@ jobs:
           components: rustfmt, clippy
       - run: npm ci
         working-directory: apps/web
+      - run: node --check scripts/dev.mjs
       - run: cargo fmt --all --check
         working-directory: services/api
       - run: cargo clippy --locked --workspace --all-targets -- -D warnings

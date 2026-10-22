@@ -1,0 +1,14 @@
+{
+  "name": "atelier",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:api": "node scripts/dev.mjs api",
+    "dev:web": "node scripts/dev.mjs web"
+  },
+  "engines": {
+    "node": ">=22.13.0",
+    "npm": ">=10"
+  }
+}

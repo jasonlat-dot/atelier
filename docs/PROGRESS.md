@@ -83,3 +83,9 @@ M1 历史交付未打包、未部署。条款仍是开发占位，正式法律�
 - [x] **远端 Actions**：功能源码 `19d3ef279b54dbb691163e397b796639c0c00f59` 的 [运行 #39772855488](https://github.com/jasonlat-dot/atelier/actions/runs/39772855488) 已确认 completed/success；`baseline` 与 `identity-schema` 均成功，包含完整 Rust/前端/契约/浏览器/安全审计、18 项真实基础设施回归与认证签到浏览器验收。
 
 详见 PR_M2.md。Google 实账号、生产打包部署、M3 素材和 M8 支付不在本次完成声明中。
+
+## M2 · 本地真实开发启动入口
+
+- 用户希望一个终端启动两端：根目录新增 package.json / package-lock.json 和 scripts/dev.mjs，`npm run dev` 启动真实 API + Vite，`dev:api` / `dev:web` 可单独运行。不新增第三方依赖。
+- 后端单独读取 services/api/.env；前端强制 HTTP 模式，不接收从后端文件加载的密钥。端口已占用时拒绝启动，不结束旧服务；Ctrl+C 和子进程失败时清理本次启动的进程树。
+- 本机 Windows 真实冒烟通过：登录页、健康检查、PG public/config、匿名 401；Vite runtime __MOCK__=false；重复启动拒绝；Ctrl+C 后 8080/5173 释放；缺少 Cargo 时清理前端。Node 语法与 Prettier、Rust fmt/clippy/workspace test、前端 typecheck/build 均通过。README 已补一条命令启动说明，CI 增加入口语法检查。
