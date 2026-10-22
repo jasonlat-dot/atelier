@@ -25,6 +25,7 @@ atelier-common = { path = "crates/common" }
 atelier-auth = { path = "crates/auth" }
 atelier-wallet = { path = "crates/wallet" }
 atelier-assets = { path = "crates/assets" }
+atelier-upstream = { path = "crates/upstream" }
 
 chrono = { version = "0.4", features = ["serde"] }
 base64 = "0.22"

@@ -33,6 +33,7 @@ pub struct ProviderFailure {
     pub code: FailureCode,
     pub retry_after: Option<u64>,
     pub quota_exhausted: bool,
+    pub produced: bool,
 }
 impl ProviderFailure {
     pub fn network() -> Self {
@@ -40,6 +41,7 @@ impl ProviderFailure {
             code: FailureCode::UpstreamError,
             retry_after: None,
             quota_exhausted: false,
+            produced: false,
         }
     }
 }
@@ -110,6 +112,9 @@ pub struct AccountView {
     pub last_used_at: Option<DateTime<Utc>>,
     pub revision: i64,
     pub in_flight: i64,
+    pub requests_24h: i64,
+    pub successes_24h: i64,
+    pub average_ms: Option<f64>,
     pub created_at: DateTime<Utc>,
 }
 #[derive(Serialize, ToSchema)]
@@ -196,4 +201,18 @@ pub struct AccountStats {
 pub struct ErrorCount {
     pub code: String,
     pub count: i64,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct CatalogModel {
+    pub id: String,
+    pub kind: String,
+    pub display_name: String,
+    pub capabilities: Capabilities,
+    pub prices: Vec<PriceRule>,
+}
+#[derive(Serialize, ToSchema)]
+pub struct Catalog {
+    pub models: Vec<CatalogModel>,
+    pub multipliers: Vec<SizeMultiplier>,
 }

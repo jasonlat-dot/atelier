@@ -65,3 +65,28 @@ MFA 验证额外限制 5 次/5 分钟/用户。角色改变/禁用通过触发�
 视频只接受单视频流的 H.264/HEVC/VP8/VP9/AV1、最大 4096 边长和 900 万像素。FFmpeg 以管道输入，协议白名单仅 pipe/cache，禁用输入 file/concat/网络协议；单进程内存上限 1 GiB、探测/封面 20 秒、转码 120 秒，共用有限处理并发。重新编码为 H.264/AAC MP4 后才生成可读链接，原始上传体从不对外提供，成功后删除。任务在 PostgreSQL 持久化，以租约和唯一令牌领取，最多三次尝试；FAILED 可删除并重新上传，签名读取与断点 Range 使用流式响应。待处理视频按 400 MiB 预占用户空间，避免转码膨胀绕过 2 GiB 配额；源文件回收后释放预占。VIDEO_UNAVAILABLE 为 503。
 
 媒体默认 MEDIA_STORAGE=local、MEDIA_DIR=data/media，拒绝与现有 WEB_DIR 重叠；文件路径从服务器 UUID 生成，不使用原始文件名。当前交付和验收使用本地存储与真实视频转码。S3 按负责人最新指令改为待定；已有 HTTPS S3 兼容适配与服务端配置保留，实服务未验收，不作为本次 M3 完成条件。
+
+## M4 账号池、模型与定价
+
+管理路径均为 `/api/v1/admin` 前缀，要求 ADMIN/SUPER_ADMIN、最近 MFA；写操作另要求同源、CSRF、管理员限流及同事务脱敏审计。输入严格拒绝未知字段。密钥、base_url、upstream_model 仅写入，任何视图/审计/错误均不回显；编辑时 null/空字符串保留旧值。
+
+| 方法与路径 | 行为 |
+| --- | --- |
+| GET /upstream-accounts?search=…&before=UUID | 名称/分组字面子串搜索；50 条游标分页；含状态、额度、在用数和近 24 小时成功/请求数与平均耗时 |
+| POST /upstream-accounts | AccountInput，创建且必须提供地址与密钥；201 脱敏 AccountView |
+| GET、PATCH /upstream-accounts/{id} | 读取/完整编辑脱敏配置；编辑必带 revision，过期 409 CONFIG_CONFLICT；额度变更使用专门动作，使用中不能替换地址/密钥 |
+| DELETE /upstream-accounts/{id}?revision=N | 软删；在用或版本冲突 409；成功 204 |
+| POST /upstream-accounts/import | JSON 数组 1–100 个 AccountInput、最多 1 MiB，整体成功或回滚；201 脱敏数组；本轮采用规格允许的 JSON 格式，不额外支持 CSV |
+| POST /upstream-accounts/{id}/test | 受限 GET /models，不生成付费内容；返回 ok/code/elapsed_ms，记录审计与统计；失败仅返回固定错误分类 |
+| POST /upstream-accounts/{id}/refresh-quota | QuotaInput：revision、quota_total、quota_remaining、quota_reset_at；管理员手动更新，不伪报供应商实时余额 |
+| GET /upstream-accounts/{id}/stats | 24 小时请求数、成功数、平均耗时和固定错误分类分布，包含连通性测试 |
+| GET、POST、PATCH /models | 模型目录/创建/完整编辑；image/video/chat；新建先禁用，配置能力、价格和账号绑定后方可启用；上游模型标识仅写 |
+| PUT /models/{id}/accounts | BindingInput：revision、account_ids、group_tags；明确绑定与分组动态绑定取并集，整体校验并写审计 |
+| GET、PUT /pricing | Pricing：全局 revision、rules 和全部六种分辨率倍率；版本冲突 409，原子替换且不能使已启用模型缺价格。图片按质量基价×分辨率倍率；视频基价按秒；参考图附加费用单独保存 |
+| GET /api/v1/models | 普通已登录用户可读的启用目录，仅公开 ID、展示名、能力及价格；无账号 ID、分组、上游地址/标识或密钥信息 |
+
+账号最多 500 个，模型最多 200 个。凭据独立域派生并以 XChaCha20-Poly1305 加密，关联账号和版本。出站逐次校验/固定 DNS，拒绝私网/特殊地址、重定向、环境代理，限制并发/响应体/时长。默认仅 HTTPS 公网；开发例外必须显式配置 UPSTREAM_DEV_ALLOW_ORIGINS 为准确 loopback origin，且服务绑定和公开入口均在 loopback。
+
+Provider 和调度为内部 service：图片 generations/edits；视频 /videos 提交、查询、内容下载，返回内部字节而非上游地址。Redis 原子槽与 PG 额度预占防并发超额，60 秒租约/20 秒续期，取消/panic 释放；按优先级、权重、空闲并发和剩余额度选账号。401/403 凭据失效、429 冷却/额度耗尽，5xx/超时连续三次冷却并指数退避；内容拒绝/参数错误不换号。最多三次尝试，已产出图片或已接受视频任务后不重复提交。每五分钟探测到期账号，额度重置只在显式 quota_reset_at 到期且探测成功时执行，未知余额不自动补满。
+
+M4 不开放用户生成/任务/quote/SSE 接口，不修改钱包余额；这些属于 M5。当前 HTTP 后端已接入，原型管理页面在后续切片完成。

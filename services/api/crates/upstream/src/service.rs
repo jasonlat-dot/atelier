@@ -12,18 +12,30 @@ use uuid::Uuid;
 pub struct UpstreamService {
     pub(crate) inner: Arc<Inner>,
 }
+#[derive(Clone)]
 pub(crate) struct Inner {
     pub db: PgPool,
     pub cipher: SecretCipher,
     pub http: SafeHttp,
+    pub slots: Option<crate::slots::SlotStore>,
+    pub provider: Arc<dyn crate::provider::Provider>,
 }
 impl UpstreamService {
     pub fn new(db: PgPool, cipher: SecretCipher, http: SafeHttp) -> Self {
         Self {
-            inner: Arc::new(Inner { db, cipher, http }),
+            inner: Arc::new(Inner {
+                db,
+                cipher,
+                provider: Arc::new(crate::provider::OpenAiCompatible::new(http.clone())),
+                http,
+                slots: None,
+            }),
         }
     }
-    async fn admin_tx(&self, actor: Uuid) -> Result<Transaction<'static, Postgres>, Error> {
+    pub(crate) async fn admin_tx(
+        &self,
+        actor: Uuid,
+    ) -> Result<Transaction<'static, Postgres>, Error> {
         let mut tx = self.inner.db.begin().await?;
         let valid:Option<Uuid>=sqlx::query_scalar("SELECT id FROM users WHERE id=$1 AND role IN ('ADMIN','SUPER_ADMIN') AND status='ACTIVE' FOR SHARE").bind(actor).fetch_optional(&mut *tx).await?;
         if valid.is_none() {
@@ -38,7 +50,7 @@ impl UpstreamService {
         if search.chars().count() > 100 {
             return Err(Error::Validation);
         }
-        let rows=sqlx::query_as::<_,AccountView>("SELECT a.id,a.name,a.kind,a.secret_last4,true AS endpoint_configured,a.group_tag,a.priority,a.weight,a.concurrency_limit,a.quota_total,a.quota_remaining,a.quota_reset_at,a.status,a.cooldown_until,a.consecutive_failures,a.last_error,a.last_used_at,a.revision,a.created_at,(SELECT count(*) FROM upstream_leases l WHERE l.account_id=a.id AND l.completed=false AND l.expires_at>clock_timestamp()) AS in_flight FROM upstream_accounts a WHERE a.deleted_at IS NULL AND (strpos(lower(a.name),lower($1))>0 OR strpos(lower(a.group_tag),lower($1))>0) AND ($2::uuid IS NULL OR (a.created_at,a.id)<(SELECT created_at,id FROM upstream_accounts WHERE id=$2 AND deleted_at IS NULL)) ORDER BY a.created_at DESC,a.id DESC LIMIT 51").bind(search).bind(before).fetch_all(&self.inner.db).await?;
+        let rows=sqlx::query_as::<_,AccountView>("SELECT a.id,a.name,a.kind,a.secret_last4,true AS endpoint_configured,a.group_tag,a.priority,a.weight,a.concurrency_limit,a.quota_total,a.quota_remaining,a.quota_reset_at,a.status,a.cooldown_until,a.consecutive_failures,a.last_error,a.last_used_at,a.revision,a.created_at,(SELECT count(*) FROM upstream_leases l WHERE l.account_id=a.id AND l.completed=false AND l.expires_at>clock_timestamp()) AS in_flight,(SELECT count(*) FROM upstream_attempts t WHERE t.account_id=a.id AND t.created_at>clock_timestamp()-interval '24 hours') AS requests_24h,(SELECT count(*) FROM upstream_attempts t WHERE t.account_id=a.id AND t.code='SUCCESS' AND t.created_at>clock_timestamp()-interval '24 hours') AS successes_24h,(SELECT avg(elapsed_ms)::float8 FROM upstream_attempts t WHERE t.account_id=a.id AND t.created_at>clock_timestamp()-interval '24 hours') AS average_ms FROM upstream_accounts a WHERE a.deleted_at IS NULL AND (strpos(lower(a.name),lower($1))>0 OR strpos(lower(a.group_tag),lower($1))>0) AND ($2::uuid IS NULL OR (a.created_at,a.id)<(SELECT created_at,id FROM upstream_accounts WHERE id=$2 AND deleted_at IS NULL)) ORDER BY a.created_at DESC,a.id DESC LIMIT 51").bind(search).bind(before).fetch_all(&self.inner.db).await?;
         let more = rows.len() > 50;
         let items: Vec<_> = rows.into_iter().take(50).collect();
         let next_cursor = if more {
@@ -107,6 +119,15 @@ impl UpstreamService {
         let last4 = new_secret.map(|s| s[s.len() - 4..].to_owned());
         if let Some(before) = &existing {
             if input.revision != Some(before.revision) {
+                return Err(Error::Conflict);
+            }
+            // Quota has a dedicated action. A stale general edit must not reset
+            // consumption that completed while the administrator had it open.
+            if input.quota_total != before.quota_total
+                || input.quota_remaining != before.quota_remaining
+                || input.quota_reset_at != before.quota_reset_at
+                || ((enc.is_some() || new_url.is_some()) && before.in_flight > 0)
+            {
                 return Err(Error::Conflict);
             }
             let repair = enc.is_some() || new_url.is_some() || before.status == "DISABLED";
@@ -459,7 +480,7 @@ pub(crate) async fn account_in<'e, E: sqlx::Executor<'e, Database = Postgres>>(
     db: E,
     id: Uuid,
 ) -> Result<AccountView, Error> {
-    sqlx::query_as("SELECT a.id,a.name,a.kind,a.secret_last4,true AS endpoint_configured,a.group_tag,a.priority,a.weight,a.concurrency_limit,a.quota_total,a.quota_remaining,a.quota_reset_at,a.status,a.cooldown_until,a.consecutive_failures,a.last_error,a.last_used_at,a.revision,a.created_at,(SELECT count(*) FROM upstream_leases l WHERE l.account_id=a.id AND l.completed=false AND l.expires_at>clock_timestamp()) AS in_flight FROM upstream_accounts a WHERE a.id=$1 AND a.deleted_at IS NULL")
+    sqlx::query_as("SELECT a.id,a.name,a.kind,a.secret_last4,true AS endpoint_configured,a.group_tag,a.priority,a.weight,a.concurrency_limit,a.quota_total,a.quota_remaining,a.quota_reset_at,a.status,a.cooldown_until,a.consecutive_failures,a.last_error,a.last_used_at,a.revision,a.created_at,(SELECT count(*) FROM upstream_leases l WHERE l.account_id=a.id AND l.completed=false AND l.expires_at>clock_timestamp()) AS in_flight,(SELECT count(*) FROM upstream_attempts t WHERE t.account_id=a.id AND t.created_at>clock_timestamp()-interval '24 hours') AS requests_24h,(SELECT count(*) FROM upstream_attempts t WHERE t.account_id=a.id AND t.code='SUCCESS' AND t.created_at>clock_timestamp()-interval '24 hours') AS successes_24h,(SELECT avg(elapsed_ms)::float8 FROM upstream_attempts t WHERE t.account_id=a.id AND t.created_at>clock_timestamp()-interval '24 hours') AS average_ms FROM upstream_accounts a WHERE a.id=$1 AND a.deleted_at IS NULL")
     .bind(id)
     .fetch_optional(db)
     .await?

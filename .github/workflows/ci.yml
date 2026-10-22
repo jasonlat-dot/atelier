@@ -77,7 +77,7 @@ jobs:
         working-directory: services/api
       - run: cargo test --locked -p atelier-app --test wallet_http -- --ignored
         working-directory: services/api
-      - run: cargo test --locked -p atelier-app --test assets_schema --test assets_http -- --ignored
+      - run: cargo test --locked -p atelier-app --test assets_schema --test assets_http --test upstream_http -- --ignored
         working-directory: services/api
       - uses: actions/setup-node@v4
         with:

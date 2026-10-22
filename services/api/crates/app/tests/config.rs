@@ -79,3 +79,25 @@ fn openapi_requires_explicit_loopback_config_and_proxy_trust_is_explicit() {
     values.insert("BIND_ADDRESS".into(), "0.0.0.0:8080".into());
     assert!(Config::from_lookup(|k| values.get(k).cloned()).is_err());
 }
+
+#[test]
+fn upstream_loopback_exception_requires_explicit_origins_and_local_service() {
+    let mut values = fixture();
+    values.insert(
+        "UPSTREAM_DEV_ALLOW_ORIGINS".into(),
+        "http://127.0.0.1:19999".into(),
+    );
+    assert!(Config::from_lookup(|k| values.get(k).cloned()).is_err());
+    values.insert("PUBLIC_BASE_URL".into(), "http://127.0.0.1:5173".into());
+    let config = Config::from_lookup(|k| values.get(k).cloned()).unwrap();
+    assert!(config
+        .upstream_egress
+        .parse("http://127.0.0.1:19999/v1", false)
+        .is_ok());
+    assert!(config
+        .upstream_egress
+        .parse("http://127.0.0.1:19998/v1", false)
+        .is_err());
+    values.insert("BIND_ADDRESS".into(), "0.0.0.0:8080".into());
+    assert!(Config::from_lookup(|k| values.get(k).cloned()).is_err());
+}

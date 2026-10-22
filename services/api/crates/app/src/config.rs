@@ -18,6 +18,8 @@ pub struct Config {
     pub media: atelier_assets::storage::StorageConfig,
     pub media_signer: atelier_assets::signing::MediaSigner,
     pub video: Option<atelier_assets::video::VideoProcessor>,
+    pub upstream_cipher: atelier_upstream::crypto::SecretCipher,
+    pub upstream_egress: atelier_upstream::egress::EgressPolicy,
 }
 
 #[derive(Debug, Error)]
@@ -62,6 +64,28 @@ impl Config {
         let google_client_secret = required("GOOGLE_CLIENT_SECRET")?;
         let master_cipher = atelier_auth::mfa::MfaCipher::from_base64(&required("MASTER_KEY")?)
             .map_err(|_| ConfigError("MASTER_KEY"))?;
+        let upstream_cipher =
+            atelier_upstream::crypto::SecretCipher::from_base64(&required("MASTER_KEY")?)
+                .map_err(|_| ConfigError("MASTER_KEY"))?;
+        let origins: Vec<String> = lookup("UPSTREAM_DEV_ALLOW_ORIGINS")
+            .unwrap_or_default()
+            .split(',')
+            .filter(|s| !s.trim().is_empty())
+            .map(|s| s.trim().to_owned())
+            .collect();
+        let origin_url =
+            url::Url::parse(public_origin.as_str()).map_err(|_| ConfigError("PUBLIC_BASE_URL"))?;
+        let local_origin = match origin_url.host() {
+            Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
+            Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
+            Some(url::Host::Domain("localhost")) => true,
+            _ => false,
+        };
+        if !origins.is_empty() && (!bind_address.ip().is_loopback() || !local_origin) {
+            return Err(ConfigError("UPSTREAM_DEV_ALLOW_ORIGINS requires loopback"));
+        }
+        let upstream_egress = atelier_upstream::egress::EgressPolicy::with_local_origins(origins)
+            .map_err(|_| ConfigError("UPSTREAM_DEV_ALLOW_ORIGINS"))?;
         let mut bootstrap = std::collections::HashSet::new();
         let media =
             atelier_assets::storage::StorageConfig::from_lookup(&lookup).map_err(ConfigError)?;
@@ -87,6 +111,8 @@ impl Config {
             }
         }
         Ok(Self {
+            upstream_cipher,
+            upstream_egress,
             media,
             media_signer,
             video,

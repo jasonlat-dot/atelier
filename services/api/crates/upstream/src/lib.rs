@@ -1,6 +1,10 @@
 //! Server-only credentials, guarded transport and upstream capacity routing.
 pub mod crypto;
 pub mod egress;
+pub mod provider;
+mod runtime;
+pub mod slots;
+pub use runtime::{RouteLease, RouteRequirements};
 mod service;
 pub mod types;
 pub mod validation;

@@ -12,6 +12,7 @@ atelier-common.workspace = true
 atelier-auth.workspace = true
 atelier-wallet.workspace = true
 atelier-assets.workspace = true
+atelier-upstream.workspace = true
 axum.workspace = true
 tokio.workspace = true
 serde.workspace = true
@@ -24,11 +25,11 @@ tower-http.workspace = true
 utoipa.workspace = true
 chrono.workspace = true
 uuid.workspace = true
+url.workspace = true
 
 [dev-dependencies]
 tower.workspace = true
 
 ring = "0.17"
 base64.workspace = true
-url.workspace = true
 sha2.workspace = true

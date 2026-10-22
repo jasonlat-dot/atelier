@@ -94,6 +94,7 @@ dependencies = [
  "atelier-assets",
  "atelier-auth",
  "atelier-common",
+ "atelier-upstream",
  "atelier-wallet",
  "axum",
  "base64 0.22.1",

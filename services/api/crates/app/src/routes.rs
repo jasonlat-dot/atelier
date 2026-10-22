@@ -128,9 +128,10 @@ async fn revoke_device(
 
 #[derive(OpenApi)]
 #[openapi(
-    paths(crate::assets_http::list,crate::assets_http::get_one,crate::assets_http::limits,crate::assets_http::upload,crate::assets_http::delete_one,crate::assets_http::delete_many,crate::assets_http::media,crate::wallet_http::summary,crate::wallet_http::ledger,crate::wallet_http::checkin,crate::wallet_http::redeem,crate::wallet_http::adjust,crate::wallet_http::create_codes,crate::wallet_http::codes,health, me, rename, logout, devices, revoke_device,crate::login_http::google_start,crate::login_http::google_callback,crate::login_http::public_config,crate::login_http::mfa_setup,crate::login_http::mfa_verify),
+    paths(crate::upstream_http::accounts,crate::upstream_http::account,crate::upstream_http::create_account,crate::upstream_http::update_account,crate::upstream_http::delete_account,crate::upstream_http::import_accounts,crate::upstream_http::probe,crate::upstream_http::refresh_quota,crate::upstream_http::stats,crate::upstream_http::models,crate::upstream_http::create_model,crate::upstream_http::update_model,crate::upstream_http::bindings,crate::upstream_http::pricing,crate::upstream_http::save_pricing,crate::upstream_http::catalog,crate::assets_http::list,crate::assets_http::get_one,crate::assets_http::limits,crate::assets_http::upload,crate::assets_http::delete_one,crate::assets_http::delete_many,crate::assets_http::media,crate::wallet_http::summary,crate::wallet_http::ledger,crate::wallet_http::checkin,crate::wallet_http::redeem,crate::wallet_http::adjust,crate::wallet_http::create_codes,crate::wallet_http::codes,health, me, rename, logout, devices, revoke_device,crate::login_http::google_start,crate::login_http::google_callback,crate::login_http::public_config,crate::login_http::mfa_setup,crate::login_http::mfa_verify),
     modifiers(&CookieSecurity),
     components(schemas(
+        atelier_upstream::AccountInput,atelier_upstream::AccountPage,atelier_upstream::AccountView,atelier_upstream::ModelInput,atelier_upstream::ModelView,atelier_upstream::BindingInput,atelier_upstream::QuotaInput,atelier_upstream::Pricing,atelier_upstream::Capabilities,atelier_upstream::PriceRule,atelier_upstream::SizeMultiplier,atelier_upstream::ProbeResult,atelier_upstream::FailureCode,atelier_upstream::AccountStats,atelier_upstream::ErrorCount,atelier_upstream::Catalog,atelier_upstream::CatalogModel,
         atelier_wallet::WalletSummary, atelier_wallet::LedgerPage, atelier_wallet::LedgerEntry, atelier_wallet::CheckinReceipt, atelier_wallet::CreditReceipt, atelier_wallet::RedeemRequest, atelier_wallet::AdjustRequest, atelier_wallet::CreateCodesRequest, atelier_wallet::CreatedCodes, atelier_wallet::CreatedCode, atelier_wallet::CodeInfo,
         atelier_assets::AssetView,atelier_assets::AssetPage,atelier_assets::DeleteAssets,atelier_assets::AssetLimits,crate::assets_http::UploadFile,
         Health,
@@ -154,6 +155,58 @@ pub fn openapi() -> utoipa::openapi::OpenApi {
 
 pub fn router(state: AppState) -> Router {
     let protected = Router::new()
+        .route(
+            "/api/v1/models",
+            get(crate::upstream_http::catalog).fallback(protected_missing),
+        )
+        .route(
+            "/api/v1/admin/upstream-accounts",
+            get(crate::upstream_http::accounts)
+                .post(crate::upstream_http::create_account)
+                .fallback(admin_missing),
+        )
+        .route(
+            "/api/v1/admin/upstream-accounts/import",
+            post(crate::upstream_http::import_accounts)
+                .fallback(admin_missing)
+                .layer(axum::extract::DefaultBodyLimit::max(1024 * 1024)),
+        )
+        .route(
+            "/api/v1/admin/upstream-accounts/{id}",
+            get(crate::upstream_http::account)
+                .patch(crate::upstream_http::update_account)
+                .delete(crate::upstream_http::delete_account)
+                .fallback(admin_missing),
+        )
+        .route(
+            "/api/v1/admin/upstream-accounts/{id}/test",
+            post(crate::upstream_http::probe).fallback(admin_missing),
+        )
+        .route(
+            "/api/v1/admin/upstream-accounts/{id}/refresh-quota",
+            post(crate::upstream_http::refresh_quota).fallback(admin_missing),
+        )
+        .route(
+            "/api/v1/admin/upstream-accounts/{id}/stats",
+            get(crate::upstream_http::stats).fallback(admin_missing),
+        )
+        .route(
+            "/api/v1/admin/models",
+            get(crate::upstream_http::models)
+                .post(crate::upstream_http::create_model)
+                .patch(crate::upstream_http::update_model)
+                .fallback(admin_missing),
+        )
+        .route(
+            "/api/v1/admin/models/{id}/accounts",
+            axum::routing::put(crate::upstream_http::bindings).fallback(admin_missing),
+        )
+        .route(
+            "/api/v1/admin/pricing",
+            get(crate::upstream_http::pricing)
+                .put(crate::upstream_http::save_pricing)
+                .fallback(admin_missing),
+        )
         .route(
             "/api/v1/assets",
             get(crate::assets_http::list)

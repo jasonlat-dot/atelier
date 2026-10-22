@@ -111,4 +111,18 @@ async fn guarded_client_never_follows_redirects_and_bounds_bodies_time_and_origi
         .is_err());
     assert_eq!(hits.load(Ordering::SeqCst), 0);
     server.abort();
+    let private_dns = SafeHttp::new(EgressPolicy::default())
+        .send(
+            Method::GET,
+            "https://localhost./target",
+            None,
+            Payload::Empty,
+            Duration::from_secs(3),
+            16,
+        )
+        .await;
+    assert!(matches!(
+        private_dns,
+        Err(atelier_upstream::Error::UnsafeUrl)
+    ));
 }
