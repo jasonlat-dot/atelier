@@ -86,3 +86,17 @@ M1 当前切片验证（2026-10-22）：`cargo fmt --all`、`cargo clippy --lock
 - [ ] PostgreSQL/Redis 真机测试仍由 CI 执行；本机不安装/启动。当前依赖替换不新增迁移或改变公开 API，完整 M1 仍未验收。
 
 本次验证结果：cargo fmt（含 --check）、clippy（--workspace --all-targets -- -D warnings）、test、check 全通过；33 项 Rust 测试通过，5 项 PostgreSQL + 1 项 Redis 测试按本机条件显式跳过。前端 typecheck/build/lint/format:check/test:mock 全通过，npm audit 0 漏洞。OpenAPI/生成 TypeScript 一致性通过，生产隔离/迁移基线/依赖锁定回归 3/3 通过。cargo audit 0 漏洞、0 警告。
+
+## M1 · 登录与 MFA 功能收尾（进行最终验证）
+
+- [x] 先新增迁移 `202610220300_m1_login_mfa.sql` 与 ID token/MFA/注册测试，确认缺实现失败后补代码；新增 HTTP/前端测试也先失败后接线。
+- [x] `auth/src/oidc_provider.rs`：固定 Google token/JWKS 出站、无重定向、限时/限大小、ring RS256 与声明校验，受信 VerifiedIdentity；`login.rs` 组合 Redis state 与后端交换、注册事务。
+- [x] `auth/src/identity.rs`：最新注册设置、canonical 唯一、IP 并发锁、邀请码原子消费、Bootstrap 仅首次、Session 轮换及同事务审计；不写余额。
+- [x] `auth/src/mfa.rs`：ChaCha20Poly1305 加密、用户/会话绑定待确认、TOTP 与时间步原子防重放、MFA 成功审计及验证时效；5 次/5 分钟防爆破。
+- [x] `app/src/login_http.rs`、配置/启动/路由/限流：Google start/callback、public/config、管理员 MFA 入口、管理员写限流，严格凭据启动自检和可信代理 IP。
+- [x] 前端 LoginPage/MfaPage 与会话路由：真实后端导航、注册三态、邀请码、服务条款占位链接、验证器绑定/验证与退出；浏览器合同 5/5 通过。
+- [x] 新增依赖 cargo audit 0 漏洞，完整锁文件 282 个依赖，无 rsa；严格 clippy 通过。
+- [ ] PostgreSQL/Redis 注册/MFA并发与审计回滚回归及完整浏览器链路：已配置 CI，尚待本次推送结果，不能提前标记完整 M1 通过。
+- 用户要求完成 M1 即停止，不进入 M2。本机不安装/启动 PostgreSQL 或 Redis；真实 Google 凭据由部署时配置。
+
+本地最终源码回归：Rust 44 项通过、12 项按环境跳过（11 项真实基础设施断言 + 1 个浏览器服务夹具）；fmt、严格 clippy 通过。前端 typecheck/lint/format/test:mock/build、npm audit（0）通过；HTTP 浏览器 5/5。CI 真库/Redis/浏览器待当前源码推送后确认。

@@ -2,7 +2,7 @@
 
 按根目录《Atelier AI 创作平台 · 产品与工程开发规格书（AI 开发版）》逐里程碑开发。
 当前状态以 [docs/PROGRESS.md](docs/PROGRESS.md) 为准；假设见 [docs/DECISIONS.md](docs/DECISIONS.md)。
-原始原型保存在提交 `c3384c5`，已完成 M0 基线整理（`b3cc451`），正在推进 M1：会话/权限守卫和账号设置已接 API 合同，Google 登录与真实实例回归尚未接通。
+原始原型保存在提交 `c3384c5`，已完成 M0 基线整理（`b3cc451`），M1 的 Google 登录、注册控制、会话/权限守卫、账号设置与管理员 TOTP 已接线，当前完整验收状态见进度文档；本轮 M1 完成后停止。
 
 ## 本地 Mock UI
 
@@ -32,10 +32,10 @@ cargo test --workspace
 cargo run -p atelier-app
 ```
 
-默认 `npm run build` 输出 `dist`，只包含 HTTP 入口；当前登录入口禁用，正式 Google 登录尚未接通；有效数据库会话可进入账号设置。
+默认 `npm run build` 输出 `dist`，只包含 HTTP 入口；登录入口导航到服务端 Google OIDC；有效会话进入账号设置，管理员先完成 TOTP 绑定/验证。
 `npm run build:mock` 单独输出 `dist-mock`，只能用于本地预览。生产构建显式设置 `VITE_API_MODE=mock` 会失败。
 Rust 自动执行 `services/api/migrations`，并可托管 `WEB_DIR` 的 SPA。
-配置样例见 `services/api/.env.example`。没有开发登录或内存 Session。
+配置样例见 `services/api/.env.example`。启动进程必须注入 DATABASE_URL、REDIS_URL、PUBLIC_BASE_URL、GOOGLE_CLIENT_ID、GOOGLE_CLIENT_SECRET、MASTER_KEY、BOOTSTRAP_ADMIN_EMAILS。认证凭据和主密钥没有默认值，缺失会拒绝启动；不要把任何服务端凭据写入 VITE_* 或前端文件。Google OAuth Web 客户端的回调为 PUBLIC_BASE_URL + /api/v1/auth/google/callback。MASTER_KEY 为持久保存的随机 32 字节 base64。没有开发登录或内存 Session。
 账号资料、设备列表/撤销、全设备注销已接服务端会话；积分/生成等业务按后续里程碑接入。
 
 开发基础设施：`infra/compose.yaml` 提供 PostgreSQL 16 与带密码 Redis 7，仅绑定 127.0.0.1；本轮不安装或启动这些服务。
@@ -65,3 +65,14 @@ python scripts/check_contract.py
 
 CI 同时运行 `cargo audit` 与 `npm audit`，完整审计结果如实保留。
 API 契约见 [docs/API.md](docs/API.md)，每个里程碑的验收与环境限制写入对应 PR 描述文档。
+
+M1 部署回归注意：首次注册默认 CLOSED，BOOTSTRAP_ADMIN_EMAILS 指定的 Gmail 首次登录可成为 SUPER_ADMIN；已有账号不因修改环境变量重新提权。注册模式/白名单/单 IP 配额来自 system_settings，M9 再提供管理页面。反向代理需要覆盖 X-Real-IP，并把实际代理 IP 加到 TRUSTED_PROXY_IPS；未配置时只使用 TCP 对端 IP，忽略转发头。
+
+真实基础设施测试在隔离测试数据库中执行（数据库账号需创建测试数据库权限）：
+
+```powershell
+cd services/api
+cargo test --locked -p atelier-auth --tests -- --ignored
+```
+
+需先设置 DATABASE_URL 与 TEST_REDIS_URL 指向专用测试实例；不要对生产数据库执行。CI 另运行 `npm run test:e2e:auth`，用 tests/browser_harness.rs 的合成 Google 签名提供方、真实 PostgreSQL/Redis 和浏览器验证登录/设置/退出/MFA。该夹具不被生产 main 引用，无测试登录开关。真实 Google 凭据与实际部署回归由项目负责人后续完成。

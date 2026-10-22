@@ -648,3 +648,232 @@ async fn revocation_between_lookup_and_touch_never_authenticates() {
         StatusCode::UNAUTHORIZED
     );
 }
+
+#[path = "../../auth/tests/support/transient.rs"]
+mod transient;
+struct MfaRepo {
+    session: Arc<FakeRepository>,
+    encrypted: Mutex<Option<Vec<u8>>>,
+    last: Mutex<Option<i64>>,
+}
+impl atelier_auth::mfa::MfaRepository for MfaRepo {
+    fn material(
+        &self,
+        _owner: Uuid,
+        _session: Uuid,
+    ) -> atelier_auth::identity::AuthFuture<'_, atelier_auth::mfa::MfaMaterial> {
+        Box::pin(async move {
+            Ok(atelier_auth::mfa::MfaMaterial {
+                enabled: self.session.record.lock().unwrap().user.mfa_enabled,
+                encrypted: self
+                    .encrypted
+                    .lock()
+                    .unwrap()
+                    .clone()
+                    .ok_or(atelier_auth::identity::AuthFailure::Mfa)?,
+            })
+        })
+    }
+    fn pending(
+        &self,
+        _owner: Uuid,
+        _session: Uuid,
+        encrypted: Vec<u8>,
+    ) -> atelier_auth::identity::AuthFuture<'_, ()> {
+        Box::pin(async move {
+            *self.encrypted.lock().unwrap() = Some(encrypted);
+            Ok(())
+        })
+    }
+    fn accept(
+        &self,
+        _owner: Uuid,
+        _session: Uuid,
+        _encrypted: Vec<u8>,
+        step: i64,
+        _enroll: bool,
+    ) -> atelier_auth::identity::AuthFuture<'_, bool> {
+        Box::pin(async move {
+            let mut last = self.last.lock().unwrap();
+            if last.is_some_and(|v| v >= step) {
+                return Ok(false);
+            }
+            *last = Some(step);
+            let mut record = self.session.record.lock().unwrap();
+            record.user.mfa_enabled = true;
+            record.mfa_verified_at = Some(Utc::now());
+            Ok(true)
+        })
+    }
+}
+#[tokio::test]
+async fn mfa_endpoints_require_admin_csrf_and_reject_unknown_fields_and_replay() {
+    use atelier_auth::mfa::{totp, MfaCipher, MfaService};
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    let (mut state, repo, cookie, csrf) = fixture();
+    let limits = Arc::new(transient::MemoryTransient::default());
+    let mfa_repo = Arc::new(MfaRepo {
+        session: repo.clone(),
+        encrypted: Mutex::new(None),
+        last: Mutex::new(None),
+    });
+    let cipher = MfaCipher::from_base64(&STANDARD.encode([9u8; 32])).unwrap();
+    state.limits = Some(limits.clone());
+    state.mfa = Some(MfaService::new(mfa_repo.clone(), limits, cipher.clone()));
+    assert_eq!(
+        request(
+            state.clone(),
+            "POST",
+            "/api/v1/admin/mfa/setup",
+            &cookie,
+            Some("https://atelier.test"),
+            Some(&csrf),
+            ""
+        )
+        .await
+        .status(),
+        StatusCode::FORBIDDEN
+    );
+    repo.record.lock().unwrap().user.role = Role::Admin;
+    assert_eq!(
+        request(
+            state.clone(),
+            "POST",
+            "/api/v1/admin/mfa/setup",
+            &cookie,
+            None,
+            None,
+            ""
+        )
+        .await
+        .status(),
+        StatusCode::FORBIDDEN
+    );
+    let setup = request(
+        state.clone(),
+        "POST",
+        "/api/v1/admin/mfa/setup",
+        &cookie,
+        Some("https://atelier.test"),
+        Some(&csrf),
+        "",
+    )
+    .await;
+    assert_eq!(setup.status(), StatusCode::OK);
+    assert!(json(setup).await["otpauth_uri"]
+        .as_str()
+        .unwrap()
+        .starts_with("otpauth://"));
+    assert_eq!(
+        request(
+            state.clone(),
+            "POST",
+            "/api/v1/admin/mfa/verify",
+            &cookie,
+            Some("https://atelier.test"),
+            Some(&csrf),
+            r#"{"code":"123456","role":"SUPER_ADMIN"}"#
+        )
+        .await
+        .status(),
+        StatusCode::UNPROCESSABLE_ENTITY
+    );
+    let secret = cipher
+        .open(
+            repo.record.lock().unwrap().user.id,
+            mfa_repo.encrypted.lock().unwrap().as_ref().unwrap(),
+        )
+        .unwrap();
+    let code = totp(&secret, "admin@gmail.com")
+        .unwrap()
+        .generate(Utc::now().timestamp() as u64)
+        .to_string();
+    let body = serde_json::json!({"code":code}).to_string();
+    assert_eq!(
+        request(
+            state.clone(),
+            "POST",
+            "/api/v1/admin/mfa/verify",
+            &cookie,
+            Some("https://atelier.test"),
+            Some(&csrf),
+            &body
+        )
+        .await
+        .status(),
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        request(
+            state.clone(),
+            "POST",
+            "/api/v1/admin/mfa/verify",
+            &cookie,
+            Some("https://atelier.test"),
+            Some(&csrf),
+            &body
+        )
+        .await
+        .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    for expected in [
+        StatusCode::UNAUTHORIZED,
+        StatusCode::UNAUTHORIZED,
+        StatusCode::TOO_MANY_REQUESTS,
+    ] {
+        assert_eq!(
+            request(
+                state.clone(),
+                "POST",
+                "/api/v1/admin/mfa/verify",
+                &cookie,
+                Some("https://atelier.test"),
+                Some(&csrf),
+                &body
+            )
+            .await
+            .status(),
+            expected
+        );
+    }
+}
+#[tokio::test]
+async fn administrator_write_sliding_window_applies_after_authentication() {
+    let (mut state, repo, cookie, csrf) = fixture();
+    state.limits = Some(Arc::new(transient::MemoryTransient::default()));
+    {
+        let mut record = repo.record.lock().unwrap();
+        record.user.role = Role::Admin;
+        record.user.mfa_enabled = true;
+        record.mfa_verified_at = Some(Utc::now());
+    }
+    for _ in 0..60 {
+        assert_eq!(
+            request(
+                state.clone(),
+                "POST",
+                "/api/v1/admin/future",
+                &cookie,
+                Some("https://atelier.test"),
+                Some(&csrf),
+                ""
+            )
+            .await
+            .status(),
+            StatusCode::NOT_FOUND
+        );
+    }
+    let response = request(
+        state,
+        "POST",
+        "/api/v1/admin",
+        &cookie,
+        Some("https://atelier.test"),
+        Some(&csrf),
+        "",
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+    assert!(response.headers().contains_key("retry-after"));
+}

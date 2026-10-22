@@ -74,6 +74,35 @@ pub async fn require_session(
             match mfa_check {
                 Err(error) => ApiError::from(error).into_response(),
                 Ok(()) => {
+                    if request.method() != "GET"
+                        && actor.user().role != Role::User
+                        && (path == "/api/v1/admin"
+                            || path == "/api/admin"
+                            || path.starts_with("/api/v1/admin/")
+                            || path.starts_with("/api/admin/"))
+                    {
+                        let result = match &state.limits {
+                            Some(limits) => limits
+                                .rate_limit(
+                                    format!("auth:admin-write:{}", actor.user().id),
+                                    atelier_auth::transient::ADMIN_WRITE_RATE,
+                                )
+                                .await
+                                .map_err(|_| atelier_auth::identity::AuthFailure::Store),
+                            None => Err(atelier_auth::identity::AuthFailure::Store),
+                        };
+                        match result {
+                            Ok(atelier_auth::transient::RateDecision::Allowed) => {}
+                            Ok(atelier_auth::transient::RateDecision::Limited {
+                                retry_after_seconds,
+                            }) => {
+                                return crate::login_http::private_error(
+                                    atelier_auth::identity::AuthFailure::Rate(retry_after_seconds),
+                                )
+                            }
+                            Err(e) => return crate::login_http::private_error(e),
+                        }
+                    }
                     request.extensions_mut().insert(actor);
                     next.run(request).await
                 }

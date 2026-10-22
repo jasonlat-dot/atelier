@@ -15,7 +15,8 @@
     "test:mock": "node ../../tests/verify_source.cjs",
     "test:e2e": "playwright test",
     "api:generate": "openapi-typescript ../../docs/openapi.json -o src/lib/generated/api.d.ts",
-    "test:e2e:http": "playwright test --config playwright.http.config.ts"
+    "test:e2e:http": "playwright test --config playwright.http.config.ts",
+    "test:e2e:auth": "playwright test --config playwright.auth.config.ts"
   },
   "dependencies": {
     "@xyflow/react": "^12.10.0",

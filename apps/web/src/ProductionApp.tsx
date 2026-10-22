@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { sessionApi, SessionError, type Me } from './features/auth/sessionApi';
 import SettingsPage from './features/settings/SettingsPage';
+import LoginPage from './features/auth/LoginPage';
+import MfaPage from './features/auth/MfaPage';
 
 type AuthState =
   | { status: 'loading' }
@@ -11,7 +13,6 @@ type AuthState =
 export default function ProductionApp() {
   const [state, setState] = useState<AuthState>({ status: 'loading' });
   const generation = useRef(0);
-  const [logoutError, setLogoutError] = useState('');
   const load = useCallback(async (signal?: AbortSignal) => {
     const sequence = ++generation.current;
     setState({ status: 'loading' });
@@ -70,19 +71,16 @@ export default function ProductionApp() {
       <Routes>
         <Route
           path="/login"
+          element={<LoginPage disabled={state.disabled} />}
+        />
+        <Route
+          path="/terms"
           element={
             <main className="signin-screen">
               <section className="signin-card">
-                <div className="eyebrow">ATELIER</div>
-                <h1>登录 Atelier</h1>
-                {state.disabled ? (
-                  <p role="alert">账号已禁用，请联系管理员。</p>
-                ) : (
-                  <p>仅支持 Gmail 账号，登录功能正在准备中。</p>
-                )}
-                <button className="btn btn-dark" disabled>
-                  Google 登录暂未开放
-                </button>
+                <h1>服务条款</h1>
+                <p>服务条款尚未发布，当前项目仍处于开发与验收阶段。</p>
+                <a href="/login">返回登录</a>
               </section>
             </main>
           }
@@ -92,27 +90,7 @@ export default function ProductionApp() {
     );
   const { me } = state;
   if (me.mfa_required)
-    return (
-      <main className="signin-screen">
-        <section className="signin-card">
-          <h1>管理员身份验证</h1>
-          <p>需要先绑定或验证 MFA。验证入口正在准备中。</p>
-          {logoutError && <p role="alert">{logoutError}</p>}
-          <button
-            className="btn btn-light"
-            onClick={() => {
-              if (!window.confirm('将退出所有设备，是否继续？')) return;
-              void sessionApi
-                .logout(me.csrf_token)
-                .then(expired)
-                .catch(() => setLogoutError('退出未成功，请稍后重试'));
-            }}
-          >
-            退出所有设备
-          </button>
-        </section>
-      </main>
-    );
+    return <MfaPage me={me} onVerified={reload} onExpired={expired} />;
   return (
     <Routes>
       <Route

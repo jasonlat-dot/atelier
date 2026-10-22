@@ -128,7 +128,7 @@ async fn revoke_device(
 
 #[derive(OpenApi)]
 #[openapi(
-    paths(health, me, rename, logout, devices, revoke_device),
+    paths(health, me, rename, logout, devices, revoke_device,crate::login_http::google_start,crate::login_http::google_callback,crate::login_http::public_config,crate::login_http::mfa_setup,crate::login_http::mfa_verify),
     modifiers(&CookieSecurity),
     components(schemas(
         Health,
@@ -139,6 +139,9 @@ async fn revoke_device(
         DeviceList,
         DeviceSession,
         SessionUser,
+        atelier_auth::identity::PublicConfig,
+        atelier_auth::mfa::MfaSetup,
+        atelier_auth::mfa::MfaCode,
         atelier_auth::policy::Role
     ))
 )]
@@ -165,6 +168,14 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/auth/logout",
             post(logout).fallback(protected_missing),
         )
+        .route(
+            "/api/v1/admin/mfa/setup",
+            post(crate::login_http::mfa_setup).fallback(admin_missing),
+        )
+        .route(
+            "/api/v1/admin/mfa/verify",
+            post(crate::login_http::mfa_verify).fallback(admin_missing),
+        )
         .route("/api/v1/admin/settings", any(super_admin_missing))
         .route("/api/v1/admin/audit", any(super_admin_missing))
         .route("/api/v1/admin", any(admin_missing))
@@ -179,6 +190,18 @@ pub fn router(state: AppState) -> Router {
     let mut app = Router::new()
         .merge(protected)
         .route("/api/v1/health", get(health))
+        .route(
+            "/api/v1/auth/google/start",
+            get(crate::login_http::google_start),
+        )
+        .route(
+            "/api/v1/auth/google/callback",
+            get(crate::login_http::google_callback),
+        )
+        .route(
+            "/api/v1/public/config",
+            get(crate::login_http::public_config),
+        )
         .route("/api/v1/dev/login", any(not_found))
         .route("/api", any(not_found))
         .route("/api/{*path}", any(not_found))
@@ -189,7 +212,7 @@ pub fn router(state: AppState) -> Router {
     }
     let static_files = ServeDir::new(&state.web_dir)
         .not_found_service(ServeFile::new(state.web_dir.join("index.html")));
-    app.fallback_service(static_files).layer(TraceLayer::new_for_http().make_span_with(|request: &axum::http::Request<_>| tracing::info_span!("http_request", method=%request.method(), path=request.uri().path()))).with_state(state)
+    app.fallback_service(static_files).layer(middleware::from_fn(crate::login_http::private_response)).layer(TraceLayer::new_for_http().make_span_with(|request: &axum::http::Request<_>| tracing::info_span!("http_request", method=%request.method(), path=request.uri().path()))).with_state(state)
 }
 
 struct CookieSecurity;

@@ -70,7 +70,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo test --locked -p atelier-auth --test schema -- --ignored
+      - run: cargo test --locked -p atelier-auth --tests -- --ignored
         working-directory: services/api
-      - run: cargo test --locked -p atelier-auth --test redis_transient -- --ignored
-        working-directory: services/api
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci && npm run build
+        working-directory: apps/web
+      - run: npx playwright install --with-deps chromium
+        working-directory: apps/web
+      - run: npm run test:e2e:auth
+        working-directory: apps/web

@@ -44,6 +44,22 @@ async function request<T>(
     : (response.json() as Promise<T>);
 }
 export const sessionApi = {
+  publicConfig: (signal?: AbortSignal) =>
+    request<components['schemas']['PublicConfig']>(
+      '/public/config',
+      'GET',
+      undefined,
+      undefined,
+      signal,
+    ),
+  mfaSetup: (csrf: string) =>
+    request<components['schemas']['MfaSetup']>(
+      '/admin/mfa/setup',
+      'POST',
+      csrf,
+    ),
+  mfaVerify: (code: string, csrf: string) =>
+    request<void>('/admin/mfa/verify', 'POST', csrf, { code }),
   me: (signal?: AbortSignal) =>
     request<Me>('/me', 'GET', undefined, undefined, signal),
   rename: (name: string, csrf: string) =>

@@ -19,7 +19,45 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .connect(&config.database_url)
         .await?;
     sqlx::migrate!("../../migrations").run(&db).await?;
+    let limits = Arc::new(
+        atelier_auth::transient::RedisTransient::connect(&config.redis_url)
+            .await
+            .map_err(|_| "Redis unavailable")?,
+    );
+    let identity = Arc::new(atelier_auth::identity::PostgresIdentity::new(
+        db.clone(),
+        config.bootstrap,
+    ));
+    let callback = format!(
+        "{}/api/v1/auth/google/callback",
+        config.public_origin.as_str()
+    );
+    let flow = atelier_auth::oidc_attempt::AttemptFlow::new(
+        limits.clone(),
+        config.google_client_id.clone(),
+        callback.clone(),
+    )?;
+    let provider = Arc::new(
+        atelier_auth::oidc_provider::GoogleProvider::new(
+            config.google_client_id,
+            config.google_client_secret,
+            callback,
+        )
+        .map_err(|_| "OIDC configuration invalid")?,
+    );
     let state = AppState {
+        login: Some(atelier_auth::login::LoginService::new(
+            flow,
+            provider,
+            identity.clone(),
+        )),
+        mfa: Some(atelier_auth::mfa::MfaService::new(
+            identity,
+            limits.clone(),
+            config.master_cipher,
+        )),
+        limits: Some(limits),
+        trusted_proxy_ips: Arc::new(config.trusted_proxy_ips),
         db: db.clone(),
         auth: SessionService::new(
             Arc::new(PostgresSessions::new(db.clone())),
@@ -30,9 +68,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let listener = tokio::net::TcpListener::bind(config.bind_address).await?;
     tracing::info!(address = %config.bind_address, "Atelier API listening");
-    axum::serve(listener, router(state))
-        .with_graceful_shutdown(shutdown())
-        .await?;
+    axum::serve(
+        listener,
+        router(state).into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown())
+    .await?;
     db.close().await;
     Ok(())
 }

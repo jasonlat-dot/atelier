@@ -1,26 +1,19 @@
-# M1 认证与权限（进行中）：会话守卫、OIDC 状态与漏洞依赖替换
+# M1：Google 登录、注册控制、会话权限与管理员 TOTP
 
-将数据库 Session、CSRF、角色/MFA 时效守卫接入 Axum，并提供真实 HTTP 账号设置页；OIDC 临时状态具备 S256 PKCE、nonce、浏览器绑定、原子一次性消费和登录滑动窗口。前端身份来自 GET /me，Google 登录入口仍禁用，等待完整 token 验证/注册/回调。
+接通服务端 Google Authorization Code + PKCE，使用 ring 验证 Google JWKS/RS256 和身份声明；注册模式、别名去重、邀请码、IP 配额与 Bootstrap 首次授予角色在 PostgreSQL 事务内执行。登录轮换 Session，用户状态/角色逐请求查询，所有已认证非 GET 请求做同源 CSRF；管理员使用加密存储与防重放 TOTP。
 
-本次针对 RUSTSEC-2023-0071 消除两条依赖路径：SQLx 0.8.6 升至 0.9.0（MySQL RSA 功能独立可选，项目仍只使用 PostgreSQL）；授权材料准备从 openidconnect 切换到 oauth2 5.0.0。当前锁文件中 rsa/openidconnect 均不存在，完整 cargo audit 通过。新增锁文件回归测试阻止漏洞依赖回归；未使用公告豁免。
+前端 /login 导航至服务端登录入口并展示注册三态，/settings 提供资料、设备撤销和全设备退出；管理员先绑定/验证 MFA。不返回 Google token、客户端密钥或主密钥，不修改积分；后续业务继续留在对应里程碑。
 
-## 逐条验收
-
-| 完整 M1 验收 | 结果 | 证据 / 缺口 |
+| M1 验收 | 当前结果 | 证据 / 待确认 |
 | --- | --- | --- |
-| 第 8 章身份自动化 | 未通过完整验收 | Cookie/伪造/过期/撤销、Gmail、PKCE/nonce/state 材料、100 并发 state 单次消费测试通过；JWKS/ID token/完整 Google 回调待实现 |
-| 第 8 章注册自动化 | 未通过完整验收 | 注册三态/Bootstrap/IP 配额纯策略、身份 schema 已有；真实注册事务、即时设置、邀请码消费待实现 |
-| 第 8 章授权自动化 | 未通过完整验收 | HTTP 角色/MFA 时效、用户状态重查、CSRF/Origin/Host、设备归属/并发撤销测试通过；真实 TOTP 与完整资源矩阵待补 |
-| /settings 与路由守卫 | 通过合同验收 | 已有 HTTP 浏览器 3/3 证据；资料、设备撤销、退出均走服务端；真实实例登录仍待接通 |
-| /login Google 登录 | 未通过 | 按钮禁用，不提供演示登录冒充正式功能 |
-| 移除 RUSTSEC-2023-0071 依赖 | 通过 | 正常 Cargo 解析的完整锁文件无 rsa；cargo audit 0 漏洞/0 警告/退出码 0；锁文件防回归先失败后通过 |
+| 身份自动化 | 本地通过；完整 CI 待确认 | 伪造 Cookie/JWT、错误签名/alg/kid、iss/aud/exp/nonce、Gmail/hd、state 重放、PKCE/浏览器绑定；Google 真配置由部署回归 |
+| 注册自动化 | 代码与测试齐备；CI 真库待确认 | CLOSED 老用户/新用户、即时切换、别名唯一、邀请码消费、IP 并发、Bootstrap 仅首次、审计失败回滚 |
+| 授权自动化 | 本地通过；CI 真库待确认 | 角色/MFA 时效、禁用/并发撤销、跨用户设备 404、Origin/Host/CSRF、管理员写限流、TOTP 重放/加密/待确认过期 |
+| /login、路由守卫、/settings | 浏览器合同通过 | HTTP 合同 5/5；真实 DB/Redis/假 OIDC 浏览器 2 项已加入 CI，结果待确认 |
+| 依赖安全 | 通过 | cargo audit 与 npm audit 均 0 漏洞；锁文件不含 rsa；无公告豁免 |
 
-## 验证
+迁移先行：`202610220100_m1_identity.sql`、`202610220200_m1_session_management.sql`、本次 `202610220300_m1_login_mfa.sql`；测试先因缺实现失败，再补实现。OpenAPI 与前端生成类型已同步。
 
-- cargo fmt（含 --check）、clippy（deny warnings）、test、check：通过；33 项 Rust 测试通过。
-- PostgreSQL 5 项、Redis 1 项真实实例测试：本机无基础服务，显式跳过；已编译并配置 CI 隔离服务执行，不能认定本次远端结果通过。
-- npm typecheck/build/lint/format:check/test:mock：通过；npm audit 0 漏洞。
-- OpenAPI/生成 TypeScript 一致性：通过；生产隔离/迁移基线/漏洞依赖回归 3/3：通过。
-- cargo audit：通过；官方 RustSec 本日公告库 1348 条，完整锁文件扫描 270 个依赖，0 漏洞、0 警告；详情见 SECURITY_AUDIT.md。
+本地 cargo fmt、严格 clippy、test（44 项通过；真实 PostgreSQL/Redis 11 项与浏览器夹具 1 项跳过）、check；npm typecheck/build/lint/format:check/test:mock 与 HTTP 浏览器 5/5。Windows 测试因默认调试产物 LNK1104 使用进程局部 CARGO_PROFILE_TEST_DEBUG=0；CI 保留标准配置。完整验收不提前标记，待当前提交 CI 真库/Redis/浏览器结果更新。
 
-迁移先行的 M1 文件为 `202610220100_m1_identity.sql` 与 `202610220200_m1_session_management.sql`；本次依赖替换无 schema/公开 API 变化，沿用已有迁移和契约。SQLx 0.9 最低 Rust 1.94，本机 1.99、CI stable 满足。规格中 openidconnect 的替换依据与假设写入 DECISIONS.md。无积分写入、前端密钥、打包或部署。
+配置和假设见 DECISIONS.md；接口见 API.md。服务条款是开发占位，正式法律文案属 M10。依用户最新要求，M1 完成后停止，不进入 M2；不安装本机 PostgreSQL/Redis，不打包或部署。

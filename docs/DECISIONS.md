@@ -57,3 +57,20 @@
 - 该切片尚未实现 ID token 校验，替换后仍不开放登录。后续签名验证须选择通过审计的实现，不能跳过 JWKS/iss/aud/exp/nonce 验证，也不能自己实现密码学原语。
 - 本次无 schema/公开 API 变化，沿用已有 M1 迁移和 OpenAPI。先增加会失败的锁文件回归测试，再替换依赖；现有会话、权限、PKCE/nonce、重放测试继续验证行为。CI 已运行 tests/baseline.test.cjs，新断言阻止 rsa 重新进入锁文件。
 - 依据：[openidconnect 必需 rsa 依赖](https://docs.rs/crate/openidconnect/4.0.1/source/Cargo.toml)、[SQLx 0.9 mysql-rsa 可选功能](https://github.com/launchbadge/sqlx/blob/v0.9.0/Cargo.toml)、[oauth2 文档](https://docs.rs/oauth2/5.0.0/oauth2/)。
+
+## 2026-10-22 · M1 登录、注册事务与 TOTP 收尾
+
+- 用户最新范围是完成 M1 后停止，覆盖此前自动继续下一里程碑的约定；本轮不进入 M2。
+- Google 只使用固定 HTTPS token/JWKS 地址，reqwest 禁止重定向、连接/整体超时、响应大小上限；每次回调重新读取 JWKS，暂不引入缓存和后台刷新。ring 验证 RS256（RSA >=2048 位），严格校验两种 Google issuer、aud、exp、nonce、可选 azp/nbf/iat、email_verified 与 Gmail；任何 hd 声明包括 null 均拒绝。没有手写密码学原语。
+- VerifiedIdentity 只能由验签函数构造；handler 不接受 id_token。state 成功消费后即使 code/注册失败也不复用。邀请码随 state 存 Redis，与回调参数无关；空邀请码视为未填写。
+- 注册事务按固定顺序取得 IP/sub/canonical-email advisory locks，再读最新并锁住注册设置；已有用户按 sub 登录，绝不按邮箱合并账号；首次 canonical 冲突拒绝。邀请码行锁消费、建用户、Session、last_login、审计同事务，审计失败整体回滚。首次 Bootstrap 绕过注册模式但不绕过 IP 配额，之后不因环境变量重新提升角色。
+- 登录轮换本浏览器旧会话；其他设备保持，退出仍是全设备退出，符合已有设置页文案。M1 无钱包写入，注册赠送由 M2 的 wallet 幂等接口实现。
+- 管理员 TOTP 为 SHA1/六位/30 秒/±1 步；待绑定 secret 10 分钟并绑定用户和发起 Session。ChaCha20Poly1305 使用 CSPRNG nonce 与用户 UUID AAD；MASTER_KEY 为环境提供的 32 字节 base64，无生产默认值。确认时才启用；时间步在 PostgreSQL 用户行锁中原子单次接受，跨设备不能重放；当前会话获得 12 小时验证时效。已绑定不可用 setup 覆盖，不额外引入恢复/重置功能。
+- 绑定流程必须把当前用户自己的 TOTP 配置交给验证器，因此仅已认证管理员、CSRF 通过、未绑定时返回一次性 otpauth_uri。前端仅在内存临时展示该用户的验证器密钥，不存 localStorage；MASTER_KEY、Google Client Secret、上游密钥不返回前端，也不写日志。这与禁止前端存放服务端密钥的要求区分。
+- MFA 额外限流选择 5 次/5 分钟/用户；管理员写操作仍按规格 60 次/分钟。Redis 故障拒绝，不降级到内存。
+- IP 来源默认 TCP 对端，绝不直接相信转发头；部署反向代理时仅允许显式 TRUSTED_PROXY_IPS 提供单值 X-Real-IP，代理需覆盖该头。避免共享代理 IP 导致用户共用配额，也避免客户端改头绕过。
+- 所有 OAuth/Redis/Bootstrap/MASTER_KEY 生产配置必填。自动审批曾因把测试固定值判为生产默认值拒绝配置接线；改为生产无默认凭据，独立 tests/config.rs 使用临时随机密钥的纯测试夹具，安全替代后审批通过，未请求放宽安全要求。
+- /login 的服务条款链接提供开发阶段占位说明；正式法律文案属 M10，上线前必须替换，不把占位当作已完成法律条款。
+- 新迁移 202610220300_m1_login_mfa.sql 添加待绑定状态与防重放时间步，不修改已提交迁移。OpenAPI 与生成类型同步；Google 真凭据/部署回归仍由用户后续自行完成。
+- 测试签名私钥仅为本轮本机生成的合成夹具，在 tests/fixtures 下；真实浏览器夹具也只在 tests/browser_harness.rs 中，需 TEST_AUTH_HARNESS=1 和隔离数据库/Redis，生产 main 没有该模式或测试提供方。
+- Windows 本机 session_http 的默认调试产物反复遇到 LNK1104，检查无对应运行进程、无 Defender 检测事件；清理该包构建缓存后仍出现。仅对本机测试设置 CARGO_PROFILE_TEST_DEBUG=0（不改断言、优化级别或安全逻辑）后 14 项权限 HTTP 测试通过；CI 保留标准配置运行。

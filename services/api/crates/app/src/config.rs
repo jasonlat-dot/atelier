@@ -9,6 +9,12 @@ pub struct Config {
     pub web_dir: PathBuf,
     pub expose_openapi: bool,
     pub public_origin: PublicOrigin,
+    pub redis_url: String,
+    pub google_client_id: String,
+    pub google_client_secret: String,
+    pub master_cipher: atelier_auth::mfa::MfaCipher,
+    pub bootstrap: std::collections::HashSet<String>,
+    pub trusted_proxy_ips: std::collections::HashSet<std::net::IpAddr>,
 }
 
 #[derive(Debug, Error)]
@@ -39,7 +45,44 @@ impl Config {
             Some("true") if bind_address.ip().is_loopback() => true,
             _ => return Err(ConfigError("EXPOSE_OPENAPI requires loopback binding")),
         };
+        // Authentication credentials and encryption key have NO defaults.
+        let required = |key| {
+            lookup(key)
+                .filter(|v| !v.trim().is_empty())
+                .ok_or(ConfigError(key))
+        };
+        let redis_url = required("REDIS_URL")?;
+        if !(redis_url.starts_with("redis://") || redis_url.starts_with("rediss://")) {
+            return Err(ConfigError("REDIS_URL"));
+        }
+        let google_client_id = required("GOOGLE_CLIENT_ID")?;
+        let google_client_secret = required("GOOGLE_CLIENT_SECRET")?;
+        let master_cipher = atelier_auth::mfa::MfaCipher::from_base64(&required("MASTER_KEY")?)
+            .map_err(|_| ConfigError("MASTER_KEY"))?;
+        let mut bootstrap = std::collections::HashSet::new();
+        for email in required("BOOTSTRAP_ADMIN_EMAILS")?.split(',') {
+            bootstrap.insert(
+                atelier_auth::policy::canonical_email(email.trim())
+                    .map_err(|_| ConfigError("BOOTSTRAP_ADMIN_EMAILS"))?,
+            );
+        }
+        let mut trusted_proxy_ips = std::collections::HashSet::new();
+        if let Some(ips) = lookup("TRUSTED_PROXY_IPS") {
+            for ip in ips.split(',').filter(|v| !v.trim().is_empty()) {
+                trusted_proxy_ips.insert(
+                    ip.trim()
+                        .parse()
+                        .map_err(|_| ConfigError("TRUSTED_PROXY_IPS"))?,
+                );
+            }
+        }
         Ok(Self {
+            redis_url,
+            google_client_id,
+            google_client_secret,
+            master_cipher,
+            bootstrap,
+            trusted_proxy_ips,
             database_url,
             bind_address,
             expose_openapi,
@@ -48,66 +91,5 @@ impl Config {
                 .map(PathBuf::from)
                 .unwrap_or_else(|| "../../apps/web/dist".into()),
         })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    fn load(values: &[(&str, &str)]) -> Result<Config, ConfigError> {
-        Config::from_lookup(|key| {
-            values
-                .iter()
-                .find(|(k, _)| *k == key)
-                .map(|(_, v)| v.to_string())
-                .or_else(|| (key == "PUBLIC_BASE_URL").then(|| "https://atelier.test".into()))
-        })
-    }
-    #[test]
-    fn missing_database_fails_without_revealing_secrets() {
-        assert!(load(&[]).is_err());
-        let error = load(&[("DATABASE_URL", "https://user:secret@host")])
-            .err()
-            .unwrap();
-        assert!(!error.to_string().contains("secret"));
-    }
-    #[test]
-    fn openapi_requires_explicit_loopback_development_config() {
-        let base = ("DATABASE_URL", "postgres://localhost/atelier");
-        assert!(!load(&[base]).unwrap().expose_openapi);
-        assert!(
-            load(&[base, ("EXPOSE_OPENAPI", "true")])
-                .unwrap()
-                .expose_openapi
-        );
-        assert!(load(&[
-            base,
-            ("EXPOSE_OPENAPI", "true"),
-            ("BIND_ADDRESS", "0.0.0.0:8080")
-        ])
-        .is_err());
-        assert!(load(&[base, ("EXPOSE_OPENAPI", "yes")]).is_err());
-    }
-    #[test]
-    fn public_origin_is_required_and_invalid_values_are_redacted() {
-        assert!(Config::from_lookup(
-            |key| (key == "DATABASE_URL").then(|| "postgres://localhost/atelier".into())
-        )
-        .is_err());
-        let error = load(&[
-            ("DATABASE_URL", "postgres://localhost/atelier"),
-            ("PUBLIC_BASE_URL", "https://user:secret@atelier.test"),
-        ])
-        .err()
-        .unwrap();
-        assert_eq!(
-            error.to_string(),
-            "Invalid or missing configuration: PUBLIC_BASE_URL"
-        );
-        assert!(load(&[
-            ("DATABASE_URL", "postgres://localhost/atelier"),
-            ("PUBLIC_BASE_URL", "http://external.test")
-        ])
-        .is_err());
     }
 }

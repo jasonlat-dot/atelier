@@ -29,3 +29,5 @@
 ## 验证边界
 
 真实 PostgreSQL/Redis 测试按用户要求在本机跳过，由 CI 隔离服务执行，结果另见 PROGRESS.md。用户此前截图中 identity-schema 成功只适用于旧提交，不能代替新版本真实实例验证。未据本地审计通过宣称整条远端 CI 已绿。
+
+M1 登录/TOTP 增量后再次审计：完整锁文件 282 个依赖，1348 条官方公告，cargo audit 退出码 0、无漏洞；npm audit 0。新增 ring、totp-rs 6、chacha20poly1305 0.11 与 reqwest；未重新引入 rsa。

@@ -1,26 +1,29 @@
-# M1 当前 API 契约
+# M1 API 契约
 
-结构化契约：`openapi.json`（Rust utoipa 导出）；前端：`apps/web/src/lib/generated/api.d.ts`（openapi-typescript 生成）。检查：根目录 `python scripts/check_contract.py`。
+结构化契约：`openapi.json`（utoipa）；前端类型：`apps/web/src/lib/generated/api.d.ts`。一致性检查：`python scripts/check_contract.py`。
 
-| 方法与路径 | 当前行为 |
+| 方法与路径 | 行为 |
 | --- | --- |
-| GET /api/v1/health | 公开进程存活检查，不代表数据库或完整认证可用 |
-| GET /api/v1/me | Cookie 会话查询，返回 user、csrf_token、mfa_required；不返回哈希、MFA 密钥、Google sub/token 或虚构积分 |
-| PATCH /api/v1/me | 只接受 display_name；1..100 字符，trim 后校验，未知字段拒绝；修改与审计同事务 |
-| GET /api/v1/me/sessions | 当前用户的有效设备列表（最多 100），独立设备 UUID、时间、IP、UA、是否当前设备 |
-| DELETE /api/v1/me/sessions/{id} | 只撤销当前用户设备，跨用户/不存在 404；当前设备撤销同时清 Cookie |
-| POST /api/v1/auth/logout | 撤销当前用户所有 Session 并清 Cookie；与审计同事务 |
-| /api/v1/admin/*、/api/admin/* | 权限/MFA 校验后，未实现的业务返回 404；普通用户 403 |
-| /api/v1/dev/login | 永久移除，404 |
-| /media/* | 404，M3 再接入 |
+| GET /api/v1/health | 进程存活检查，不替代基础设施就绪检查 |
+| GET /api/v1/public/config | 最新 registration_mode 与版本；不返回白名单/凭据；no-store |
+| GET /api/v1/auth/google/start?invite=… | 20 次/10 分钟/IP；state/nonce/S256 PKCE，Redis TTL 600 秒，浏览器绑定 Cookie，302 Google；邀请码只绑定在服务端 state 中 |
+| GET /api/v1/auth/google/callback | 原子消费 state → 后端换 code → ring 验 RS256/JWKS/iss/aud/exp/nonce/Gmail/hd → 事务注册/登录与会话轮换 → 303 /settings；前端不上传 id_token |
+| GET /api/v1/me | 服务端 user、csrf_token、mfa_required；不返回 token_hash、Google sub/token、MFA 密钥或虚构积分 |
+| PATCH /api/v1/me | 仅 display_name，trim 后 1..100 字符，修改与审计同事务 |
+| GET /api/v1/me/sessions | 当前用户有效设备列表，独立 UUID、时间、IP、UA、当前设备标志 |
+| DELETE /api/v1/me/sessions/{id} | 只撤销当前用户设备；跨用户/不存在 404；撤销当前设备清 Cookie |
+| POST /api/v1/auth/logout | 撤销当前用户全部 Session 并清 Cookie，与审计同事务 |
+| POST /api/v1/admin/mfa/setup | 管理员绑定；创建 10 分钟、当前会话绑定的加密待确认 secret；返回本人的一次性 otpauth_uri。已绑定不可覆盖 |
+| POST /api/v1/admin/mfa/verify | 只接受 `{code}` 六位数字；确认绑定或验证，单用户时间步原子防重放，成功后当前 Session MFA 有效 12 小时 |
+| /api/v1/admin/*、/api/admin/* | 普通用户 403；管理员需最近 MFA（绑定/验证入口例外）；写操作限流 60 次/分钟/用户；后续里程碑未实现业务 404 |
+| /api/v1/dev/login、/media/* | 404；无开发登录，媒体由 M3 实现 |
 
-所有受保护响应包含 Cache-Control: no-store。Cookie 名 __Host-sid；非 GET 必须带匹配可信 PUBLIC_BASE_URL 的 Origin/Host 与 X-CSRF-Token。重复安全头拒绝。OpenAPI 声明 cookie/CSRF security scheme。
+受保护请求逐次查 PostgreSQL 最新角色/状态。所有非 GET 的已认证请求必须匹配配置 PUBLIC_BASE_URL 的 Origin/Host，并带 Session 绑定 X-CSRF-Token；重复安全头拒绝。Google start/callback 仅 GET，HEAD 不创建/消费状态。认证响应 no-store、no-referrer。
 
-- 无/伪造/过期/撤销 Session：401 UNAUTHENTICATED。
-- 当前数据库用户禁用：403 ACCOUNT_DISABLED；角色逐请求查询，不接受请求体身份。
-- 普通用户管理请求或 CSRF：403 FORBIDDEN；缺少/过期 MFA：403 MFA_REQUIRED。
-- 参数校验：422 VALIDATION；数据库异常：503 SERVICE_UNAVAILABLE。
-- 错误体统一 `{error:{code,message,request_id}}`，内部细节不返回。
-- /api/openapi.json 默认 404；显式 EXPOSE_OPENAPI=true 且回环绑定时可公开开发查看。
+会话 Cookie 为 __Host-sid（Secure/HttpOnly/SameSite=Lax/Path=/），数据库仅存哈希；空闲 7 天、绝对 30 天。登录轮换本浏览器旧 Cookie，不撤销其他设备；退出所有设备撤销全部会话。
 
-**Google 登录/注册、Session 签发轮换、Redis state/限流、真实 TOTP 尚未接通。** 当前接口只消费已有有效数据库会话，生产前端不提供假登录。5 项 PostgreSQL 测试待真实实例运行，完整 M1 未验收。
+错误体：`{error:{code,message,request_id}}`。401 UNAUTHENTICATED / MFA_INVALID；403 ACCOUNT_DISABLED / FORBIDDEN / MFA_REQUIRED / REGISTRATION_CLOSED / INVITE_REQUIRED；409 IDENTITY_CONFLICT；422 VALIDATION；429 TOO_MANY_REQUESTS（Retry-After）；503 SERVICE_UNAVAILABLE。服务端不回显内部错误、连接串或凭据。
+
+MFA 验证额外限制 5 次/5 分钟/用户。角色改变/禁用通过触发器撤销会话；管理员 MFA 操作在事务内再次校验账号/会话，成功写审计。M2/M5 的积分/任务尚未实现，不提供相关资金或资源能力。
+
+默认只信真实 TCP 对端 IP，忽略 X-Forwarded-For。只有显式配置 TRUSTED_PROXY_IPS 的对端可提供单值 X-Real-IP；代理必须覆盖该头，禁止透传客户端伪造值。Google Client Secret 和 MASTER_KEY 仅后端环境变量必填，无默认值。

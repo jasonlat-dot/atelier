@@ -19,6 +19,8 @@ pub struct AttemptRecord {
     pkce_verifier: String,
     browser_hash: String,
     created_at: i64,
+    #[serde(default)]
+    invite: Option<String>,
 }
 impl fmt::Debug for AttemptRecord {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -26,6 +28,9 @@ impl fmt::Debug for AttemptRecord {
     }
 }
 impl AttemptRecord {
+    pub fn invite(&self) -> Option<&str> {
+        self.invite.as_deref()
+    }
     pub fn nonce(&self) -> &str {
         &self.nonce
     }
@@ -96,6 +101,18 @@ impl AttemptFlow {
         })
     }
     pub async fn begin(&self, ip: IpAddr) -> Result<BeginAttempt, BeginError> {
+        self.begin_with_invite(ip, None).await
+    }
+    pub async fn begin_with_invite(
+        &self,
+        ip: IpAddr,
+        invite: Option<String>,
+    ) -> Result<BeginAttempt, BeginError> {
+        if invite.as_ref().is_some_and(|v| {
+            v.is_empty() || v.len() > 128 || !v.bytes().all(|b| b.is_ascii_graphic())
+        }) {
+            return Err(BeginError::InvalidState);
+        }
         let canonical_ip = match ip {
             IpAddr::V6(ip) => ip
                 .to_ipv4_mapped()
@@ -146,6 +163,7 @@ impl AttemptFlow {
                 pkce_verifier: verifier.secret().clone(),
                 browser_hash: digest(&browser),
                 created_at: Utc::now().timestamp(),
+                invite: invite.clone(),
             };
             let payload = serde_json::to_string(&record).map_err(|_| BeginError::Unavailable)?;
             if self

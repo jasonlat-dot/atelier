@@ -45,7 +45,7 @@ pub fn canonical_email(email: &str) -> Result<String, PolicyError> {
     Ok(format!("{canonical}@gmail.com"))
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GoogleIdentity {
     pub google_sub: String,
     pub email: String,
