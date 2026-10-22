@@ -89,3 +89,10 @@ M1 历史交付未打包、未部署。条款仍是开发占位，正式法律�
 - 用户希望一个终端启动两端：根目录新增 package.json / package-lock.json 和 scripts/dev.mjs，`npm run dev` 启动真实 API + Vite，`dev:api` / `dev:web` 可单独运行。不新增第三方依赖。
 - 后端单独读取 services/api/.env；前端强制 HTTP 模式，不接收从后端文件加载的密钥。端口已占用时拒绝启动，不结束旧服务；Ctrl+C 和子进程失败时清理本次启动的进程树。
 - 本机 Windows 真实冒烟通过：登录页、健康检查、PG public/config、匿名 401；Vite runtime __MOCK__=false；重复启动拒绝；Ctrl+C 后 8080/5173 释放；缺少 Cargo 时清理前端。Node 语法与 Prettier、Rust fmt/clippy/workspace test、前端 typecheck/build 均通过。README 已补一条命令启动说明，CI 增加入口语法检查。
+
+## M2 · Google 实账号回调修复
+
+- 用户实账号返回标准 iss，旧回调结构将其当未知参数拒绝；app/src/login_http.rs 补充必填 issuer 和严格 Google HTTPS 匹配，错误响应不消费 state。未修改数据库、Cookie 策略或令牌验签。
+- app/tests/login_http.rs 真实响应参数回归先失败后通过，合计 5/5；覆盖错误/缺失/重复 issuer、未知参数和重放。Playwright 的 Google 模拟回调同步带 iss，避免再次漏测。
+- 本地 fmt/clippy/workspace test/check（45 项普通测试）、前端 typecheck/lint/format:check/build、契约与 baseline 3/3 通过。使用独立构建目录避开用户运行中的 exe；未在占用中的 8080 启动第二份浏览器夹具，完整真实 PG/Redis 浏览器链路交由本次 Actions 再验收。
+- 另验证 Google JWKS 直连失败、本机 7890 代理可达；后端本地 .env 已补现有代理地址（未提交）。用户需重启 npm run dev 并从登录页重新授权；尚不宣称真实 Google 实账号登录已通过。

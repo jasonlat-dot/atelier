@@ -96,6 +96,7 @@ pub async fn google_start(
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Callback {
+    iss: String,
     state: Option<String>,
     code: Option<String>,
     error: Option<String>,
@@ -121,7 +122,7 @@ fn browser_cookie(headers: &HeaderMap) -> Result<String, AuthFailure> {
     }
     value.ok_or(AuthFailure::State)
 }
-#[utoipa::path(get,path="/api/v1/auth/google/callback",params(("state"=String,Query),("code"=Option<String>,Query)),responses((status=303,description="Session issued; redirect to settings"),(status=401,body=ErrorResponse),(status=403,body=ErrorResponse),(status=409,body=ErrorResponse),(status=429,body=ErrorResponse),(status=503,body=ErrorResponse)))]
+#[utoipa::path(get,path="/api/v1/auth/google/callback",params(("iss"=String,Query,description="Must exactly equal https://accounts.google.com"),("state"=String,Query),("code"=Option<String>,Query)),responses((status=303,description="Session issued; redirect to settings"),(status=401,body=ErrorResponse),(status=403,body=ErrorResponse),(status=409,body=ErrorResponse),(status=429,body=ErrorResponse),(status=503,body=ErrorResponse)))]
 pub async fn google_callback(
     State(state): State<AppState>,
     method: Method,
@@ -134,6 +135,11 @@ pub async fn google_callback(
     }
     let result = async {
         let Query(query) = query.map_err(|_| AuthFailure::State)?;
+        // RFC 9207: Google always supplies its issuer. Check before consuming state
+        // or sending the authorization code to the fixed token endpoint.
+        if query.iss != "https://accounts.google.com" {
+            return Err(AuthFailure::State);
+        }
         let browser = browser_cookie(&headers)?;
         let ip = client_ip(&state, connection, &headers)?;
         let context = LoginContext {

@@ -1,5 +1,13 @@
 # Atelier 开发决策
 
+## 2026-10-22 · Google 实账号回调 issuer 修复
+
+- 用户实账号回调包含 `iss=https://accounts.google.com`，旧 Callback 使用 deny_unknown_fields 却未声明 iss，导致合法响应在 Query 解析阶段直接返回 401。旧自动化提供方未附带该标准字段，因此此前 CI 未覆盖真实响应形态。
+- 按 [Google 官方参考](https://developers.google.com/identity/openid-connect/reference) 与 [RFC 9207](https://www.rfc-editor.org/rfc/rfc9207.html) 声明必填 iss，严格匹配 HTTPS Google issuer，在消费 state 和兑换 code 前校验。缺失、空、重复、HTTP、其他域名、尾斜杠或附带伪造 id_token 均拒绝。保留未知字段拒绝、浏览器绑定、PKCE、一次性 state 与 JWT 签名/声明校验，不放宽认证。
+- 先将真实 issuer 加入 HTTP/浏览器夹具并新增回归，确认旧实现 2 项失败，再修复到 login_http 5/5 通过。浏览器模拟 Google 的重定向现在也包含 issuer；OpenAPI 与 TypeScript 同步更新。
+- 用户正在运行后端，Windows 锁住默认目录的 exe；本机验证使用忽略的独立 CARGO_TARGET_DIR，未停止用户服务。应用新修复需 Ctrl+C 后重新 npm run dev，再从登录页发起新的授权流程，不能刷新旧回调 URL。
+- 本机读取公开 Google JWKS 的检查：直连失败，现有本机 7890 代理返回有效公钥。仅在后端忽略配置中补 HTTPS_PROXY（如已有则保留），不写前端或提交到仓库。实际 Google 账号完成登录仍需用户重试验证。
+
 ## 2026-10-22 · 一条命令启动真实前后端
 
 - 用户明确希望像 npm run 一样启动，不要求手动开启两个终端。根目录提供 npm run dev、dev:api、dev:web，由 Node 原生子进程启动 Cargo 与现有 Vite；无新第三方依赖，也不改为 npm workspace，保留 apps/web 独立锁文件。

@@ -118,7 +118,7 @@ async fn oidc_start_callback_replay_and_invite_binding_are_enforced_over_http() 
         .next()
         .unwrap()
         .to_owned();
-    let callback = format!("/api/v1/auth/google/callback?state={oauth_state}&code=valid-code");
+    let callback = format!("/api/v1/auth/google/callback?state={oauth_state}&code=valid-code&iss=https%3A%2F%2Faccounts.google.com");
     assert_eq!(
         get(state.clone(), &callback, "__Host-oidc=forged")
             .await
@@ -159,6 +159,55 @@ async fn oidc_start_callback_replay_and_invite_binding_are_enforced_over_http() 
         .status(),
         StatusCode::UNAUTHORIZED
     );
+}
+#[tokio::test]
+async fn callback_issuer_must_match_google_without_consuming_a_valid_attempt() {
+    let (state, repo) = fixture();
+    let begin = get(state.clone(), "/api/v1/auth/google/start", "").await;
+    let location = url::Url::parse(begin.headers()["location"].to_str().unwrap()).unwrap();
+    let oauth_state = location
+        .query_pairs()
+        .find(|(key, _)| key == "state")
+        .unwrap()
+        .1
+        .into_owned();
+    let cookie = begin.headers()["set-cookie"]
+        .to_str()
+        .unwrap()
+        .split(';')
+        .next()
+        .unwrap()
+        .to_owned();
+    let callback = format!("/api/v1/auth/google/callback?state={oauth_state}&code=valid-code");
+    for issuer in [
+        "",
+        "&iss=",
+        "&iss=https%3A%2F%2Fevil.test",
+        "&iss=http%3A%2F%2Faccounts.google.com",
+        "&iss=accounts.google.com",
+        "&iss=https%3A%2F%2Faccounts.google.com%2F",
+        "&iss=https%3A%2F%2Faccounts.google.com&iss=https%3A%2F%2Faccounts.google.com",
+        "&iss=https%3A%2F%2Faccounts.google.com&id_token=forged",
+    ] {
+        assert_eq!(
+            get(state.clone(), &format!("{callback}{issuer}"), &cookie)
+                .await
+                .status(),
+            StatusCode::UNAUTHORIZED,
+            "issuer suffix: {issuer}"
+        );
+        assert_eq!(repo.calls.load(Ordering::SeqCst), 0);
+    }
+    let valid = format!("{callback}&iss=https%3A%2F%2Faccounts.google.com&scope=openid%20email%20profile&authuser=0&prompt=none");
+    assert_eq!(
+        get(state.clone(), &valid, &cookie).await.status(),
+        StatusCode::SEE_OTHER
+    );
+    assert_eq!(
+        get(state, &valid, &cookie).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(repo.calls.load(Ordering::SeqCst), 1);
 }
 #[tokio::test]
 async fn public_config_is_redacted_and_start_rate_is_not_bypassed_by_forwarded_headers() {

@@ -17,6 +17,7 @@ async function google(page: Page, kind: 'user' | 'admin') {
       'http://127.0.0.1:8080/api/v1/auth/google/callback',
     );
     callback.searchParams.set('state', query.get('state') || '');
+    callback.searchParams.set('iss', 'https://accounts.google.com');
     callback.searchParams.set('code', code);
     // Playwright routes only the first request in a redirect chain. Preserve
     // the real backend cookie and assert its Google URL before emulating IdP.

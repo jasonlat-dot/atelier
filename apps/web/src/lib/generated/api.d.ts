@@ -706,6 +706,8 @@ export interface operations {
     google_callback: {
         parameters: {
             query: {
+                /** @description Must exactly equal https://accounts.google.com */
+                iss: string;
                 state: string;
                 code?: string;
             };

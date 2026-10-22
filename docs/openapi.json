@@ -425,6 +425,15 @@
         "operationId": "google_callback",
         "parameters": [
           {
+            "name": "iss",
+            "in": "query",
+            "description": "Must exactly equal https://accounts.google.com",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "state",
             "in": "query",
             "required": true,
