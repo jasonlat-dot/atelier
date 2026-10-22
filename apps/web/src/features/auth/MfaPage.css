@@ -1,0 +1,217 @@
+.signin-screen.mfa-screen {
+  display: block;
+  overflow: auto;
+  padding: 48px 20px;
+  background: #f4f2ee;
+  color: #1f1e1b;
+}
+
+.signin-card.mfa-card {
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 36px;
+  border-color: #e5e1da;
+  border-radius: 20px;
+  box-shadow: 0 20px 40px -16px #403a2e1f;
+}
+
+.mfa-eyebrow {
+  margin-bottom: 14px;
+  color: #726d62;
+  font-size: 11px;
+  letter-spacing: 1.5px;
+}
+
+.mfa-card h1 {
+  margin-bottom: 12px;
+}
+
+.mfa-card p {
+  margin-bottom: 14px;
+  color: #6c6962;
+  font-size: 13px;
+  line-height: 1.75;
+}
+
+.mfa-steps {
+  margin: 24px 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: mfa-step;
+}
+
+.mfa-steps > li {
+  position: relative;
+  padding-left: 36px;
+  margin-top: 24px;
+  counter-increment: mfa-step;
+}
+
+.mfa-steps > li::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid #ddd7cc;
+  border-radius: 50%;
+  background: #f6f4ef;
+  color: #655e50;
+  content: counter(mfa-step);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mfa-steps h2 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 24px;
+}
+
+.mfa-steps a,
+.mfa-card .mfa-switch {
+  color: #356358;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.mfa-enrollment {
+  padding: 16px;
+  border: 1px solid #e5e1da;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.mfa-qr {
+  margin: 0;
+  text-align: center;
+}
+
+.mfa-qr svg {
+  display: block;
+  width: min(100%, 208px);
+  height: auto;
+  margin: 0 auto;
+}
+
+.mfa-qr figcaption {
+  margin-top: 8px;
+  color: #6c6962;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.mfa-card .mfa-switch {
+  min-height: 40px;
+  margin: 4px 0;
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-size: 13px;
+}
+
+.mfa-card .mfa-help {
+  margin-bottom: 0;
+  color: #80796e;
+  font-size: 12px;
+}
+
+.mfa-details {
+  margin: 0 0 16px;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.mfa-details > div + div {
+  margin-top: 10px;
+}
+
+.mfa-details dt {
+  color: #80796e;
+}
+
+.mfa-details dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.mfa-card label {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.mfa-card .input {
+  width: 100%;
+  min-width: 0;
+  border-color: #ddd7cc;
+  border-radius: 8px;
+}
+
+.mfa-secret {
+  font-family: Consolas, monospace;
+  font-size: 12px;
+}
+
+.mfa-form {
+  display: grid;
+  gap: 10px;
+  padding-top: 24px;
+  border-top: 1px solid #e5e1da;
+}
+
+.mfa-form .mfa-code {
+  font-size: 20px;
+  letter-spacing: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mfa-form .btn {
+  width: 100%;
+  min-height: 44px;
+}
+
+.mfa-footer {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  margin-top: 20px;
+  color: #80796e;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.mfa-card .mfa-error {
+  padding: 12px;
+  border-radius: 8px;
+  background: #faf0eb;
+  color: #9b4235;
+}
+
+.mfa-card :is(button, a, input):focus-visible {
+  outline: 2px solid #356358;
+  outline-offset: 3px;
+}
+
+@media (max-width: 480px) {
+  .signin-screen.mfa-screen {
+    padding: 24px 16px;
+  }
+
+  .signin-card.mfa-card {
+    padding: 28px 20px;
+  }
+
+  .mfa-steps > li {
+    padding-left: 30px;
+  }
+
+  .mfa-enrollment {
+    padding: 12px;
+  }
+}

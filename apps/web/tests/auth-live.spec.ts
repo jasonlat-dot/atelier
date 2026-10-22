@@ -97,6 +97,10 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   expect((await page.request.get('/api/v1/admin/users')).status()).toBe(403);
   page.once('dialog', (d) => d.accept());
   await page.getByRole('button', { name: '绑定验证器' }).click();
+  await expect(
+    page.getByRole('img', { name: 'Atelier 验证器绑定二维码' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: '无法扫码？使用密钥' }).click();
   const secret = await page.getByLabel('验证器密钥').inputValue();
   const code = otp(secret);
   await page.getByLabel('六位验证码').fill(code);

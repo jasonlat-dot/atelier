@@ -200,9 +200,22 @@ test('administrator enrolls MFA through CSRF protected endpoints and returns to 
     return route.fulfill({ json: { sessions: [] } });
   });
   await page.goto('/settings');
+  await expect(
+    page.getByRole('list', { name: '验证器绑定步骤' }),
+  ).toBeVisible();
+  await expect(page.getByRole('link', { name: '查看安装说明' })).toBeVisible();
   page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: '绑定验证器' }).click();
+  const qr = page.getByRole('img', { name: 'Atelier 验证器绑定二维码' });
+  await expect(qr).toBeVisible();
+  await expect(page.getByLabel('验证器密钥')).toHaveCount(0);
+  await page.getByRole('button', { name: '无法扫码？使用密钥' }).click();
+  await expect(qr).toHaveCount(0);
   await expect(page.getByLabel('验证器密钥')).toHaveValue('TESTSECRET');
+  await expect(page.getByText('基于时间（Time based）')).toBeVisible();
+  await page.getByRole('button', { name: '返回二维码绑定' }).click();
+  await expect(qr).toBeVisible();
+  await expect(page.getByLabel('验证器密钥')).toHaveCount(0);
   await page.getByLabel('六位验证码').fill('123456');
   await page.getByRole('button', { name: '验证并继续' }).click();
   await expect(page.getByRole('heading', { name: '账号设置' })).toBeVisible();

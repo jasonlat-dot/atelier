@@ -110,3 +110,12 @@ M1 历史交付未打包、未部署。条款仍是开发占位，正式法律�
 - `apps/web/vite.config.ts` 改为显式 target / changeOrigin=false，保持原始 Host、Origin 和 CSRF 请求头。后端来源、Host、CSRF、管理员权限及 TOTP 检查保持严格，不修改用户数据库或绑定状态。
 - 新增 `tests/dev-proxy.test.mjs`，加载实际 Vite 配置、使用随机隔离端口验证 POST MFA setup 的请求头转发；修复前明确在 Host 断言失败，修复后通过，并断言外部 Origin 不会被改成可信来源。CI 已增加此检查。
 - 前端 typecheck/lint/format:check/build、代理回归、基线 3/3、OpenAPI 契约检查均通过。需用户刷新或重启开发服务后再次绑定验证器；尚未替用户完成真实 MFA 绑定。
+
+## M2 · 管理员验证器扫码与页面指引
+
+- 用户确认代理修复后已能获取绑定材料；指出页面缺少下一步指引，并明确要求默认二维码、可切换手动密钥。`MfaPage.tsx` / `MfaPage.css` 补充准备手机验证器、扫码添加、填写六位验证码三步引导及安装说明。
+- 点击绑定后默认展示本地生成的 SVG 二维码；“无法扫码？使用密钥”展示账号名称、基于时间类型及可复制密钥，可返回二维码，切换不重新请求 setup。已绑定账号仅显示验证码验证；补充 10 分钟绑定期限、验证码来源、过期及接口失败提示。
+- 新增固定版本 qrcode.react 4.2.0（React peer，无其他运行依赖），仅在浏览器编码后端已有 otpauth_uri，不调用第三方二维码服务，不修改后端鉴权、数据库或 API 契约。
+- 前端 typecheck/lint/format:check/build、HTTP 浏览器 7/7、Mock 回归、代理/基线 4/4、契约检查通过；Rust fmt/clippy/workspace test 通过，45 项普通测试。更新真实认证浏览器夹具的二维码/密钥切换，真实 PG/Redis 全链路交由本次 Actions 验证。
+- 隔离浏览器使用合成绑定材料验证默认 QR、手动切换、复制、单次 setup、错误及已绑定状态；1280 桌面与 320 小屏检查通过。独立 jsQR 解码实际截图，与原始测试 otpauth URI 完整一致；截图及临时解码工具仅在忽略目录 .tools。没有使用或保存用户真实绑定密钥。
+- 新增依赖后 npm 官方 registry audit 为 0 漏洞；cargo-audit 使用当日最新官方公告库（HEAD 与 fetch 结果一致），1349 条公告 / 282 个 Rust 依赖，退出码 0。
