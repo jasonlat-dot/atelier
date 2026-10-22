@@ -655,6 +655,7 @@ struct MfaRepo {
     session: Arc<FakeRepository>,
     encrypted: Mutex<Option<Vec<u8>>>,
     last: Mutex<Option<i64>>,
+    expired: Mutex<bool>,
 }
 impl atelier_auth::mfa::MfaRepository for MfaRepo {
     fn material(
@@ -663,6 +664,9 @@ impl atelier_auth::mfa::MfaRepository for MfaRepo {
         _session: Uuid,
     ) -> atelier_auth::identity::AuthFuture<'_, atelier_auth::mfa::MfaMaterial> {
         Box::pin(async move {
+            if *self.expired.lock().unwrap() {
+                return Err(atelier_auth::identity::AuthFailure::MfaEnrollmentExpired);
+            }
             Ok(atelier_auth::mfa::MfaMaterial {
                 enabled: self.session.record.lock().unwrap().user.mfa_enabled,
                 encrypted: self
@@ -716,6 +720,7 @@ async fn mfa_endpoints_require_admin_csrf_and_reject_unknown_fields_and_replay()
         session: repo.clone(),
         encrypted: Mutex::new(None),
         last: Mutex::new(None),
+        expired: Mutex::new(false),
     });
     let cipher = MfaCipher::from_base64(&STANDARD.encode([9u8; 32])).unwrap();
     state.limits = Some(limits.clone());
@@ -876,4 +881,57 @@ async fn administrator_write_sliding_window_applies_after_authentication() {
     .await;
     assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
     assert!(response.headers().contains_key("retry-after"));
+}
+
+#[tokio::test]
+async fn expired_mfa_enrollment_has_distinct_status_and_keeps_the_session() {
+    use atelier_auth::mfa::{MfaCipher, MfaService};
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    let (mut state, repo, cookie, csrf) = fixture();
+    repo.record.lock().unwrap().user.role = Role::Admin;
+    let mfa_repo = Arc::new(MfaRepo {
+        session: repo,
+        encrypted: Mutex::new(None),
+        last: Mutex::new(None),
+        expired: Mutex::new(true),
+    });
+    let limits = Arc::new(transient::MemoryTransient::default());
+    state.limits = Some(limits.clone());
+    state.mfa = Some(MfaService::new(
+        mfa_repo.clone(),
+        limits,
+        MfaCipher::from_base64(&STANDARD.encode([9u8; 32])).unwrap(),
+    ));
+    let expired = request(
+        state.clone(),
+        "POST",
+        "/api/v1/admin/mfa/verify",
+        &cookie,
+        Some("https://atelier.test"),
+        Some(&csrf),
+        r#"{"code":"123456"}"#,
+    )
+    .await;
+    assert_eq!(expired.status(), StatusCode::CONFLICT);
+    assert_eq!(expired.headers()["cache-control"], "no-store");
+    assert_eq!(
+        json(expired).await["error"]["code"],
+        "MFA_ENROLLMENT_EXPIRED"
+    );
+    let current = request(state.clone(), "GET", "/api/v1/me", &cookie, None, None, "").await;
+    assert_eq!(current.status(), StatusCode::OK);
+    assert_eq!(json(current).await["mfa_required"], true);
+    *mfa_repo.expired.lock().unwrap() = false;
+    let invalid = request(
+        state,
+        "POST",
+        "/api/v1/admin/mfa/verify",
+        &cookie,
+        Some("https://atelier.test"),
+        Some(&csrf),
+        r#"{"code":"123456"}"#,
+    )
+    .await;
+    assert_eq!(invalid.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(json(invalid).await["error"]["code"], "MFA_INVALID");
 }

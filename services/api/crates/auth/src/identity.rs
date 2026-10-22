@@ -21,6 +21,7 @@ pub enum AuthFailure {
     Disabled,
     Forbidden,
     Mfa,
+    MfaEnrollmentExpired,
     Rate(u64),
     Store,
 }
@@ -63,6 +64,11 @@ impl From<AuthFailure> for ApiError {
                 StatusCode::UNAUTHORIZED,
                 "MFA_INVALID",
                 "Verification code invalid, expired or already used",
+            ),
+            AuthFailure::MfaEnrollmentExpired => (
+                StatusCode::CONFLICT,
+                "MFA_ENROLLMENT_EXPIRED",
+                "Authenticator enrollment has expired",
             ),
             AuthFailure::Rate(_) => (
                 StatusCode::TOO_MANY_REQUESTS,

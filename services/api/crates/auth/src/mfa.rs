@@ -9,7 +9,7 @@ use chacha20poly1305::{
     aead::{Aead, Payload},
     ChaCha20Poly1305, KeyInit, Nonce,
 };
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use sqlx::Row;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -211,17 +211,18 @@ impl MfaRepository for PostgresIdentity {
         Box::pin(async move {
             let mut tx = self.pool.begin().await?;
             lock_actor(&mut tx, owner, session).await?;
-            let row=sqlx::query("SELECT mfa_enabled,mfa_secret_enc,mfa_pending_enc,mfa_pending_expires_at,mfa_pending_session FROM users WHERE id=$1").bind(owner).fetch_one(&mut *tx).await?;
+            let row=sqlx::query("SELECT mfa_enabled,mfa_secret_enc,mfa_pending_enc,mfa_pending_expires_at<=clock_timestamp() AS pending_expired,mfa_pending_session FROM users WHERE id=$1").bind(owner).fetch_one(&mut *tx).await?;
             let enabled: bool = row.get("mfa_enabled");
             let encrypted = if enabled {
                 row.get::<Option<Vec<u8>>, _>("mfa_secret_enc")
             } else {
-                if row
-                    .get::<Option<DateTime<Utc>>, _>("mfa_pending_expires_at")
-                    .is_none_or(|t| t <= Utc::now())
-                    || row.get::<Option<Uuid>, _>("mfa_pending_session") != Some(session)
-                {
+                if row.get::<Option<Uuid>, _>("mfa_pending_session") != Some(session) {
                     return Err(AuthFailure::Mfa);
+                }
+                match row.get::<Option<bool>, _>("pending_expired") {
+                    Some(true) => return Err(AuthFailure::MfaEnrollmentExpired),
+                    None => return Err(AuthFailure::Mfa),
+                    Some(false) => {}
                 }
                 row.get("mfa_pending_enc")
             };
@@ -236,7 +237,7 @@ impl MfaRepository for PostgresIdentity {
         Box::pin(async move {
             let mut tx = self.pool.begin().await?;
             lock_actor(&mut tx, owner, session).await?;
-            let updated=sqlx::query("UPDATE users SET mfa_pending_enc=$2,mfa_pending_session=$3,mfa_pending_expires_at=now()+interval '10 minutes' WHERE id=$1 AND NOT mfa_enabled").bind(owner).bind(encrypted).bind(session).execute(&mut *tx).await?;
+            let updated=sqlx::query("UPDATE users SET mfa_pending_enc=$2,mfa_pending_session=$3,mfa_pending_expires_at=clock_timestamp()+interval '10 minutes' WHERE id=$1 AND NOT mfa_enabled").bind(owner).bind(encrypted).bind(session).execute(&mut *tx).await?;
             if updated.rows_affected() != 1 {
                 return Err(AuthFailure::Forbidden);
             }
@@ -257,11 +258,18 @@ impl MfaRepository for PostgresIdentity {
             let mut tx = self.pool.begin().await?;
             lock_actor(&mut tx, owner, session).await?;
             let updated = if enroll {
-                sqlx::query("UPDATE users SET mfa_enabled=true,mfa_secret_enc=mfa_pending_enc,mfa_pending_enc=NULL,mfa_pending_session=NULL,mfa_pending_expires_at=NULL,mfa_last_step=$4 WHERE id=$1 AND NOT mfa_enabled AND mfa_pending_enc=$2 AND mfa_pending_session=$3 AND mfa_pending_expires_at>now() AND (mfa_last_step IS NULL OR mfa_last_step<$4)").bind(owner).bind(&encrypted).bind(session).bind(step).execute(&mut *tx).await?
+                sqlx::query("UPDATE users SET mfa_enabled=true,mfa_secret_enc=mfa_pending_enc,mfa_pending_enc=NULL,mfa_pending_session=NULL,mfa_pending_expires_at=NULL,mfa_last_step=$4 WHERE id=$1 AND NOT mfa_enabled AND mfa_pending_enc=$2 AND mfa_pending_session=$3 AND mfa_pending_expires_at>clock_timestamp() AND (mfa_last_step IS NULL OR mfa_last_step<$4)").bind(owner).bind(&encrypted).bind(session).bind(step).execute(&mut *tx).await?
             } else {
                 sqlx::query("UPDATE users SET mfa_last_step=$3 WHERE id=$1 AND mfa_enabled AND mfa_secret_enc=$2 AND (mfa_last_step IS NULL OR mfa_last_step<$3)").bind(owner).bind(&encrypted).bind(step).execute(&mut *tx).await?
             };
             if updated.rows_affected() != 1 {
+                if enroll {
+                    let expired: bool = sqlx::query_scalar("SELECT COALESCE(NOT mfa_enabled AND mfa_pending_enc=$2 AND mfa_pending_session=$3 AND mfa_pending_expires_at<=clock_timestamp(),false) FROM users WHERE id=$1")
+                        .bind(owner).bind(&encrypted).bind(session).fetch_one(&mut *tx).await?;
+                    if expired {
+                        return Err(AuthFailure::MfaEnrollmentExpired);
+                    }
+                }
                 return Ok(false);
             }
             sqlx::query("UPDATE sessions SET mfa_verified_at=now() WHERE id=$1 AND user_id=$2")

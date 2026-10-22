@@ -116,6 +116,16 @@
               }
             }
           },
+          "409": {
+            "description": "MFA_ENROLLMENT_EXPIRED: pending enrollment expired; start setup again",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "422": {
             "description": "",
             "content": {

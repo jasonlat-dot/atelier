@@ -337,3 +337,133 @@ test('MFA binding has no native confirmation and logout uses an accessible modal
   expect(setupRequests).toBe(1);
   expect(nativeDialogs).toEqual([]);
 });
+
+test('MFA errors distinguish wrong codes from expired enrollment and renew only on request', async ({
+  page,
+}) => {
+  let setups = 0;
+  let verifies = 0;
+  let setupFailure = false;
+  await page.route('**/api/v1/**', async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === '/api/v1/me')
+      return route.fulfill({
+        json: { ...me, user: { ...user, role: 'ADMIN' }, mfa_required: true },
+      });
+    if (path === '/api/v1/admin/mfa/setup') {
+      setups++;
+      if (setupFailure)
+        return route.fulfill({
+          status: 503,
+          json: { error: { code: 'SERVICE_UNAVAILABLE' } },
+        });
+      return route.fulfill({
+        json: {
+          otpauth_uri: `otpauth://totp/Atelier:test?secret=${'ABCDEFGHIJKLMNOP'[setups].repeat(16)}&issuer=Atelier`,
+        },
+      });
+    }
+    if (path === '/api/v1/admin/mfa/verify') {
+      verifies++;
+      return route.fulfill({
+        status: verifies === 1 ? 401 : 409,
+        json: {
+          error: {
+            code: verifies === 1 ? 'MFA_INVALID' : 'MFA_ENROLLMENT_EXPIRED',
+          },
+        },
+      });
+    }
+    return route.fulfill({ status: 404 });
+  });
+  await page.goto('/settings');
+  await page.getByRole('button', { name: '绑定验证器', exact: true }).click();
+  const input = page.getByLabel('六位验证码');
+  const submit = page.getByRole('button', { name: '验证并继续', exact: true });
+  const qr = page.getByRole('img', { name: 'Atelier 验证器绑定二维码' });
+  await expect(qr).toBeVisible();
+  const original = await qr.locator('path').last().getAttribute('d');
+  await input.fill('123456');
+  await submit.click();
+  const invalid = page.getByRole('alertdialog', { name: '验证码不正确' });
+  await expect(invalid).toBeVisible();
+  await expect(invalid.getByRole('button', { name: '重新输入' })).toBeFocused();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await invalid.getByRole('button', { name: '重新输入' }).click();
+  await expect(invalid).not.toBeVisible();
+  await expect(input).toHaveValue('');
+  await expect(input).toBeFocused();
+  expect(setups).toBe(1);
+  expect(await qr.locator('path').last().getAttribute('d')).toBe(original);
+  await input.fill('123456');
+  await submit.click();
+  const expired = page.getByRole('alertdialog', { name: '绑定已过期' });
+  await expect(expired).toBeVisible();
+  await expect(qr).toHaveCount(0);
+  await expired.getByRole('button', { name: '取消', exact: true }).click();
+  await expect(expired).not.toBeVisible();
+  await expect(input).toBeDisabled();
+  expect(setups).toBe(1);
+  await page.getByRole('button', { name: '重新绑定', exact: true }).click();
+  await expect(qr).toBeVisible();
+  expect(setups).toBe(2);
+  expect(await qr.locator('path').last().getAttribute('d')).not.toBe(original);
+  await input.fill('123456');
+  await submit.click();
+  await expect(expired).toBeVisible();
+  await expired.getByRole('button', { name: '重新绑定', exact: true }).click();
+  await expect(expired).not.toBeVisible();
+  await expect(qr).toBeVisible();
+  await expect(input).toHaveValue('');
+  await expect(input).toBeFocused();
+  expect(setups).toBe(3);
+  await input.fill('123456');
+  await submit.click();
+  await expect(expired).toBeVisible();
+  setupFailure = true;
+  await expired.getByRole('button', { name: '重新绑定', exact: true }).click();
+  const unavailable = page.getByRole('alertdialog', {
+    name: '二维码生成未完成',
+  });
+  await expect(unavailable).toBeVisible();
+  await expect(expired).not.toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(unavailable).not.toBeVisible();
+  await expect(input).toBeDisabled();
+});
+
+test('an enrolled administrator with a wrong code sees retry without a rebind action', async ({
+  page,
+}) => {
+  let setupRequests = 0;
+  await page.route('**/api/v1/**', async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === '/api/v1/me')
+      return route.fulfill({
+        json: {
+          ...me,
+          user: { ...user, role: 'ADMIN', mfa_enabled: true },
+          mfa_required: true,
+        },
+      });
+    if (path === '/api/v1/admin/mfa/setup') setupRequests++;
+    return route.fulfill({
+      status: 401,
+      json: { error: { code: 'MFA_INVALID' } },
+    });
+  });
+  await page.goto('/settings');
+  const input = page.getByLabel('六位验证码');
+  await input.fill('123456');
+  await page.getByRole('button', { name: '验证并继续' }).click();
+  await expect(
+    page.getByRole('alertdialog', { name: '验证码不正确' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: '重新绑定', exact: true }),
+  ).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(input).toBeFocused();
+  await expect(input).toHaveValue('');
+  expect(setupRequests).toBe(0);
+});

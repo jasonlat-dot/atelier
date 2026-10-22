@@ -213,7 +213,7 @@ pub async fn mfa_setup(State(state): State<AppState>, AuthUser(actor): AuthUser)
         None => failure(AuthFailure::Store),
     }
 }
-#[utoipa::path(post,path="/api/v1/admin/mfa/verify",request_body=MfaCode,security(("session"=[],"csrf"=[])),responses((status=204),(status=401,body=ErrorResponse),(status=403,body=ErrorResponse),(status=422,body=ErrorResponse),(status=429,body=ErrorResponse),(status=503,body=ErrorResponse)))]
+#[utoipa::path(post,path="/api/v1/admin/mfa/verify",request_body=MfaCode,security(("session"=[],"csrf"=[])),responses((status=204),(status=401,body=ErrorResponse),(status=403,body=ErrorResponse),(status=409,description="MFA_ENROLLMENT_EXPIRED: pending enrollment expired; start setup again",body=ErrorResponse),(status=422,body=ErrorResponse),(status=429,body=ErrorResponse),(status=503,body=ErrorResponse)))]
 pub async fn mfa_verify(
     State(state): State<AppState>,
     AuthUser(actor): AuthUser,

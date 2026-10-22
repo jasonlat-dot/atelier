@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Check, QrCode } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { sessionApi, SessionError, type Me } from './sessionApi';
+import MfaFeedback, { type MfaNotice } from './MfaFeedback';
 import './MfaPage.css';
 
 function VerificationCode({
@@ -102,30 +103,73 @@ export default function MfaPage({
     inFlight.current = false;
     setPending(null);
   };
-  const [error, setError] = useState('');
+  const [feedback, setFeedback] = useState<MfaNotice | null>(null);
+  const [enrollmentExpired, setEnrollmentExpired] = useState(false);
   const [showSecret, setShowSecret] = useState(false);
   const [copyMessage, setCopyMessage] = useState('');
   const fail = (reason: unknown, operation: 'setup' | 'verify' | 'logout') => {
     if (reason instanceof SessionError && reason.code === 'UNAUTHENTICATED')
       onExpired();
     else if (reason instanceof SessionError && reason.status === 429)
-      setError('尝试过于频繁，请稍后再试。');
+      setFeedback({
+        kind: 'error',
+        title: '操作过于频繁',
+        message: '请稍后再试，验证尝试过于频繁时会暂时限制请求。',
+      });
     else if (reason instanceof SessionError && reason.code === 'FORBIDDEN')
-      setError('请求被拒绝，请刷新页面后重试；若仍失败，请联系管理员。');
+      setFeedback({
+        kind: 'error',
+        title: '请求未能完成',
+        message: '请求被拒绝，请刷新页面后重试；若仍失败，请联系管理员。',
+      });
     else if (reason instanceof SessionError && reason.code === 'MFA_INVALID')
-      setError(
-        me.user.mfa_enabled
-          ? '验证码无效，请输入验证器中最新的六位数字，并确认手机时间准确。'
-          : '验证码无效或绑定已过期。请使用最新验证码；若绑定已超过 10 分钟，请刷新页面后重新绑定。',
-      );
-    else
-      setError(
-        operation === 'setup'
-          ? '暂时无法生成绑定二维码，请稍后重试。'
-          : operation === 'logout'
-            ? '退出未成功，请稍后重试。'
-            : '暂时无法完成验证，请稍后重试。',
-      );
+      setFeedback({
+        kind: 'invalid',
+        title: '验证码不正确',
+        message:
+          '请输入手机验证器中 Atelier 当前显示的 6 位数字，验证码每 30 秒更新一次。',
+      });
+    else if (
+      reason instanceof SessionError &&
+      reason.code === 'MFA_ENROLLMENT_EXPIRED' &&
+      !me.user.mfa_enabled
+    ) {
+      setUri('');
+      setCode('');
+      setCopyMessage('');
+      setEnrollmentExpired(true);
+      setFeedback({
+        kind: 'expired',
+        title: '绑定已过期',
+        message:
+          '二维码有效期为 10 分钟，当前绑定已失效。重新生成二维码后再扫描即可。',
+      });
+    } else
+      setFeedback({
+        kind: 'error',
+        title:
+          operation === 'setup'
+            ? '二维码生成未完成'
+            : operation === 'logout'
+              ? '退出未完成'
+              : '验证未完成',
+        message: '服务暂时不可用，请稍后重试。',
+      });
+  };
+  const generate = () => {
+    if (!begin('setup')) return;
+    setFeedback(null);
+    setCode('');
+    void sessionApi
+      .mfaSetup(me.csrf_token)
+      .then((result) => {
+        setUri(result.otpauth_uri);
+        setEnrollmentExpired(false);
+        setShowSecret(false);
+        setCopyMessage('');
+      })
+      .catch((reason: unknown) => fail(reason, 'setup'))
+      .finally(finish);
   };
   const secret = uri ? new URL(uri).searchParams.get('secret') || '' : '';
   const ready = me.user.mfa_enabled || Boolean(uri);
@@ -135,7 +179,7 @@ export default function MfaPage({
       onSubmit={(event) => {
         event.preventDefault();
         if (!ready || code.length !== 6 || !begin('verify')) return;
-        setError('');
+        setFeedback(null);
         void sessionApi
           .mfaVerify(code, me.csrf_token)
           .then(() => {
@@ -150,7 +194,7 @@ export default function MfaPage({
     >
       <VerificationCode
         value={code}
-        disabled={!ready || busy}
+        disabled={!ready || busy || Boolean(feedback)}
         onChange={setCode}
       />
       {ready && (
@@ -161,7 +205,9 @@ export default function MfaPage({
       )}
       {!ready && (
         <p id="mfa-code-help" className="mfa-code-label">
-          请先点击绑定验证器，再输入手机生成的验证码。
+          {enrollmentExpired
+            ? '绑定已过期，请重新生成二维码后再输入验证码。'
+            : '请先点击绑定验证器，再输入手机生成的验证码。'}
         </p>
       )}
       <button
@@ -189,11 +235,6 @@ export default function MfaPage({
             ? '打开手机验证器，找到 Atelier 账号，输入当前显示的六位验证码。'
             : '你的账号拥有管理员权限，请绑定手机验证器后继续。'}
         </p>
-        {error && (
-          <p className="mfa-error" role="alert">
-            {error}
-          </p>
-        )}
         {!me.user.mfa_enabled && (
           <ol className="mfa-steps" aria-label="验证器绑定步骤">
             <li>
@@ -217,29 +258,23 @@ export default function MfaPage({
                   ? '在手机 App 中点击「＋」→「输入设置密钥」，按下方信息填写并添加。'
                   : uri
                     ? '在手机 App 中点击「＋」→「扫描二维码」，扫描下方二维码，添加 Atelier 账号。'
-                    : '点击下方按钮生成二维码，再用手机验证器的「＋」→「扫描二维码」添加账号。'}
+                    : enrollmentExpired
+                      ? '当前绑定已过期，请点击下方「重新绑定」生成新二维码，再用手机验证器扫描。'
+                      : '点击下方按钮生成二维码，再用手机验证器的「＋」→「扫描二维码」添加账号。'}
               </p>
               {!uri && (
                 <button
                   className="btn btn-dark"
                   disabled={busy}
                   aria-busy={pending === 'setup'}
-                  onClick={() => {
-                    if (!begin('setup')) return;
-                    setError('');
-                    void sessionApi
-                      .mfaSetup(me.csrf_token)
-                      .then((result) => {
-                        setUri(result.otpauth_uri);
-                        setShowSecret(false);
-                        setCopyMessage('');
-                      })
-                      .catch((reason: unknown) => fail(reason, 'setup'))
-                      .finally(finish);
-                  }}
+                  onClick={generate}
                 >
                   <QrCode size={18} aria-hidden="true" />
-                  {pending === 'setup' ? '正在生成二维码…' : '绑定验证器'}
+                  {pending === 'setup'
+                    ? '正在生成二维码…'
+                    : enrollmentExpired
+                      ? '重新绑定'
+                      : '绑定验证器'}
                 </button>
               )}
               {uri && (
@@ -313,7 +348,7 @@ export default function MfaPage({
                   </button>
                   <p className="mfa-help">
                     请在 10
-                    分钟内完成绑定，过期后刷新页面重新绑定。二维码和密钥请妥善保管，不要分享。
+                    分钟内完成绑定，过期后可重新生成二维码。二维码和密钥请妥善保管，不要分享。
                   </p>
                 </>
               )}
@@ -397,7 +432,7 @@ export default function MfaPage({
               onClick={() => {
                 if (!begin('logout')) return;
                 logoutDialog.current?.close();
-                setError('');
+                setFeedback(null);
                 void sessionApi
                   .logout(me.csrf_token)
                   .then(onExpired)
@@ -409,6 +444,20 @@ export default function MfaPage({
             </button>
           </div>
         </dialog>
+        {feedback && (
+          <MfaFeedback
+            notice={feedback}
+            onDismiss={() => {
+              if (feedback.kind === 'invalid') setCode('');
+              setFeedback(null);
+            }}
+            onPrimary={() => {
+              if (feedback.kind === 'invalid') setCode('');
+              setFeedback(null);
+              if (feedback.kind === 'expired') generate();
+            }}
+          />
+        )}
       </section>
     </main>
   );

@@ -3,7 +3,7 @@ mod transient {
     include!("support/transient.rs");
 }
 use atelier_auth::{
-    identity::{IdentityRepository, LoginContext, PostgresIdentity},
+    identity::{AuthFailure, IdentityRepository, LoginContext, PostgresIdentity},
     mfa::{totp, MfaCipher, MfaRepository, MfaService},
     postgres::PostgresSessions,
     service::{PublicOrigin, SessionService},
@@ -48,20 +48,66 @@ async fn mfa_enrollment_replay_concurrency_expiry_and_audit_rollback(pool: PgPoo
     );
     let setup = mfa.setup(&actor).await.unwrap();
     assert!(setup.otpauth_uri.starts_with("otpauth://totp/"));
+    let original = repo
+        .material(actor.user().id, actor.session_id())
+        .await
+        .unwrap();
     sqlx::query("UPDATE users SET mfa_pending_expires_at=now()-interval '1 second' WHERE id=$1")
         .bind(actor.user().id)
         .execute(&pool)
         .await
         .unwrap();
-    assert!(repo
+    let expiry = repo
         .material(actor.user().id, actor.session_id())
         .await
-        .is_err());
-    sqlx::query("UPDATE users SET mfa_pending_expires_at=now()+interval '10 minutes' WHERE id=$1")
+        .err()
+        .unwrap();
+    assert_eq!(expiry, AuthFailure::MfaEnrollmentExpired);
+    assert_eq!(
+        mfa.verify(&actor, "123456").await,
+        Err(AuthFailure::MfaEnrollmentExpired)
+    );
+    assert_eq!(
+        repo.accept(
+            actor.user().id,
+            actor.session_id(),
+            original.encrypted.clone(),
+            1,
+            true
+        )
+        .await,
+        Err(AuthFailure::MfaEnrollmentExpired)
+    );
+    // A different session must not receive the current enrollment's expiry status.
+    let other_session = uuid::Uuid::new_v4();
+    let other_secrets = atelier_auth::session::SessionSecrets::generate().unwrap();
+    sqlx::query("INSERT INTO sessions(id,user_id,token_hash,csrf_token,expires_at) VALUES($1,$2,$3,$4,now()+interval '1 hour')")
+        .bind(other_session).bind(actor.user().id).bind(other_secrets.token_hash().as_slice())
+        .bind(other_secrets.csrf_token()).execute(&pool).await.unwrap();
+    sqlx::query("UPDATE users SET mfa_pending_session=$2 WHERE id=$1")
         .bind(actor.user().id)
+        .bind(other_session)
         .execute(&pool)
         .await
         .unwrap();
+    assert_eq!(
+        repo.material(actor.user().id, actor.session_id())
+            .await
+            .err(),
+        Some(AuthFailure::Mfa)
+    );
+    let renewed = mfa.setup(&actor).await.unwrap();
+    assert_ne!(renewed.otpauth_uri, setup.otpauth_uri);
+    assert!(!repo
+        .accept(
+            actor.user().id,
+            actor.session_id(),
+            original.encrypted,
+            1,
+            true
+        )
+        .await
+        .unwrap());
     let material = repo
         .material(actor.user().id, actor.session_id())
         .await
@@ -71,6 +117,11 @@ async fn mfa_enrollment_replay_concurrency_expiry_and_audit_rollback(pool: PgPoo
     let otp = totp(&plaintext, "admin@gmail.com").unwrap();
     let now = chrono::Utc::now().timestamp() as u64;
     let code = otp.generate(now).to_string();
+    let wrong = (0..10)
+        .map(|value| format!("{value:06}"))
+        .find(|value| otp.check(value, now).is_none())
+        .unwrap();
+    assert_eq!(mfa.verify(&actor, &wrong).await, Err(AuthFailure::Mfa));
     mfa.verify(&actor, &code).await.unwrap();
     let current = service.authenticate("GET", &headers).await.unwrap();
     assert!(!current.me().mfa_required);

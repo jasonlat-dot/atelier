@@ -347,13 +347,6 @@
   margin: 0;
 }
 
-.mfa-card .mfa-error {
-  padding: 12px;
-  border-radius: 8px;
-  background: #faf0eb;
-  color: #9b4235;
-}
-
 .mfa-card :is(button, a, .input):focus-visible {
   outline: 2px solid #356358;
   outline-offset: 3px;
@@ -394,6 +387,67 @@
 
 .mfa-confirm-actions .btn {
   margin: 0;
+}
+
+.mfa-feedback {
+  padding: 36px 32px 28px;
+  text-align: center;
+}
+
+.mfa-feedback::backdrop {
+  background: #0007;
+}
+
+.mfa-feedback-icon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 24px;
+  border-radius: 50%;
+  background: #fbd6d6;
+  color: #a52c2c;
+}
+
+.mfa-feedback-warning {
+  background: #fbdda2;
+  color: #805310;
+}
+
+.mfa-feedback h2 {
+  margin-bottom: 16px;
+  color: #151515;
+  font-size: 22px;
+  line-height: 1.5;
+}
+
+.mfa-feedback p {
+  margin: 0 0 28px;
+  color: #625f59;
+  font-size: 15px;
+  line-height: 1.8;
+}
+
+.mfa-feedback-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.mfa-feedback-actions .btn {
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  margin: 0;
+  font-size: 16px;
+}
+
+.mfa-feedback-actions .btn-dark {
+  background: #111;
+  color: #fff;
+}
+
+.mfa-feedback-actions .btn-dark:hover {
+  background: #303030;
 }
 
 @media (max-width: 600px) {
