@@ -1,0 +1,16 @@
+import type { Edge, Node, Viewport } from '@xyflow/react';
+export type Role='USER'|'ADMIN'|'SUPER_ADMIN';
+export type User={id:string;name:string;email:string;role:Role;credits:number;avatar:string;disabled?:boolean};
+export type MediaKind='image'|'video';
+export type Asset={id:string;name:string;kind:MediaKind;src:string;poster?:string;createdAt:string;ownerId:string;duration?:number};
+export type GraphNodeType='text'|'image'|'video'|'config'|'task';
+export type CanvasData={title?:string;text?:string;src?:string;poster?:string;assetId?:string;quality?:string;ratio?:string;prompt?:string;kind?:MediaKind;model?:string;status?:string;progress?:number;jobId?:string;duration?:number;[key:string]:unknown};
+export type CanvasNode=Node<CanvasData,GraphNodeType>;
+export type CanvasGraph={nodes:CanvasNode[];edges:Edge[];viewport:Viewport};
+export type Project={id:string;ownerId:string;name:string;revision:number;updatedAt:string;graph:CanvasGraph};
+export type JobStatus='queued'|'routing'|'generating'|'completed'|'failed'|'cancelled';
+export type Job={id:string;ownerId:string;projectId:string;nodeId:string;kind:MediaKind;prompt:string;quality:string;ratio:string;model:string;duration?:number;count:number;status:JobStatus;progress:number;cost:number;charged:boolean;createdAt:string;updatedAt:string;resultAssetIds:string[];idempotencyKey:string};
+export type CatalogModel={id:string;label:string;kind:MediaKind;enabled:boolean;cost:number;provider:string};
+export type DB={users:User[];projects:Project[];assets:Asset[];jobs:Job[];models:CatalogModel[];currentUserId:string;checkin:Record<string,string>;ledger:{id:string;userId:string;amount:number;reason:string;at:string;jobId?:string}[]};
+export const PERMISSIONS:Record<Role,string[]>={USER:['canvas:read','canvas:write','generation:create','wallet:read'],ADMIN:['canvas:read','canvas:write','generation:create','wallet:read','admin:read','admin:users:write','admin:models:write'],SUPER_ADMIN:['canvas:read','canvas:write','generation:create','wallet:read','admin:read','admin:users:write','admin:models:write','admin:security:write']};
+export const hasPermission=(role:Role,p:string)=>PERMISSIONS[role].includes(p);
