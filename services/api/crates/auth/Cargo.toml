@@ -22,6 +22,6 @@ serde_json.workspace = true
 serde.workspace = true
 utoipa.workspace = true
 url.workspace = true
-openidconnect = { version = "4", default-features = false, features = ["reqwest", "rustls-tls"] }
+oauth2 = { version = "5", default-features = false, features = ["reqwest", "rustls-tls"] }
 redis = { version = "1.7.1", features = ["tokio-comp", "connection-manager"] }
 tokio.workspace = true

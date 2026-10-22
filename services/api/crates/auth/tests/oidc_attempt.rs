@@ -117,6 +117,13 @@ async fn authorization_has_pkce_and_nonce_but_never_verifier_or_binding_secret()
         "https://accounts.google.com"
     );
     assert_eq!(query["response_type"], "code");
+    assert_eq!(
+        query["redirect_uri"],
+        "https://atelier.test/api/v1/auth/google/callback"
+    );
+    assert_eq!(URL_SAFE_NO_PAD.decode(&query["state"]).unwrap().len(), 32);
+    assert!(URL_SAFE_NO_PAD.decode(&query["nonce"]).unwrap().len() >= 16);
+    assert_ne!(query["state"], query["nonce"]);
     assert_eq!(query["client_id"], "client-id");
     assert_eq!(query["code_challenge_method"], "S256");
     for scope in ["openid", "email", "profile"] {

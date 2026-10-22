@@ -23,3 +23,11 @@ test('production build has no mock modules, demo identities, or local wallet', (
   }
   assert.ok(scripts > 0);
 });
+
+test('Rust lockfile excludes the vulnerable RSA implementation', () => {
+  assert.equal(
+    /^name = "rsa"$/m.test(read('services/api/Cargo.lock')),
+    false,
+    'RUSTSEC-2023-0071 has no patched rsa release; remove every dependency path',
+  );
+});

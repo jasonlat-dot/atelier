@@ -27,7 +27,7 @@
 - [x] `docs/openapi.json` 从 utoipa 生成，`apps/web/src/lib/generated/api.d.ts` 从契约生成；`scripts/check_contract.py` 一致性通过。
 - [x] 本地 Rust：fmt、clippy（-D warnings）、test（6 个测试，其中权限矩阵覆盖 105 组请求）、check 全通过。
 - [x] 本地前端：typecheck、lint、format:check、test:mock、build、build:mock 全通过；Playwright 在 Edge 1/1 通过（生成回流、刷新保存、签到去重、角色切换）；生产产物测试 2/2 通过；npm audit 0 漏洞。
-- [ ] cargo audit：最初因工具安装受阻未运行；现已本机复现 rsa / RUSTSEC-2023-0071 失败，CI 保留硬门禁，详见末尾审计记录。
+- [x] cargo audit：原先复现 rsa / RUSTSEC-2023-0071 失败；现按用户要求移除所有引入路径，本地审计 0 漏洞、0 警告。CI 保留硬门禁，当前证据见末尾记录。
 - [ ] PostgreSQL/Redis 真实实例、迁移执行、Google OIDC 与正式业务回归：按用户要求待自行部署；M0 不宣称这些能力可用。
 
 验收描述：`docs/PR_M0.md`。下一步严格按 M1，先迁移与测试。
@@ -76,3 +76,13 @@ M1 当前切片验证（2026-10-22）：`cargo fmt --all`、`cargo clippy --lock
 本切片最终验证：`cargo fmt --all` / `cargo fmt --all --check`、`cargo clippy --locked --offline --workspace --all-targets -- -D warnings`、`cargo test --locked --offline --workspace` 通过（33 项测试通过，5 项 PostgreSQL + 1 项 Redis 测试按环境要求跳过）；`npm run typecheck`、`npm run build` 通过，`npm audit` 为 0 漏洞。cargo audit 失败（1 项 rsa 公告），如实保留，不宣称全部检查通过。
 
 补充检查：OpenAPI/生成 TypeScript 一致性、生产产物隔离测试 2/2、`git diff --check` 均通过。
+
+## M1 · 移除 RSA 漏洞依赖（2026-10-22）
+
+- [x] 先在 `tests/baseline.test.cjs` 添加锁文件无 rsa 断言，修改前实际失败；再修改依赖与授权准备。OIDC 测试补充回调 URL、state 长度、nonce 长度和独立性断言。
+- [x] `services/api/Cargo.toml`：SQLx 0.9.0，仅启用 PostgreSQL/Tokio/rustls-ring 与现有功能；SQLx 新版把 MySQL RSA 独立为可选，锁文件移除旧路径。
+- [x] `auth/Cargo.toml` 与 `auth/src/oidc_attempt.rs`：替换 openidconnect 为 oauth2 5.0.0，保留 S256 PKCE、nonce/state 与 Redis 一次性浏览器绑定。未接通 ID token 校验或登录入口。
+- [x] Cargo 正常生成的完整锁文件中 rsa、openidconnect 均不存在；本机 cargo audit 0 漏洞、0 警告、退出码 0，扫描 270 个依赖。无漏洞豁免或门禁放宽，详见 SECURITY_AUDIT.md。
+- [ ] PostgreSQL/Redis 真机测试仍由 CI 执行；本机不安装/启动。当前依赖替换不新增迁移或改变公开 API，完整 M1 仍未验收。
+
+本次验证结果：cargo fmt（含 --check）、clippy（--workspace --all-targets -- -D warnings）、test、check 全通过；33 项 Rust 测试通过，5 项 PostgreSQL + 1 项 Redis 测试按本机条件显式跳过。前端 typecheck/build/lint/format:check/test:mock 全通过，npm audit 0 漏洞。OpenAPI/生成 TypeScript 一致性通过，生产隔离/迁移基线/依赖锁定回归 3/3 通过。cargo audit 0 漏洞、0 警告。

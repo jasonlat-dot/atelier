@@ -8,3 +8,5 @@
 - 不打包；按要求运行 cargo fmt/clippy/test 和 npm typecheck/build。只通过 wallet 模块修改余额，前端禁止密钥。
 
 - 提交作者固定使用 jasonlat-dot / 223874649+jasonlat-dot@users.noreply.github.com（公开账号 ID 已核对为 223874649）。只设置本仓库，不改全局 Git 配置；提交前核对 git var GIT_AUTHOR_IDENT，禁止继承全局旧邮箱。
+
+- 用户要求不能保留已知漏洞依赖：发现时升级或替换所有引入路径；禁止用审计豁免、降阈值或忽略退出码使其通过。新增/升级依赖后重新运行 cargo audit 与 npm audit。

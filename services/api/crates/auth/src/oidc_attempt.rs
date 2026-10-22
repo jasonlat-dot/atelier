@@ -5,9 +5,8 @@ use crate::{
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use chrono::Utc;
-use openidconnect::{
-    core::{CoreAuthenticationFlow, CoreClient, CoreJsonWebKeySet},
-    AuthUrl, ClientId, CsrfToken, IssuerUrl, Nonce, PkceCodeChallenge, RedirectUrl, Scope,
+use oauth2::{
+    basic::BasicClient, AuthUrl, ClientId, CsrfToken, PkceCodeChallenge, RedirectUrl, Scope,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -53,6 +52,11 @@ pub struct AttemptFlow {
     store: Arc<dyn TransientStore>,
     client_id: String,
     callback: String,
+}
+fn random_token() -> Result<String, BeginError> {
+    let mut bytes = [0_u8; 32];
+    getrandom::fill(&mut bytes).map_err(|_| BeginError::Unavailable)?;
+    Ok(URL_SAFE_NO_PAD.encode(bytes))
 }
 fn digest(value: &str) -> String {
     URL_SAFE_NO_PAD.encode(Sha256::digest(value.as_bytes()))
@@ -117,35 +121,28 @@ impl AttemptFlow {
                 })
             }
         }
-        let client = CoreClient::new(
-            ClientId::new(self.client_id.clone()),
-            IssuerUrl::new("https://accounts.google.com".into()).expect("fixed issuer"),
-            CoreJsonWebKeySet::new(Vec::new()),
-        )
-        .set_auth_uri(
-            AuthUrl::new("https://accounts.google.com/o/oauth2/v2/auth".into())
-                .expect("fixed provider"),
-        )
-        .set_redirect_uri(
-            RedirectUrl::new(self.callback.clone()).map_err(|_| BeginError::Unavailable)?,
-        );
+        let client = BasicClient::new(ClientId::new(self.client_id.clone()))
+            .set_auth_uri(
+                AuthUrl::new("https://accounts.google.com/o/oauth2/v2/auth".into())
+                    .expect("fixed provider"),
+            )
+            .set_redirect_uri(
+                RedirectUrl::new(self.callback.clone()).map_err(|_| BeginError::Unavailable)?,
+            );
         for _ in 0..3 {
             let (challenge, verifier) = PkceCodeChallenge::new_random_sha256();
-            let (authorization_url, state, nonce) = client
-                .authorize_url(
-                    CoreAuthenticationFlow::AuthorizationCode,
-                    || CsrfToken::new_random_len(32),
-                    Nonce::new_random,
-                )
+            let nonce = random_token()?;
+            let (authorization_url, state) = client
+                .authorize_url(|| CsrfToken::new_random_len(32))
+                .add_scope(Scope::new("openid".into()))
+                .add_extra_param("nonce", nonce.clone())
                 .add_scope(Scope::new("email".into()))
                 .add_scope(Scope::new("profile".into()))
                 .set_pkce_challenge(challenge)
                 .url();
-            let mut bytes = [0_u8; 32];
-            getrandom::fill(&mut bytes).map_err(|_| BeginError::Unavailable)?;
-            let browser = URL_SAFE_NO_PAD.encode(bytes);
+            let browser = random_token()?;
             let record = AttemptRecord {
-                nonce: nonce.secret().clone(),
+                nonce,
                 pkce_verifier: verifier.secret().clone(),
                 browser_hash: digest(&browser),
                 created_at: Utc::now().timestamp(),

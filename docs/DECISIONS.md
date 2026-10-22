@@ -47,3 +47,13 @@
 - 本机不安装/启动 PostgreSQL 和 Redis；新增 Redis 真实实例测试显式 ignore，CI 使用独占 runner 的回环 Redis 7（数据库 15、临时数据），验证 100 并发 state 单次消费、NX/TTL 和滑动窗口。CI 临时 Redis 不对公网开放，不作为生产无密码配置示例。
 - 已在项目忽略目录安装 cargo-audit；其直接拉取公告库失败，改用现有本机代理进行普通 Git clone 后对该新鲜公告库 --no-fetch 审计，未禁用漏洞匹配。实际发现 rsa 0.9.10 / RUSTSEC-2023-0071；详见 SECURITY_AUDIT.md。保留 CI cargo audit 硬门禁，不加 ignore 或 continue-on-error。
 - npm audit 改为即使前序步骤失败仍执行，使 Rust 告警不会遮蔽 JavaScript 审计结果；失败仍会使整个作业失败。
+
+## 2026-10-22 · 移除 RSA 漏洞依赖
+
+- 用户明确要求“有漏洞不能保留”。优先消除依赖来源，覆盖此前暂时保留审计失败的处理；不接受 ignore、降阈值或 continue-on-error。
+- 官方 openidconnect 4.0.1 将 rsa 列为必需依赖，无法通过关闭默认 feature 去除；SQLx 0.8 的锁文件也会保留 MySQL 引入路径。所有现有 rsa 版本均无公告修复版本，不做无依据降级。
+- SQLx 升到稳定 0.9.0。其 MySQL RSA 已拆为独立可选功能，项目只启 PostgreSQL、Tokio 和 rustls/ring，显式启用已有审计 JSON 字段所需 json feature；Cargo 正常解析生成锁文件，未手删传递依赖。SQLx 0.9 要求 Rust >=1.94，本机 1.99、CI stable 满足。
+- 规格 3.1 原指定 openidconnect；根据用户本次安全要求，当前授权材料准备改用同上游维护者的 oauth2 5.0.0（openidconnect 原来已经依赖它）生成授权 URL/state/S256 PKCE，独立 32 字节 CSPRNG nonce，保留原来的 openid/email/profile、回调 URL 与一次性 Redis 浏览器绑定。
+- 该切片尚未实现 ID token 校验，替换后仍不开放登录。后续签名验证须选择通过审计的实现，不能跳过 JWKS/iss/aud/exp/nonce 验证，也不能自己实现密码学原语。
+- 本次无 schema/公开 API 变化，沿用已有 M1 迁移和 OpenAPI。先增加会失败的锁文件回归测试，再替换依赖；现有会话、权限、PKCE/nonce、重放测试继续验证行为。CI 已运行 tests/baseline.test.cjs，新断言阻止 rsa 重新进入锁文件。
+- 依据：[openidconnect 必需 rsa 依赖](https://docs.rs/crate/openidconnect/4.0.1/source/Cargo.toml)、[SQLx 0.9 mysql-rsa 可选功能](https://github.com/launchbadge/sqlx/blob/v0.9.0/Cargo.toml)、[oauth2 文档](https://docs.rs/oauth2/5.0.0/oauth2/)。

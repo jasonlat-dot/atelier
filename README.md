@@ -20,6 +20,8 @@ npm run dev
 
 ## Rust 与生产前端基线
 
+需要 Rust stable >=1.94（SQLx 0.9 的最低要求）；本机验证版本为 1.99。
+
 ```powershell
 cd apps/web
 npm run build
