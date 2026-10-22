@@ -5,6 +5,7 @@ export default defineConfig({
     'session-settings.spec.ts',
     'wallet.spec.ts',
     'workspace.spec.ts',
+    'assets.spec.ts',
   ],
   workers: 1,
   use: {

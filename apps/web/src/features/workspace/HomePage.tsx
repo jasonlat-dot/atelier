@@ -6,6 +6,7 @@ import {
   Plus,
 } from 'lucide-react';
 import type { Me } from '../auth/sessionApi';
+import { Link } from 'react-router-dom';
 import WalletPage from '../wallet/WalletPage';
 
 const shortcuts = [
@@ -46,21 +47,32 @@ export default function HomePage(props: {
         </button>
       </div>
       <div className="quick-cards">
-        {shortcuts.map(({ name, description, icon: Icon }) => (
-          <article key={name}>
-            <div className="quick-card-top">
-              <div className="quick-icon">
-                <Icon size={19} />
+        {shortcuts.map(({ name, description, icon: Icon }) => {
+          const content = (
+            <>
+              <div className="quick-card-top">
+                <div className="quick-icon">
+                  <Icon size={19} />
+                </div>
+                {name !== '素材库' && (
+                  <span className="feature-pending">即将开放</span>
+                )}
               </div>
-              <span className="feature-pending">即将开放</span>
-            </div>
-            <strong>
-              {name}
-              <ArrowRight size={16} />
-            </strong>
-            <p>{description}</p>
-          </article>
-        ))}
+              <strong>
+                {name}
+                <ArrowRight size={16} />
+              </strong>
+              <p>{description}</p>
+            </>
+          );
+          return name === '素材库' ? (
+            <Link to="/assets" key={name}>
+              {content}
+            </Link>
+          ) : (
+            <article key={name}>{content}</article>
+          );
+        })}
       </div>
       <div className="section-head">
         <h2>最近的创作项目</h2>

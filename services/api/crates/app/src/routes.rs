@@ -128,10 +128,11 @@ async fn revoke_device(
 
 #[derive(OpenApi)]
 #[openapi(
-    paths(crate::wallet_http::summary,crate::wallet_http::ledger,crate::wallet_http::checkin,crate::wallet_http::redeem,crate::wallet_http::adjust,crate::wallet_http::create_codes,crate::wallet_http::codes,health, me, rename, logout, devices, revoke_device,crate::login_http::google_start,crate::login_http::google_callback,crate::login_http::public_config,crate::login_http::mfa_setup,crate::login_http::mfa_verify),
+    paths(crate::assets_http::list,crate::assets_http::get_one,crate::assets_http::limits,crate::assets_http::upload,crate::assets_http::delete_one,crate::assets_http::delete_many,crate::assets_http::media,crate::wallet_http::summary,crate::wallet_http::ledger,crate::wallet_http::checkin,crate::wallet_http::redeem,crate::wallet_http::adjust,crate::wallet_http::create_codes,crate::wallet_http::codes,health, me, rename, logout, devices, revoke_device,crate::login_http::google_start,crate::login_http::google_callback,crate::login_http::public_config,crate::login_http::mfa_setup,crate::login_http::mfa_verify),
     modifiers(&CookieSecurity),
     components(schemas(
         atelier_wallet::WalletSummary, atelier_wallet::LedgerPage, atelier_wallet::LedgerEntry, atelier_wallet::CheckinReceipt, atelier_wallet::CreditReceipt, atelier_wallet::RedeemRequest, atelier_wallet::AdjustRequest, atelier_wallet::CreateCodesRequest, atelier_wallet::CreatedCodes, atelier_wallet::CreatedCode, atelier_wallet::CodeInfo,
+        atelier_assets::AssetView,atelier_assets::AssetPage,atelier_assets::DeleteAssets,atelier_assets::AssetLimits,crate::assets_http::UploadFile,
         Health,
         ErrorResponse,
         ErrorDetail,
@@ -153,6 +154,30 @@ pub fn openapi() -> utoipa::openapi::OpenApi {
 
 pub fn router(state: AppState) -> Router {
     let protected = Router::new()
+        .route(
+            "/api/v1/assets",
+            get(crate::assets_http::list)
+                .delete(crate::assets_http::delete_many)
+                .fallback(protected_missing),
+        )
+        .route(
+            "/api/v1/assets/limits",
+            get(crate::assets_http::limits).fallback(protected_missing),
+        )
+        .route(
+            "/api/v1/assets/uploads",
+            post(crate::assets_http::upload)
+                .fallback(protected_missing)
+                .layer(axum::extract::DefaultBodyLimit::max(
+                    atelier_assets::MAX_VIDEO_BYTES + 1024 * 1024,
+                )),
+        )
+        .route(
+            "/api/v1/assets/{id}",
+            get(crate::assets_http::get_one)
+                .delete(crate::assets_http::delete_one)
+                .fallback(protected_missing),
+        )
         .route(
             "/api/v1/wallet",
             get(crate::wallet_http::summary).fallback(protected_missing),
@@ -214,7 +239,18 @@ pub fn router(state: AppState) -> Router {
             state.clone(),
             require_session,
         ));
+    let media = Router::new()
+        .route(
+            "/{id}/{variant}",
+            get(crate::assets_http::media).fallback(protected_missing),
+        )
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            require_session,
+        ))
+        .fallback(not_found);
     let mut app = Router::new()
+        .nest("/media", media)
         .merge(protected)
         .route("/api/v1/health", get(health))
         .route(
@@ -231,9 +267,7 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/api/v1/dev/login", any(not_found))
         .route("/api", any(not_found))
-        .route("/api/{*path}", any(not_found))
-        .route("/media", any(not_found))
-        .route("/media/{*path}", any(not_found));
+        .route("/api/{*path}", any(not_found));
     if state.expose_openapi {
         app = app.route("/api/openapi.json", get(|| async { Json(openapi()) }));
     }

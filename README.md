@@ -26,7 +26,7 @@ $env:PLAYWRIGHT_CHANNEL = 'chrome' # 已装 Chrome；CI 使用 Playwright Chromi
 ./scripts/api.ps1 -Action run
 ```
 
-登录后 `/` 为签到工作台，`/wallet` 查看真实余额/兑换/流水，`/settings` 管理账号，`/admin/credits` 提供有审计的 MFA 管理员调账。
+登录后 `/` 为签到工作台，`/assets` 使用原型布局管理真实图片上传/筛选/预览/删除，`/wallet` 查看真实余额/兑换/流水，`/settings` 管理账号，`/admin/credits` 提供有审计的 MFA 管理员调账。
 
 ## 本地 Mock UI
 
@@ -100,3 +100,5 @@ cargo test --locked -p atelier-auth --tests -- --ignored
 ```
 
 需先设置 DATABASE_URL 与 TEST_REDIS_URL 指向专用测试实例；不要对生产数据库执行。CI 另运行 `npm run test:e2e:auth`，用 tests/browser_harness.rs 的合成 Google 签名提供方、真实 PostgreSQL/Redis 和浏览器验证登录/设置/退出/MFA。该夹具不被生产 main 引用，无测试登录开关。真实 Google 凭据与实际部署回归由项目负责人后续完成。
+
+素材文件默认写入 API 工作目录的 `data/media`（Git 忽略且不在网页静态目录），沿用现有 MASTER_KEY 生成私有签名链接。图片支持 PNG/JPEG/WebP、20 MiB、默认保留 30 天；视频处理为 M3 后续切片，当前明确禁用。S3 配置见 services/api/.env.example，真实服务尚未验收。

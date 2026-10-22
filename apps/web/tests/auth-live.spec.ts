@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { createHmac } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 async function google(page: Page, kind: 'user' | 'admin') {
   await page.route('**/api/v1/auth/google/start*', async (route) => {
     const response = await route.fetch({ maxRedirects: 0 });
@@ -13,9 +14,7 @@ async function google(page: Page, kind: 'user' | 'admin') {
     const code = [kind, query.get('nonce'), query.get('code_challenge')].join(
       '~',
     );
-    const callback = new URL(
-      'http://127.0.0.1:8080/api/v1/auth/google/callback',
-    );
+    const callback = new URL('/api/v1/auth/google/callback', page.url());
     callback.searchParams.set('state', query.get('state') || '');
     callback.searchParams.set('iss', 'https://accounts.google.com');
     callback.searchParams.set('code', code);
@@ -78,6 +77,38 @@ test('real database and Redis login reaches workspace, survives reload and revok
   await expect(page.getByRole('button', { name: '今日已签到' })).toBeDisabled();
   const wallet = await (await page.request.get('/api/v1/wallet')).json();
   expect(wallet.balance).toBe(30);
+  await page.getByRole('link', { name: '我的素材库', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '我的素材库' })).toBeVisible();
+  const image = readFileSync(
+    new URL(
+      '../../../services/api/crates/app/tests/fixtures/reference.png',
+      import.meta.url,
+    ),
+  );
+  await page.getByLabel('选择上传素材', { exact: true }).setInputFiles({
+    name: 'Live reference.png',
+    mimeType: 'image/png',
+    buffer: image,
+  });
+  await expect(
+    page.getByText('已上传 1 个素材', { exact: true }),
+  ).toBeVisible();
+  await page.reload();
+  await page.getByRole('button', { name: '预览 Live reference.png' }).click();
+  const preview = page.getByRole('dialog', { name: 'Live reference.png' });
+  await expect
+    .poll(() =>
+      preview
+        .getByRole('img', { name: 'Live reference.png' })
+        .evaluate((element) => (element as HTMLImageElement).naturalWidth),
+    )
+    .toBe(16);
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: '删除 Live reference.png' }).click();
+  await page.getByRole('button', { name: '确认删除素材' }).click();
+  await expect(
+    page.getByText('已删除 1 个素材', { exact: true }),
+  ).toBeVisible();
   await page.getByRole('link', { name: '账号设置', exact: true }).click();
   page.once('dialog', (d) => d.accept());
   await page.getByRole('button', { name: '退出所有设备' }).click();
@@ -113,7 +144,10 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   expect(me.mfa_required).toBe(false);
   expect((await page.request.get('/api/v1/admin/users')).status()).toBe(404);
   const replay = await page.request.post('/api/v1/admin/mfa/verify', {
-    headers: { origin: 'http://127.0.0.1:8080', 'X-CSRF-Token': me.csrf_token },
+    headers: {
+      origin: new URL(page.url()).origin,
+      'X-CSRF-Token': me.csrf_token,
+    },
     data: { code },
   });
   expect(replay.status()).toBe(401);

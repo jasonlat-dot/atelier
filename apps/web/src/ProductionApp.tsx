@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import { sessionApi, SessionError, type Me } from './features/auth/sessionApi';
 import WorkspaceShell from './features/workspace/WorkspaceShell';
 import HomePage from './features/workspace/HomePage';
+import AssetsPage from './features/assets/AssetsPage';
 import SettingsPage from './features/settings/SettingsPage';
 import LoginPage from './features/auth/LoginPage';
 import MfaPage from './features/auth/MfaPage';
@@ -108,6 +109,10 @@ export default function ProductionApp() {
   return (
     <WorkspaceShell me={me} onExpired={expired} onReload={reload}>
       <Routes>
+        <Route
+          path="/assets"
+          element={<AssetsPage me={me} onExpired={expired} onReload={reload} />}
+        />
         <Route
           path="/"
           element={<HomePage me={me} onExpired={expired} onReload={reload} />}

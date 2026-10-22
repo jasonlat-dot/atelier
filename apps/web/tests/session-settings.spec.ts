@@ -11,6 +11,15 @@ const user = {
 };
 const me = { user, csrf_token: csrf, mfa_required: false };
 
+test.beforeEach(async ({ page }) => {
+  await page.route('**/api/v1/wallet', (route) =>
+    route.fulfill({
+      status: 503,
+      json: { error: { code: 'SERVICE_UNAVAILABLE' } },
+    }),
+  );
+});
+
 test('settings uses server session, sends CSRF, confirms revocation and clears logout state', async ({
   page,
 }) => {

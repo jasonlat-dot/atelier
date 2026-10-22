@@ -35,6 +35,8 @@ test("development API proxy preserves public Host, Origin and CSRF headers", asy
     );
     assert(loaded, "Vite configuration must load");
     const proxy = loaded.config.server?.proxy?.["/api"];
+    const mediaProxy = loaded.config.server?.proxy?.["/media"];
+    assert(mediaProxy, "Vite must proxy private media requests");
     assert(proxy, "Vite must proxy API requests");
     vite = await createServer({
       ...loaded.config,
@@ -49,20 +51,21 @@ test("development API proxy preserves public Host, Origin and CSRF headers", asy
         // Only replace the destination; retain the application's proxy behavior.
         proxy: {
           "/api": typeof proxy === "string" ? target : { ...proxy, target },
+          "/media": typeof mediaProxy === "string" ? target : { ...mediaProxy, target },
         },
       },
     });
     frontend.listen(0, "127.0.0.1");
     await once(frontend, "listening");
     const port = frontend.address().port;
-    const send = (origin) =>
+    const send = (origin, path = "/api/v1/admin/mfa/setup", method = "POST") =>
       new Promise((resolve, reject) => {
         const req = request(
           {
             host: "127.0.0.1",
             port,
-            method: "POST",
-            path: "/api/v1/admin/mfa/setup",
+            method,
+            path,
             headers: {
               Host: "127.0.0.1:5173",
               Origin: origin,
@@ -98,6 +101,7 @@ test("development API proxy preserves public Host, Origin and CSRF headers", asy
       path: "/api/v1/admin/mfa/setup",
     };
     assert.deepEqual(await send(expected.origin), expected);
+    assert.deepEqual(await send(expected.origin, "/media/test/original?expires=123&signature=test-only", "GET"), {...expected, method:"GET", path:"/media/test/original?expires=123&signature=test-only"});
     // Never replace an untrusted Origin with a trusted one to make CSRF pass.
     assert.deepEqual(await send("https://untrusted.example"), {
       ...expected,

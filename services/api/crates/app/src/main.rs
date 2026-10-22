@@ -48,7 +48,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .map_err(|_| "OIDC configuration invalid")?,
     );
+    let media_storage = config
+        .media
+        .build(&config.web_dir)
+        .await
+        .map_err(|_| "Media storage configuration unavailable")?;
+    let assets = atelier_assets::AssetService::new(db.clone(), media_storage, config.media_signer);
     let state = AppState {
+        assets: Some(assets.clone()),
         login: Some(atelier_auth::login::LoginService::new(
             flow,
             provider,
@@ -72,6 +79,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let listener = tokio::net::TcpListener::bind(config.bind_address).await?;
     let reconciliation =
         tokio::spawn(atelier_wallet::WalletService::new(db.clone()).reconciliation_loop());
+    let media_maintenance = tokio::spawn(assets.maintenance_loop());
     tracing::info!(address = %config.bind_address, "Atelier API listening");
     axum::serve(
         listener,
@@ -80,6 +88,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .with_graceful_shutdown(shutdown())
     .await?;
     reconciliation.abort();
+    media_maintenance.abort();
     db.close().await;
     Ok(())
 }

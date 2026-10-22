@@ -81,7 +81,7 @@ test('production workspace preserves prototype shell and synchronizes real walle
   await expect(
     page.getByRole('button', { name: '新建画布', exact: true }),
   ).toBeDisabled();
-  await expect(page.getByText('即将开放', { exact: true })).toHaveCount(3);
+  await expect(page.getByText('即将开放', { exact: true })).toHaveCount(2);
   await expect(page.getByText('MOCK DEMO')).toHaveCount(0);
   await expect(page.getByText('切换演示账号')).toHaveCount(0);
   await expect(

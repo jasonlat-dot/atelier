@@ -74,6 +74,12 @@ impl IdentityProvider for FixtureProvider {
 #[ignore = "Opt-in Playwright fixture with isolated PostgreSQL/Redis; never a production login mode"]
 async fn browser_harness(db: sqlx::PgPool) {
     assert_eq!(std::env::var("TEST_AUTH_HARNESS").as_deref(), Ok("1"));
+    let port: u16 = std::env::var("TEST_AUTH_PORT")
+        .unwrap_or_else(|_| "8080".into())
+        .parse()
+        .unwrap();
+    assert_ne!(port, 0);
+    let base_url = format!("http://127.0.0.1:{port}");
     sqlx::query("UPDATE system_settings SET value='\"OPEN\"' WHERE key='registration_mode'")
         .execute(&db)
         .await
@@ -92,7 +98,7 @@ async fn browser_harness(db: sqlx::PgPool) {
     let flow = AttemptFlow::new(
         limits.clone(),
         "browser-test".into(),
-        "http://127.0.0.1:8080/api/v1/auth/google/callback".into(),
+        format!("{base_url}/api/v1/auth/google/callback"),
     )
     .unwrap();
     let mut key = [0u8; 32];
@@ -100,9 +106,14 @@ async fn browser_harness(db: sqlx::PgPool) {
     let cipher = MfaCipher::from_base64(&STANDARD.encode(key)).unwrap();
     let mut state = AppState::test();
     state.db = db.clone();
+    state.assets = Some(atelier_assets::AssetService::new(
+        db.clone(),
+        atelier_assets::storage::Storage::memory(),
+        atelier_assets::signing::MediaSigner::from_base64(&STANDARD.encode(key)).unwrap(),
+    ));
     state.auth = SessionService::new(
         Arc::new(PostgresSessions::new(db)),
-        PublicOrigin::parse("http://127.0.0.1:8080").unwrap(),
+        PublicOrigin::parse(&base_url).unwrap(),
     );
     state.login = Some(LoginService::new(
         flow,
@@ -113,7 +124,7 @@ async fn browser_harness(db: sqlx::PgPool) {
     state.limits = Some(limits);
     state.web_dir =
         std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../../apps/web/dist");
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:8080")
+    let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, port))
         .await
         .unwrap();
     axum::serve(

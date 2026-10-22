@@ -1,3 +1,4 @@
+pub mod assets_http;
 pub mod auth_http;
 pub mod config;
 pub mod login_http;
@@ -20,6 +21,7 @@ pub struct AppState {
     pub login: Option<atelier_auth::login::LoginService>,
     pub mfa: Option<atelier_auth::mfa::MfaService>,
     pub limits: Option<Arc<dyn atelier_auth::transient::TransientStore>>,
+    pub assets: Option<atelier_assets::AssetService>,
     pub trusted_proxy_ips: Arc<std::collections::HashSet<std::net::IpAddr>>,
 }
 
@@ -37,6 +39,7 @@ impl AppState {
             login: None,
             mfa: None,
             limits: None,
+            assets: None,
             trusted_proxy_ips: Arc::new(std::collections::HashSet::new()),
             db,
             web_dir: "__no_static_assets__".into(),

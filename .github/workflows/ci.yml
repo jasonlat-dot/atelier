@@ -72,9 +72,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo test --locked -p atelier-auth -p atelier-wallet --tests -- --ignored
+      - run: cargo test --locked -p atelier-auth -p atelier-wallet -p atelier-assets --tests -- --ignored
         working-directory: services/api
       - run: cargo test --locked -p atelier-app --test wallet_http -- --ignored
+        working-directory: services/api
+      - run: cargo test --locked -p atelier-app --test assets_schema --test assets_http -- --ignored
         working-directory: services/api
       - uses: actions/setup-node@v4
         with:

@@ -22,14 +22,15 @@ export async function request<T>(
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (csrf) headers['X-CSRF-Token'] = csrf;
   if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  const form = body instanceof FormData;
+  if (body !== undefined && !form) headers['Content-Type'] = 'application/json';
   const response = await fetch(`/api/v1${path}`, {
     method,
     headers,
     credentials: 'same-origin',
     cache: 'no-store',
     signal,
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: body === undefined ? undefined : form ? body : JSON.stringify(body),
   });
   if (!response.ok) {
     const data = (await response.json().catch(() => null)) as {

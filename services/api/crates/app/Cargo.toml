@@ -11,6 +11,7 @@ workspace = true
 atelier-common.workspace = true
 atelier-auth.workspace = true
 atelier-wallet.workspace = true
+atelier-assets.workspace = true
 axum.workspace = true
 tokio.workspace = true
 serde.workspace = true

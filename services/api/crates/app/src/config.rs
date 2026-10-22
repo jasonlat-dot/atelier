@@ -15,6 +15,8 @@ pub struct Config {
     pub master_cipher: atelier_auth::mfa::MfaCipher,
     pub bootstrap: std::collections::HashSet<String>,
     pub trusted_proxy_ips: std::collections::HashSet<std::net::IpAddr>,
+    pub media: atelier_assets::storage::StorageConfig,
+    pub media_signer: atelier_assets::signing::MediaSigner,
 }
 
 #[derive(Debug, Error)]
@@ -60,6 +62,11 @@ impl Config {
         let master_cipher = atelier_auth::mfa::MfaCipher::from_base64(&required("MASTER_KEY")?)
             .map_err(|_| ConfigError("MASTER_KEY"))?;
         let mut bootstrap = std::collections::HashSet::new();
+        let media =
+            atelier_assets::storage::StorageConfig::from_lookup(&lookup).map_err(ConfigError)?;
+        let media_signer =
+            atelier_assets::signing::MediaSigner::from_base64(&required("MASTER_KEY")?)
+                .map_err(|_| ConfigError("MASTER_KEY"))?;
         for email in required("BOOTSTRAP_ADMIN_EMAILS")?.split(',') {
             bootstrap.insert(
                 atelier_auth::policy::canonical_email(email.trim())
@@ -77,6 +84,8 @@ impl Config {
             }
         }
         Ok(Self {
+            media,
+            media_signer,
             redis_url,
             google_client_id,
             google_client_secret,

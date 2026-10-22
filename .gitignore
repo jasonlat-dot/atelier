@@ -13,3 +13,4 @@ dist-mock/
 playwright-report/
 test-results/
 *.tsbuildinfo
+services/api/data/

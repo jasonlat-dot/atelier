@@ -38,7 +38,7 @@ const creation = [
   { path: '/', label: '工作台', icon: LayoutDashboard, ready: true },
   { path: '/chat', label: 'AI 智能对话', icon: MessageSquare },
   { path: '/canvas', label: '无限创作画布', icon: GalleryHorizontal },
-  { path: '/assets', label: '我的素材库', icon: FolderOpen },
+  { path: '/assets', label: '我的素材库', icon: FolderOpen, ready: true },
 ];
 const personal = [
   { path: '/wallet', label: '积分与订阅', icon: CircleDollarSign, ready: true },

@@ -1,4 +1,4 @@
-# M1 / M2 API 契约
+# M1 / M2 / M3 API 契约
 
 结构化契约：`openapi.json`（utoipa）；前端类型：`apps/web/src/lib/generated/api.d.ts`。一致性检查：`python scripts/check_contract.py`。
 
@@ -34,7 +34,7 @@
 | POST /api/v1/admin/mfa/setup | 管理员绑定；创建 10 分钟、当前会话绑定的加密待确认 secret；返回本人的一次性 otpauth_uri。已绑定不可覆盖 |
 | POST /api/v1/admin/mfa/verify | 只接受 `{code}` 六位数字；确认绑定或验证，单用户时间步原子防重放，成功后当前 Session MFA 有效 12 小时。验证码错误/失效/重放为 401 MFA_INVALID；当前会话的待绑定材料过期为 409 MFA_ENROLLMENT_EXPIRED，可重新调用 setup 生成新材料；不覆盖已启用的验证器 |
 | /api/v1/admin/*、/api/admin/* | 普通用户 403；管理员需最近 MFA（绑定/验证入口例外）；写操作限流 60 次/分钟/用户；后续里程碑未实现业务 404 |
-| /api/v1/dev/login、/media/* | 404；无开发登录，媒体由 M3 实现 |
+| /api/v1/dev/login | 404；无开发登录；媒体接口见 M3 |
 
 受保护请求逐次查 PostgreSQL 最新角色/状态。所有非 GET 的已认证请求必须匹配配置 PUBLIC_BASE_URL 的 Origin/Host，并带 Session 绑定 X-CSRF-Token；重复安全头拒绝。Google start/callback 仅 GET，HEAD 不创建/消费状态。认证响应 no-store、no-referrer。
 
@@ -45,3 +45,21 @@
 MFA 验证额外限制 5 次/5 分钟/用户。角色改变/禁用通过触发器撤销会话；管理员 MFA 操作在事务内再次校验账号/会话，成功写审计。M2 积分接口见上表；生成任务属 M5，尚未实现。
 
 默认只信真实 TCP 对端 IP，忽略 X-Forwarded-For。只有显式配置 TRUSTED_PROXY_IPS 的对端可提供单值 X-Real-IP；代理必须覆盖该头，禁止透传客户端伪造值。Google Client Secret 和 MASTER_KEY 仅后端环境变量必填，无默认值。
+
+## M3 素材接口 · 图片接入切片
+
+路径以 `/api/v1` 为前缀，媒体读取路径除外。所有接口经过真实 Session/账号状态检查，管理员要求最近 MFA；非 GET 要求同源和 CSRF。
+
+| 方法与路径 | 行为 |
+| --- | --- |
+| GET /assets/limits | 图片/视频大小上限、视频能力开关和最大时长；此切片 video_enabled=false |
+| POST /assets/uploads | multipart，且只能包含一个 file 字段；PNG/JPEG/WebP，单张最多 20 MiB；魔数与声明 MIME 一致，解码与尺寸/像素/内存校验，方向校正、重新编码为 PNG、JPEG 缩略图；201 AssetView |
+| GET /assets?kind=image&source=upload&search=名称&before=UUID&limit=24 | 当前用户素材按 created_at/id 倒序，kind/source 可省略，search 按名称字面子串匹配、最多 100 字符；limit 1–100；items、total、next_cursor |
+| GET /assets/{id} | 当前用户单个未删除/未过期素材及新签名链接；跨用户、不存在、删除或到期统一 404 |
+| DELETE /assets/{id} | 本人素材软删，立即撤销所有签名链接；204 |
+| DELETE /assets | JSON `{ids:[UUID]}`，1–100 个；全部归属校验和审计同事务，存在跨用户/无效 ID 时整体不删；204 |
+| GET /media/{id}/{variant}?expires=…&signature=… | variant=original/thumbnail；要求当前账号 Session 与签名归属一致，HMAC 链接最多 5 分钟，且不超过素材到期时间；支持单段 bytes Range；图片重新编码后才可访问，no-store/no-referrer/nosniff，不公开存储键或 S3 地址 |
+
+默认 FREE 素材保留 30 天；预留订阅保留设置 180 天，订阅业务尚未实现。当前每用户最多 500 个未到期素材、合计 2 GiB，上传 10 次/分钟/用户；全局并发与流式读取限额约束内存。INVALID_MEDIA 422、MEDIA_TOO_LARGE 413、ASSET_QUOTA_EXCEEDED 409、繁忙/限流 429、存储故障 503。删除/到期后台每分钟重试清理文件；中断上传可回收。未实现画布引用，未提供拖到画布的假操作。
+
+媒体默认 MEDIA_STORAGE=local、MEDIA_DIR=data/media，拒绝与现有 WEB_DIR 重叠；文件路径从服务器 UUID 生成，不使用原始文件名。可配置 HTTPS S3 兼容后端（服务端 S3_ENDPOINT/BUCKET/REGION/ACCESS_KEY_ID/SECRET_ACCESS_KEY）；未提供实 S3 凭据，当前验收覆盖本地存储，S3 实服务及视频转码仍待后续切片验证。
