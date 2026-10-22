@@ -106,6 +106,48 @@ async fn browser_harness(db: sqlx::PgPool) {
     let cipher = MfaCipher::from_base64(&STANDARD.encode(key)).unwrap();
     let mut state = AppState::test();
     state.db = db.clone();
+    // A real HTTP upstream, bound to a dynamic loopback port only in this test binary.
+    let upstream_listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))
+        .await
+        .unwrap();
+    let upstream_origin = format!("http://{}", upstream_listener.local_addr().unwrap());
+    // Pass the fixture address via a test-only file, never a production API or browser response.
+    let upstream_file = std::env::var("TEST_UPSTREAM_ORIGIN_FILE").ok();
+    if let Some(path) = upstream_file.as_ref() {
+        std::fs::create_dir_all(std::path::Path::new(path).parent().unwrap()).unwrap();
+        std::fs::write(path, &upstream_origin).unwrap();
+    }
+    let upstream_server = tokio::spawn(async move {
+        axum::serve(
+            upstream_listener,
+            axum::Router::new().route(
+                "/v1/models",
+                axum::routing::get(|| async {
+                    axum::Json(serde_json::json!({"data":[{"id":"fixture-private-model"}]}))
+                }),
+            ),
+        )
+        .await
+        .unwrap();
+    });
+    state.upstream = Some(
+        atelier_upstream::UpstreamService::new(
+            db.clone(),
+            atelier_upstream::crypto::SecretCipher::from_base64(&STANDARD.encode(key)).unwrap(),
+            atelier_upstream::egress::SafeHttp::new(
+                atelier_upstream::egress::EgressPolicy::with_local_origins(vec![upstream_origin])
+                    .unwrap(),
+            ),
+        )
+        .with_slots(
+            atelier_upstream::slots::SlotStore::connect(
+                &std::env::var("TEST_REDIS_URL").unwrap(),
+                &format!("browser-upstream:{}", uuid::Uuid::new_v4()),
+            )
+            .await
+            .unwrap(),
+        ),
+    );
     let video = atelier_assets::video::VideoProcessor::from_lookup(|key| std::env::var(key).ok())
         .unwrap()
         .expect("Browser fixture requires FFmpeg");
@@ -144,4 +186,5 @@ async fn browser_harness(db: sqlx::PgPool) {
     .await
     .unwrap();
     processing.abort();
+    upstream_server.abort();
 }

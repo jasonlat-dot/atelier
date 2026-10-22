@@ -188,4 +188,62 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   });
   expect(replay.status()).toBe(401);
   expect((await replay.json()).error.code).toBe('MFA_INVALID');
+  await page.getByRole('link', { name: '上游账号池', exact: true }).click();
+  await page.getByRole('button', { name: '新增账号', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  const origin = readFileSync(
+    new URL('../test-results/upstream-origin.txt', import.meta.url),
+    'utf8',
+  );
+  await dialog.getByLabel('账号名称').fill('Live upstream');
+  await dialog.getByLabel('接口地址').fill(`${origin}/v1`);
+  await dialog.getByLabel('API 密钥').fill('synthetic-browser-secret');
+  await dialog.getByRole('button', { name: '保存配置' }).click();
+  await expect(dialog).toHaveCount(0);
+  await page.getByRole('button', { name: '测试连接 Live upstream' }).click();
+  await expect(page.getByRole('status')).toContainText('连接正常');
+  await page.reload();
+  await expect(
+    page.getByRole('cell', { name: /^Live upstream/ }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: '编辑 Live upstream' }).click();
+  await expect(dialog.getByLabel('API 密钥')).toHaveValue('');
+  await expect(dialog.getByLabel('接口地址')).toHaveValue('');
+  await page.keyboard.press('Escape');
+  await page
+    .getByRole('navigation', { name: '主导航' })
+    .getByRole('link', { name: '模型与定价', exact: true })
+    .click();
+  await page.getByRole('button', { name: '新增模型' }).click();
+  await dialog.getByLabel('公开模型标识').fill('live-image');
+  await dialog.getByLabel('展示名称').fill('Live Image');
+  await dialog.getByLabel('上游模型标识').fill('fixture-private-model');
+  await dialog.getByRole('button', { name: '保存模型' }).click();
+  await expect(dialog).toHaveCount(0);
+  await page.getByRole('button', { name: '绑定账号 Live Image' }).click();
+  await dialog.getByLabel('动态分组').fill('default');
+  await dialog.getByRole('button', { name: '保存绑定' }).click();
+  await expect(dialog).toHaveCount(0);
+  await page.getByRole('tab', { name: '积分定价' }).click();
+  for (const quality of ['low', 'medium', 'high'])
+    await page.getByLabel(`Live Image ${quality} 基础积分`).fill('10');
+  await page.getByRole('button', { name: '保存全部价格' }).click();
+  await expect(page.getByRole('status')).toContainText('价格已保存');
+  await page.getByRole('tab', { name: '模型目录' }).click();
+  await page
+    .getByRole('button', { name: '启用 Live Image', exact: true })
+    .click();
+  await expect(page.getByText('已启用', { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByText('已启用', { exact: true })).toBeVisible();
+  const catalog = await (await page.request.get('/api/v1/models')).json();
+  expect(catalog.models.map((m: { id: string }) => m.id)).toEqual([
+    'live-image',
+  ]);
+  expect(JSON.stringify(catalog)).not.toMatch(
+    /fixture-private-model|synthetic-browser-secret|base_url|account_ids|group_tags/,
+  );
+  expect(
+    (await (await page.request.get('/api/v1/wallet')).json()).balance,
+  ).toBe(20);
 });

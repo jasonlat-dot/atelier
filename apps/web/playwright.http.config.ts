@@ -6,6 +6,7 @@ export default defineConfig({
     'wallet.spec.ts',
     'workspace.spec.ts',
     'assets.spec.ts',
+    'upstream.spec.ts',
   ],
   workers: 1,
   use: {

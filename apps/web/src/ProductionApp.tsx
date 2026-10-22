@@ -9,6 +9,8 @@ import LoginPage from './features/auth/LoginPage';
 import MfaPage from './features/auth/MfaPage';
 import WalletPage from './features/wallet/WalletPage';
 import AdminCreditsPage from './features/wallet/AdminCreditsPage';
+import AdminAccountsPage from './features/upstream/AdminAccountsPage';
+import AdminModelsPage from './features/upstream/AdminModelsPage';
 
 type AuthState =
   | { status: 'loading' }
@@ -109,6 +111,22 @@ export default function ProductionApp() {
   return (
     <WorkspaceShell me={me} onExpired={expired} onReload={reload}>
       <Routes>
+        <Route
+          path="/admin/accounts"
+          element={
+            <AdminAccountsPage me={me} onExpired={expired} onReload={reload} />
+          }
+        />
+        <Route
+          path="/admin/providers"
+          element={<Navigate to="/admin/accounts" replace />}
+        />
+        <Route
+          path="/admin/models"
+          element={
+            <AdminModelsPage me={me} onExpired={expired} onReload={reload} />
+          }
+        />
         <Route
           path="/assets"
           element={<AssetsPage me={me} onExpired={expired} onReload={reload} />}

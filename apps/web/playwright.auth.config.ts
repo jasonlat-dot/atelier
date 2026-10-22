@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { resolve } from 'node:path';
 const baseURL = process.env.TEST_AUTH_BASE_URL || 'http://127.0.0.1:8080';
 if (!/^http:\/\/127\.0\.0\.1:\d+$/.test(baseURL))
   throw new Error('Test authentication harness must use loopback HTTP');
@@ -18,6 +19,13 @@ export default defineConfig({
     url: `${baseURL}/api/v1/health`,
     timeout: 240000,
     reuseExistingServer: false,
-    env: { TEST_AUTH_HARNESS: '1', TEST_AUTH_PORT: new URL(baseURL).port },
+    env: {
+      TEST_AUTH_HARNESS: '1',
+      TEST_AUTH_PORT: new URL(baseURL).port,
+      TEST_UPSTREAM_ORIGIN_FILE: resolve(
+        import.meta.dirname,
+        'test-results/upstream-origin.txt',
+      ),
+    },
   },
 });

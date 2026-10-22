@@ -187,3 +187,7 @@
 - 规格引用视频 4.8 但正文没有该章节：M4 采用官方兼容 /videos 提交、查询、内容下载协议；视频模型能力显式包含可选秒数和尺寸，价格按秒配置。现有核心 SQL 的 models.kind 示例补入 video。图片采用 /images/generations 和 multipart /images/edits。参考：[Images](https://developers.openai.com/api/reference/resources/images/methods/generate)、[Videos](https://developers.openai.com/api/reference/resources/videos/methods/create)。
 - 兼容供应商没有统一额度查询协议，因此提供真实连通性测试和管理员手动额度更新，不伪造供应商实时余额。M4 提供可测试的适配与调度 service；生成任务队列、用户生成接口、报价授权、钱包预占/结算与 SSE 均留在 M5。
 - 出站请求每次校验并固定 DNS 解析结果，拒绝私网/元数据/特殊用途地址、重定向和环境代理。开发白名单仅允许明确 loopback origin，且只有服务绑定与 PUBLIC_BASE_URL 都为 loopback 时可配置；无默认放行。
+
+
+- M4 原型管理页复用生产工作台与既有表格样式，不加载 Mock 数据。账号敏感字段采用空输入/留空保留；风险操作使用可访问的 dialog，支持 Esc/遮罩/焦点恢复及请求锁。价格按公开模型和质量维护，倍率全局带版本；本轮只保存配置，不提前实现用户报价或扣款。
+- 连通性测试纳入 24 小时统计，UI 明确说明；真实供应商连通性和付费内容验证需部署者使用自己的配置执行，本轮通过可控 HTTP 假上游、真实隔离 PG/Redis 和真实浏览器完成 M4 验收。浏览器测试的动态 loopback 上游和地址文件仅存在测试夹具，生产无对应接口或登录开关。

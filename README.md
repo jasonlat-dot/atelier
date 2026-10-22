@@ -2,11 +2,11 @@
 
 按根目录《Atelier AI 创作平台 · 产品与工程开发规格书（AI 开发版）》逐里程碑开发。
 当前状态以 [docs/PROGRESS.md](docs/PROGRESS.md) 为准；假设见 [docs/DECISIONS.md](docs/DECISIONS.md)。
-原始原型保存在提交 `c3384c5`。M0/M1/M2 已完成验收；M2 积分账本与签到的本地真实 PG/Redis、浏览器测试和 [远端 Actions](https://github.com/jasonlat-dot/atelier/actions/runs/39772855488) 全部通过，详见 [M2 验收记录](docs/PR_M2.md)。当前停在 M2，不进入 M3；实际部署与 Google 实账号回归见 [M1 部署清单](docs/M1_VALIDATION.md)。
+原始原型保存在提交 `c3384c5`。M0–M3 已完成；M4 账号池与模型的后端和原型管理页面已接通，本地检查通过，远端验收状态见 [进度记录](docs/PROGRESS.md)。本轮完成 M4 后停止，不进入 M5；S3 继续待定。实际部署与 Google 实账号回归见 [M1 部署清单](docs/M1_VALIDATION.md)。
 
 ## 已部署 WSL 数据库
 
-已接入 PostgreSQL 16（127.0.0.1:15432）、Redis 7（127.0.0.1:16380）。独立业务库 atelier 已应用 M0–M2 迁移；测试库 atelier_test 及 CREATEDB 测试角色独立。连接配置在 Git 忽略的 services/api/.env 与 .env.test.local，禁止提交凭据。
+已接入 PostgreSQL 16（127.0.0.1:15432）、Redis 7（127.0.0.1:16380）。API 启动时自动应用 M0–M4 的版本化迁移；独立业务库 atelier 与测试库分离；测试库 atelier_test 及 CREATEDB 测试角色独立。连接配置在 Git 忽略的 services/api/.env 与 .env.test.local，禁止提交凭据。
 
 真实开发模式可在仓库根目录用一个终端启动前后端：
 
@@ -26,7 +26,7 @@ $env:PLAYWRIGHT_CHANNEL = 'chrome' # 已装 Chrome；CI 使用 Playwright Chromi
 ./scripts/api.ps1 -Action run
 ```
 
-登录后 `/` 为签到工作台，`/assets` 使用原型布局管理真实图片上传/筛选/预览/删除，`/wallet` 查看真实余额/兑换/流水，`/settings` 管理账号，`/admin/credits` 提供有审计的 MFA 管理员调账。
+登录后 `/` 为签到工作台，`/assets` 使用原型布局管理真实图片/视频上传、筛选、预览与删除，`/wallet` 查看真实余额/兑换/流水，`/settings` 管理账号，`/admin/credits` 提供有审计的 MFA 管理员调账。
 
 ## 本地 Mock UI
 
@@ -104,3 +104,19 @@ cargo test --locked -p atelier-auth --tests -- --ignored
 素材文件默认写入 API 工作目录的 `data/media`（Git 忽略且不在网页静态目录），沿用现有 MASTER_KEY 生成私有签名链接。素材库沿用原型，支持图片 PNG/JPEG/WebP（20 MiB）和视频 MP4/WebM（200 MiB、60 秒）。视频先显示处理中，后台重新转码为 MP4、生成封面后可播放、拖动进度和下载；默认保留 30 天。
 
 视频依赖 FFmpeg/ffprobe、timeout 和 prlimit。Linux 使用本机 PATH；Windows 默认经 WSL 调用，可在后端 `.env` 配置 `FFMPEG_DIR=/绝对/Linux/目录`。本机已配置工作区内的工具，重启 `npm run dev` 即可启用。换机器时需安装工具或重新配置路径；设置 `VIDEO_MODE=disabled` 可只启用图片，工具缺失时页面明确提示视频不可用。当前使用本地磁盘存储；S3 按负责人决定改为待定，不纳入本次 M3 完成范围，也不声明已通过实服务验收。
+
+
+## M4 管理入口
+
+管理员完成 MFA 后，从侧栏进入 **上游账号池**（`/admin/accounts`）和 **模型与定价**（`/admin/models`）。
+
+1. 新增账号，填写兼容接口的完整基础地址（通常以 `/v1` 结尾）、API 密钥、分组、并发与额度，然后测试连接。
+2. 新建公开模型，填写展示名、内部上游模型标识以及实际支持的质量、比例、分辨率、参考图和视频时长。新模型默认不启用。
+3. 为模型绑定指定账号或分组；两者取并集。
+4. 在“积分定价”填写各档基础积分、全局倍率，保存后回到目录启用模型。
+
+地址、API 密钥和内部模型标识只写不读，编辑时留空保留。账号池沿用后端 `MASTER_KEY` 加密凭据，不新增前端密钥；该主密钥需持久保存，不能随意更换。连接测试只请求模型列表；额度目前由管理员在上游核对后手动更新，不代表自动查询上游余额。
+
+出站默认仅支持公网 HTTPS，并拒绝私网、重定向和环境代理。生产无需配置 `UPSTREAM_DEV_ALLOW_ORIGINS`；只有隔离本地假上游开发才可显式填写准确 loopback origin，且 API 与公开入口都必须为 loopback。实际供应商协议或模型能力需要用供应商真实配置核对，本轮使用受控假上游验收，未发起付费生成。
+
+重启仓库根目录的 `npm run dev` 后，新迁移会自动执行。M4 只交付账号、模型、价格和内部路由适配；用户创作任务、积分预占/结算与进度推送属于 M5，本轮未启动。验收与后续续接见 [M4 记录](docs/PR_M4.md)。

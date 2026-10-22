@@ -54,8 +54,18 @@ const admin = [
     icon: CircleDollarSign,
     ready: true,
   },
-  { path: '/admin/models', label: '模型配置', icon: SlidersHorizontal },
-  { path: '/admin/providers', label: '账号与供应商', icon: ShieldCheck },
+  {
+    path: '/admin/models',
+    label: '模型与定价',
+    icon: SlidersHorizontal,
+    ready: true,
+  },
+  {
+    path: '/admin/accounts',
+    label: '上游账号池',
+    icon: ShieldCheck,
+    ready: true,
+  },
 ];
 
 export default function WorkspaceShell({
