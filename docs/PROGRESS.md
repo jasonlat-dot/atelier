@@ -96,3 +96,10 @@ M1 历史交付未打包、未部署。条款仍是开发占位，正式法律�
 - app/tests/login_http.rs 真实响应参数回归先失败后通过，合计 5/5；覆盖错误/缺失/重复 issuer、未知参数和重放。Playwright 的 Google 模拟回调同步带 iss，避免再次漏测。
 - 本地 fmt/clippy/workspace test/check（45 项普通测试）、前端 typecheck/lint/format:check/build、契约与 baseline 3/3 通过。使用独立构建目录避开用户运行中的 exe；未在占用中的 8080 启动第二份浏览器夹具，完整真实 PG/Redis 浏览器链路交由本次 Actions 再验收。
 - 另验证 Google JWKS 直连失败、本机 7890 代理可达；后端本地 .env 已补现有代理地址（未提交）。用户需重启 npm run dev 并从登录页重新授权；尚不宣称真实 Google 实账号登录已通过。
+
+## M2 · 登录页参考图调整
+
+- `apps/web/src/features/auth/LoginPage.tsx` / `LoginPage.css` 按用户截图调整品牌、配色、卡片尺寸、衬线标题、注册提示、Google 按钮和条款区域；独立样式不改变 MFA 等其他认证页面。
+- 保留服务端注册三态、邀请码提交、加载禁用、配置重试、账号禁用提示和真实 Google 导航。无新依赖、迁移或 API 变化。
+- 前端 typecheck/lint/format:check/build、Mock 源码回归通过；现有 HTTP 浏览器 7/7 通过，测试使用独立 5174 端口，未停止用户开发服务。Rust fmt/clippy/workspace test 通过，45 项普通测试；基础设施测试按现有规则忽略，本次未重跑真实 PG/Redis。
+- 隔离浏览器检查 CLOSED/OPEN/INVITE_ONLY、配置加载/失败重试、禁用账号、条款导航及键盘焦点通过，无页面脚本错误；已检查 1280×800 桌面、390×844 手机与 320×480 小屏截图，小屏可滚动访问条款。检查截图保留于忽略目录 `.tools/`，不作为产品静态资源发布。
