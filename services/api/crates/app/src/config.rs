@@ -1,3 +1,4 @@
+use atelier_auth::service::PublicOrigin;
 use std::{net::SocketAddr, path::PathBuf};
 use thiserror::Error;
 
@@ -7,6 +8,7 @@ pub struct Config {
     pub bind_address: SocketAddr,
     pub web_dir: PathBuf,
     pub expose_openapi: bool,
+    pub public_origin: PublicOrigin,
 }
 
 #[derive(Debug, Error)]
@@ -25,6 +27,9 @@ impl Config {
         if !(database_url.starts_with("postgres://") || database_url.starts_with("postgresql://")) {
             return Err(ConfigError("DATABASE_URL"));
         }
+        let public_origin =
+            PublicOrigin::parse(&lookup("PUBLIC_BASE_URL").ok_or(ConfigError("PUBLIC_BASE_URL"))?)
+                .map_err(|_| ConfigError("PUBLIC_BASE_URL"))?;
         let bind_address: SocketAddr = lookup("BIND_ADDRESS")
             .unwrap_or_else(|| "127.0.0.1:8080".into())
             .parse()
@@ -38,6 +43,7 @@ impl Config {
             database_url,
             bind_address,
             expose_openapi,
+            public_origin,
             web_dir: lookup("WEB_DIR")
                 .map(PathBuf::from)
                 .unwrap_or_else(|| "../../apps/web/dist".into()),
@@ -54,6 +60,7 @@ mod tests {
                 .iter()
                 .find(|(k, _)| *k == key)
                 .map(|(_, v)| v.to_string())
+                .or_else(|| (key == "PUBLIC_BASE_URL").then(|| "https://atelier.test".into()))
         })
     }
     #[test]
@@ -80,5 +87,27 @@ mod tests {
         ])
         .is_err());
         assert!(load(&[base, ("EXPOSE_OPENAPI", "yes")]).is_err());
+    }
+    #[test]
+    fn public_origin_is_required_and_invalid_values_are_redacted() {
+        assert!(Config::from_lookup(
+            |key| (key == "DATABASE_URL").then(|| "postgres://localhost/atelier".into())
+        )
+        .is_err());
+        let error = load(&[
+            ("DATABASE_URL", "postgres://localhost/atelier"),
+            ("PUBLIC_BASE_URL", "https://user:secret@atelier.test"),
+        ])
+        .err()
+        .unwrap();
+        assert_eq!(
+            error.to_string(),
+            "Invalid or missing configuration: PUBLIC_BASE_URL"
+        );
+        assert!(load(&[
+            ("DATABASE_URL", "postgres://localhost/atelier"),
+            ("PUBLIC_BASE_URL", "http://external.test")
+        ])
+        .is_err());
     }
 }

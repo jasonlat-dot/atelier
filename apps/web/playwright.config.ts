@@ -1,6 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './tests',
+  testMatch: 'mock-baseline.spec.ts',
   workers: 1,
   fullyParallel: false,
   use: {

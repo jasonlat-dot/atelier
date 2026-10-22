@@ -1,7 +1,18 @@
-use crate::AppState;
+use crate::{
+    auth_http::{require_session, AuthUser, RequireRole},
+    AppState,
+};
+use atelier_auth::views::{DeviceList, DeviceSession, MeResponse, RenameRequest, SessionUser};
 use atelier_common::{ApiError, ErrorDetail, ErrorResponse};
 use axum::{
-    routing::{any, get},
+    extract::{
+        rejection::{JsonRejection, PathRejection},
+        Path, State,
+    },
+    http::{header, StatusCode},
+    middleware,
+    response::{IntoResponse, Response},
+    routing::{any, delete, get, post},
     Json, Router,
 };
 use serde::Serialize;
@@ -10,14 +21,13 @@ use tower_http::{
     trace::TraceLayer,
 };
 use utoipa::{OpenApi, ToSchema};
+use uuid::Uuid;
 
 #[derive(Serialize, ToSchema)]
 pub struct Health {
     pub status: String,
     pub milestone: String,
 }
-
-/// Liveness only; does not assert that subsequent milestones are available.
 #[utoipa::path(get, path = "/api/v1/health", responses((status = 200, body = Health)))]
 async fn health() -> Json<Health> {
     Json(Health {
@@ -25,28 +35,151 @@ async fn health() -> Json<Health> {
         milestone: "M0".into(),
     })
 }
-
 async fn not_found() -> ApiError {
     ApiError::not_found()
 }
+async fn protected_missing(_actor: AuthUser) -> ApiError {
+    ApiError::not_found()
+}
+async fn admin_missing(_actor: RequireRole<false>) -> ApiError {
+    ApiError::not_found()
+}
+async fn super_admin_missing(_actor: RequireRole<true>) -> ApiError {
+    ApiError::not_found()
+}
+
+#[utoipa::path(get, path = "/api/v1/me", security(("session" = [])), responses((status = 200, body = MeResponse), (status = 401, body = ErrorResponse), (status = 403, body = ErrorResponse), (status = 503, body = ErrorResponse)))]
+async fn me(AuthUser(actor): AuthUser) -> Json<MeResponse> {
+    Json(actor.me())
+}
+#[utoipa::path(patch, path = "/api/v1/me", request_body = RenameRequest, security(("session" = [], "csrf" = [])), responses((status = 200, body = MeResponse), (status = 401, body = ErrorResponse), (status = 403, body = ErrorResponse), (status = 422, body = ErrorResponse), (status = 503, body = ErrorResponse)))]
+async fn rename(
+    State(state): State<AppState>,
+    AuthUser(actor): AuthUser,
+    body: Result<Json<RenameRequest>, JsonRejection>,
+) -> Result<Json<MeResponse>, ApiError> {
+    let Json(body) = body.map_err(|_| {
+        ApiError::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "VALIDATION",
+            "Expected display_name only",
+        )
+    })?;
+    Ok(Json(
+        state
+            .auth
+            .rename(&actor, &body.display_name)
+            .await
+            .map_err(ApiError::from)?,
+    ))
+}
+fn clear_cookie() -> &'static str {
+    "__Host-sid=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0"
+}
+#[utoipa::path(post, path = "/api/v1/auth/logout", security(("session" = [], "csrf" = [])), responses((status = 204), (status = 401, body = ErrorResponse), (status = 403, body = ErrorResponse), (status = 503, body = ErrorResponse)))]
+async fn logout(
+    State(state): State<AppState>,
+    AuthUser(actor): AuthUser,
+) -> Result<Response, ApiError> {
+    state.auth.logout(&actor).await.map_err(ApiError::from)?;
+    Ok((
+        StatusCode::NO_CONTENT,
+        [(header::SET_COOKIE, clear_cookie())],
+    )
+        .into_response())
+}
+#[utoipa::path(get, path = "/api/v1/me/sessions", security(("session" = [])), responses((status = 200, body = DeviceList), (status = 401, body = ErrorResponse), (status = 403, body = ErrorResponse), (status = 503, body = ErrorResponse)))]
+async fn devices(
+    State(state): State<AppState>,
+    AuthUser(actor): AuthUser,
+) -> Result<Json<DeviceList>, ApiError> {
+    Ok(Json(
+        state.auth.devices(&actor).await.map_err(ApiError::from)?,
+    ))
+}
+#[utoipa::path(delete, path = "/api/v1/me/sessions/{id}", params(("id" = Uuid, Path)), security(("session" = [], "csrf" = [])), responses((status = 204), (status = 401, body = ErrorResponse), (status = 403, body = ErrorResponse), (status = 404, body = ErrorResponse), (status = 503, body = ErrorResponse), (status = 422, body = ErrorResponse)))]
+async fn revoke_device(
+    State(state): State<AppState>,
+    AuthUser(actor): AuthUser,
+    id: Result<Path<Uuid>, PathRejection>,
+) -> Result<Response, ApiError> {
+    let Path(id) = id.map_err(|_| {
+        ApiError::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "VALIDATION",
+            "Invalid session identifier",
+        )
+    })?;
+    state
+        .auth
+        .revoke_device(&actor, id)
+        .await
+        .map_err(ApiError::from)?;
+    Ok(if id == actor.session_id() {
+        (
+            StatusCode::NO_CONTENT,
+            [(header::SET_COOKIE, clear_cookie())],
+        )
+            .into_response()
+    } else {
+        StatusCode::NO_CONTENT.into_response()
+    })
+}
 
 #[derive(OpenApi)]
-#[openapi(paths(health), components(schemas(Health, ErrorResponse, ErrorDetail)))]
+#[openapi(
+    paths(health, me, rename, logout, devices, revoke_device),
+    modifiers(&CookieSecurity),
+    components(schemas(
+        Health,
+        ErrorResponse,
+        ErrorDetail,
+        MeResponse,
+        RenameRequest,
+        DeviceList,
+        DeviceSession,
+        SessionUser,
+        atelier_auth::policy::Role
+    ))
+)]
 struct Contract;
-
 pub fn openapi() -> utoipa::openapi::OpenApi {
     Contract::openapi()
 }
 
 pub fn router(state: AppState) -> Router {
+    let protected = Router::new()
+        .route(
+            "/api/v1/me",
+            get(me).patch(rename).fallback(protected_missing),
+        )
+        .route(
+            "/api/v1/me/sessions",
+            get(devices).fallback(protected_missing),
+        )
+        .route(
+            "/api/v1/me/sessions/{id}",
+            delete(revoke_device).fallback(protected_missing),
+        )
+        .route(
+            "/api/v1/auth/logout",
+            post(logout).fallback(protected_missing),
+        )
+        .route("/api/v1/admin/settings", any(super_admin_missing))
+        .route("/api/v1/admin/audit", any(super_admin_missing))
+        .route("/api/v1/admin", any(admin_missing))
+        .route("/api/v1/admin/{*path}", any(admin_missing))
+        .route("/api/admin", any(admin_missing))
+        .route("/api/admin/{*path}", any(admin_missing))
+        .route("/api/v1/{*path}", any(protected_missing))
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            require_session,
+        ));
     let mut app = Router::new()
+        .merge(protected)
         .route("/api/v1/health", get(health))
         .route("/api/v1/dev/login", any(not_found))
-        .route("/api/v1/{*path}", any(atelier_auth::require_authenticated))
-        .route(
-            "/api/admin/{*path}",
-            any(atelier_auth::require_authenticated),
-        )
         .route("/api", any(not_found))
         .route("/api/{*path}", any(not_found))
         .route("/media", any(not_found))
@@ -56,7 +189,22 @@ pub fn router(state: AppState) -> Router {
     }
     let static_files = ServeDir::new(&state.web_dir)
         .not_found_service(ServeFile::new(state.web_dir.join("index.html")));
-    app.fallback_service(static_files)
-        .layer(TraceLayer::new_for_http())
-        .with_state(state)
+    app.fallback_service(static_files).layer(TraceLayer::new_for_http().make_span_with(|request: &axum::http::Request<_>| tracing::info_span!("http_request", method=%request.method(), path=request.uri().path()))).with_state(state)
+}
+
+struct CookieSecurity;
+impl utoipa::Modify for CookieSecurity {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
+        if let Some(components) = openapi.components.as_mut() {
+            components.add_security_scheme(
+                "session",
+                SecurityScheme::ApiKey(ApiKey::Cookie(ApiKeyValue::new("__Host-sid"))),
+            );
+            components.add_security_scheme(
+                "csrf",
+                SecurityScheme::ApiKey(ApiKey::Header(ApiKeyValue::new("X-CSRF-Token"))),
+            );
+        }
+    }
 }

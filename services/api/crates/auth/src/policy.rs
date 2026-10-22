@@ -130,7 +130,8 @@ pub fn registration_allowed(
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Role {
     User,
     Admin,
@@ -234,4 +235,14 @@ pub fn csrf_allowed(
         return Err(PolicyError::CsrfRejected);
     }
     Ok(())
+}
+
+impl Role {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::User => "USER",
+            Self::Admin => "ADMIN",
+            Self::SuperAdmin => "SUPER_ADMIN",
+        }
+    }
 }

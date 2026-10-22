@@ -1,6 +1,7 @@
 use atelier_app::{config::Config, router, AppState};
+use atelier_auth::{postgres::PostgresSessions, service::SessionService};
 use sqlx::postgres::PgPoolOptions;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -20,11 +21,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     sqlx::migrate!("../../migrations").run(&db).await?;
     let state = AppState {
         db: db.clone(),
+        auth: SessionService::new(
+            Arc::new(PostgresSessions::new(db.clone())),
+            config.public_origin,
+        ),
         web_dir: config.web_dir,
         expose_openapi: config.expose_openapi,
     };
     let listener = tokio::net::TcpListener::bind(config.bind_address).await?;
-    tracing::info!(address = %config.bind_address, "Atelier M0 foundation listening");
+    tracing::info!(address = %config.bind_address, "Atelier API listening");
     axum::serve(listener, router(state))
         .with_graceful_shutdown(shutdown())
         .await?;

@@ -37,14 +37,28 @@
 - [x] 先写 `migrations/202610220100_m1_identity.sql`、`auth/tests/policy.rs`、`auth/tests/session.rs`、`auth/tests/schema.rs`；测试先因缺实现失败，再补 `auth/src/policy.rs` 与 `session.rs`。
 - [x] 身份基础源码：users、sessions、system_settings、invite_codes、audit_logs；默认 CLOSED；角色/禁用事务触发撤销会话。**迁移尚未在真实 PostgreSQL 执行，未认定可部署通过。**
 - [x] 纯规则测试：Gmail 别名、已验证邮箱/hd 条件、注册三态/Bootstrap/IP 配额、禁用/空闲 7 天/绝对 30 天、管理员角色和 MFA 12 小时窗口、同源 CSRF、重复安全头、256 位令牌、重复/伪造 Cookie 和 Debug 脱敏。
-- [ ] 两项 SQLx 真实数据库测试：身份唯一约束/默认注册关闭、角色变更与禁用撤销会话；已编译，因无数据库显式跳过。CI identity-schema 作业配置执行，远端未运行。
+- [ ] 五项 SQLx 真实数据库测试已编译但因无本机数据库显式跳过：身份唯一约束、角色/禁用撤销、设备 ID、repo/service 往返和审计失败回滚。CI identity-schema 配置运行；读取远端状态遭 GitHub API 出口限流，未确认结果。
 - [ ] OIDC Authorization Code + PKCE、JWKS 签名/iss/aud/exp/nonce 校验、Redis state 一次性消费和限流。
 - [ ] 注册事务、即时设置、邀请码消费、IP 并发限额、Bootstrap 仅首次登录。
-- [ ] 数据库 Session repo/service、AuthUser/RequireRole 提取器、逐请求状态/角色查询、登出和撤销、CSRF 中间件。
+- [x] 数据库 Session repo/service、AuthUser/RequireRole 提取器、逐请求状态/角色查询、登出和设备撤销、CSRF 中间件源码与 HTTP 合同回归；真实 PostgreSQL 回归仍待运行，尚无登录签发入口。
 - [ ] TOTP 绑定/验证/重放防护与加密存储。
-- [ ] 前端 /login、路由守卫、/settings（在真实契约接通时同步实现，不提供假登录）。
+- [x] 前端 Session/角色路由守卫和 /settings 已接真实 API 契约；3 项浏览器合同测试通过。
+- [ ] /login 的 Google 登录接入、管理员 MFA 绑定/验证页仍未接通，当前入口明确禁用。
 - [ ] 第 8 章身份/注册/授权全链路矩阵，用户部署后的 PostgreSQL/Redis/OIDC 回归。
 
-当前公开 API 和 OpenAPI 无新增；纯策略与迁移不是用户已可使用功能。M1 未完成，不进入 M2。
+身份基础切片交付时未新增公开 API；后续接口变化见以下会话管理记录。M1 未完成，不进入 M2。
 
 M1 当前切片验证（2026-10-22）：`cargo fmt --all`、`cargo clippy --locked --offline --workspace --all-targets -- -D warnings`、`cargo test --locked --offline --workspace`、`cargo check --locked --offline --workspace` 均通过；总计 15 个测试通过、2 个 PostgreSQL 测试显式跳过。`npm run typecheck` / `npm run build` 重新通过；生产产物 2/2 与 API 一致性再次通过。M0 UI、lint、Mock/E2E 与 npm audit 的通过结果见上一节，前端在本切片没有改动。cargo audit 与真实数据库/Redis 仍未验证。
+
+## M1 · 会话管理、权限守卫与账号设置（2026-10-22）
+
+- [x] 先写 `202610220200_m1_session_management.sql` 与 `app/tests/session_http.rs`、`web/tests/session-settings.spec.ts`；新增测试先失败，再实现。Host 尾斜杠混淆由测试实际发现并修复。
+- [x] `auth/src/{repository,postgres,service,views}.rs`：数据库哈希查会话、最新状态/角色、空闲/绝对过期、条件 touch 拒绝并发撤销/改角色、显示名修改、设备列表、按归属撤销、全会话注销；修改/撤销与审计在同事务内，无积分写入。
+- [x] `app/src/auth_http.rs`：AuthUser 与 RequireRole、非 GET Origin/Host/CSRF、重复安全头拒绝、HTTP/2 authority 校验、无 MFA 管理员只允许身份信息/安全退出和后续 MFA 入口；受保护响应 no-store。
+- [x] `app/src/routes.rs` 接通 GET/PATCH /me、GET /me/sessions、DELETE /me/sessions/{id}、POST /auth/logout。未知管理接口经过权限检查再 404，不把待实现后台当作可用。
+- [x] `features/auth/sessionApi.ts`、`features/settings/SettingsPage.tsx` 与 `ProductionApp.tsx`：只从 GET /me 建立前端状态，显示名、设备、二次确认撤销/退出、401 跳登录、临时故障保留错误状态、MFA 拦截；没有演示登录、localStorage 身份或密钥。
+- [x] Rust fmt、严格 clippy、test、check 通过：28 项测试通过，5 项数据库测试显式跳过。前端 typecheck、build、lint、format:check、Mock 业务与 Mock 浏览器 1/1、HTTP 浏览器 3/3 通过；产物隔离 2/2、OpenAPI/生成类型一致性通过。
+- [ ] 本机 PostgreSQL/Redis、Google 登录、TOTP、cargo audit、远端 CI 结果仍未验证。本项接口依赖后续 OIDC 签发有效 Session，不能作为完整登录可用的声明。
+- 后续提交使用 jasonlat-dot 的已核对 noreply 邮箱；用户已授权检查/文档完成后自动推送到 origin/main，旧三个提交不重写。
+
+下一项：M1 OIDC state/PKCE/nonce、Redis 一次性状态与限流，再接注册事务和 Google 回调。完整 M1 仍未验收。

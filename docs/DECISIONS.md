@@ -24,3 +24,15 @@
 - 数据库绝对期限采用 720 小时，避免会话数据库时区有夏令时时 interval '30 days' 与 UTC 策略产生偏差。
 - 无本地数据库时，真实迁移测试显式 ignore，不能报告通过；CI 新增隔离 PostgreSQL 16 作业专门运行 ignored schema 测试。本轮未推送或运行远端 CI。
 - 未实现注册赠送积分；M2 通过 wallet service 接入，禁止 auth 直接改余额。
+
+## 2026-10-22 · 会话服务与推送约定
+
+- 用户已明确授权当前及后续正常推送至 https://github.com/jasonlat-dot/atelier.git 的 main；覆盖上文“仅本地提交”的历史范围，不创建/强推历史。
+- GitHub 公开账号信息确认 jasonlat-dot ID=223874649，提交身份只在本仓库设置为 jasonlat-dot / 223874649+jasonlat-dot@users.noreply.github.com；此前三个提交沿用的全局身份不重写。
+- 规格要求“设备及撤销”但未列 URL，补 GET /api/v1/me/sessions 和 DELETE /api/v1/me/sessions/{id}。设备 ID 为独立随机 UUID，绝不把 token_hash 当设备 ID 返回。
+- 数据库不可用返回 503 SERVICE_UNAVAILABLE，不能伪装成 401 导致前端错误退出；SQL 错误、连接串和原始 Cookie 不回显。
+- PUBLIC_BASE_URL 为必填，以规范化可信配置比对 Origin 和 Host；不信 Forwarded/X-Forwarded-Host，HTTP/2 authority 也必须匹配。生产只允 HTTPS，回环 HTTP 仅开发白名单。
+- 按规格对所有非 GET（含 HEAD/OPTIONS）做 CSRF；GET /me 和注销允许未完成 MFA 的管理员进入，用于取得身份/CSRF和安全退出，其他业务要求最近 12 小时 MFA。
+- Session last_seen_at 使用 GREATEST 更新，避免并发请求覆盖为更早时间；条件更新拒绝查询后发生的会话撤销和角色变化。不是会话缓存，不在内存保存生产 Session。
+- /me 暂不返回虚构钱包/订阅摘要，待 M2/M8 按模块接入。没有 OIDC 前不提供任何开发或测试登录给用户，Google 按钮暂禁用。
+- 前端浏览器测试使用 HTTP 响应合同替身，Rust HTTP 测试使用测试仓库替身；它们不替代真实 PostgreSQL/Redis/OIDC 回归。远端 CI 状态读取遭 API 限流，结果仍按未确认记录。

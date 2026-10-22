@@ -10,11 +10,12 @@
     "typecheck": "tsc --noEmit",
     "build:mock": "tsc --noEmit && vite build --mode mock-preview",
     "lint": "eslint .",
-    "format": "prettier --write src vite.config.ts playwright.config.ts tests package.json tsconfig.json eslint.config.js",
-    "format:check": "prettier --check src vite.config.ts playwright.config.ts tests package.json tsconfig.json eslint.config.js",
+    "format": "prettier --write src vite.config.ts playwright*.config.ts tests package.json tsconfig.json eslint.config.js",
+    "format:check": "prettier --check src vite.config.ts playwright*.config.ts tests package.json tsconfig.json eslint.config.js",
     "test:mock": "node ../../tests/verify_source.cjs",
     "test:e2e": "playwright test",
-    "api:generate": "openapi-typescript ../../docs/openapi.json -o src/lib/generated/api.d.ts"
+    "api:generate": "openapi-typescript ../../docs/openapi.json -o src/lib/generated/api.d.ts",
+    "test:e2e:http": "playwright test --config playwright.http.config.ts"
   },
   "dependencies": {
     "@xyflow/react": "^12.10.0",

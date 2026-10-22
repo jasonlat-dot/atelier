@@ -20,7 +20,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 thiserror = "2"
 tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.6", features = ["fs", "trace"] }
-utoipa = { version = "5", features = ["uuid"] }
+utoipa = { version = "5", features = ["uuid", "chrono"] }
 atelier-common = { path = "crates/common" }
 atelier-auth = { path = "crates/auth" }
 
@@ -29,6 +29,7 @@ base64 = "0.22"
 sha2 = "0.10"
 subtle = "2"
 getrandom = "0.4"
+url = "2"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

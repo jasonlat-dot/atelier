@@ -1877,3 +1877,50 @@ small {
 .signin-card .login-error {
   color: #a75555;
 }
+
+.account-shell {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 40px 24px;
+}
+.account-shell header {
+  margin-bottom: 24px;
+}
+.account-section {
+  margin: 20px 0;
+  padding: 24px;
+}
+.account-section h2 {
+  margin-bottom: 20px;
+  font-size: 18px;
+}
+.account-section form {
+  display: grid;
+  gap: 12px;
+  max-width: 420px;
+}
+.device-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px;
+}
+.device-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: center;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
+}
+.device-list strong {
+  overflow-wrap: anywhere;
+}
+.device-list p {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+.account-shell [role='alert'] {
+  color: var(--danger);
+  margin: 12px 0;
+}

@@ -41,6 +41,7 @@ dependencies = [
  "atelier-auth",
  "atelier-common",
  "axum",
+ "chrono",
  "serde",
  "serde_json",
  "sqlx",
@@ -51,6 +52,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "utoipa",
+ "uuid",
 ]
 
 [[package]]
@@ -66,10 +68,13 @@ dependencies = [
  "base64",
  "chrono",
  "getrandom 0.4.3",
+ "serde",
  "serde_json",
  "sha2",
  "sqlx",
  "subtle",
+ "url",
+ "utoipa",
  "uuid",
 ]
 

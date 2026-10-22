@@ -2,7 +2,7 @@
 
 按根目录《Atelier AI 创作平台 · 产品与工程开发规格书（AI 开发版）》逐里程碑开发。
 当前状态以 [docs/PROGRESS.md](docs/PROGRESS.md) 为准；假设见 [docs/DECISIONS.md](docs/DECISIONS.md)。
-原始原型保存在提交 `c3384c5`，已完成 M0 基线整理（`b3cc451`），正在推进 M1 身份基础；正式认证流程尚未接通。
+原始原型保存在提交 `c3384c5`，已完成 M0 基线整理（`b3cc451`），正在推进 M1：会话/权限守卫和账号设置已接 API 合同，Google 登录与真实实例回归尚未接通。
 
 ## 本地 Mock UI
 
@@ -30,11 +30,11 @@ cargo test --workspace
 cargo run -p atelier-app
 ```
 
-默认 `npm run build` 输出 `dist`，只包含 HTTP 入口；M0 登录页只显示服务状态，正式登录属于 M1。
+默认 `npm run build` 输出 `dist`，只包含 HTTP 入口；当前登录入口禁用，正式 Google 登录尚未接通；有效数据库会话可进入账号设置。
 `npm run build:mock` 单独输出 `dist-mock`，只能用于本地预览。生产构建显式设置 `VITE_API_MODE=mock` 会失败。
 Rust 自动执行 `services/api/migrations`，并可托管 `WEB_DIR` 的 SPA。
 配置样例见 `services/api/.env.example`。没有开发登录或内存 Session。
-用户、积分、生成等业务 API 暂时拒绝所有请求，按后续里程碑替换。
+账号资料、设备列表/撤销、全设备注销已接服务端会话；积分/生成等业务按后续里程碑接入。
 
 开发基础设施：`infra/compose.yaml` 提供 PostgreSQL 16 与带密码 Redis 7，仅绑定 127.0.0.1；本轮不安装或启动这些服务。
 旧原型迁移已归档到 `docs/legacy`；已有旧版数据库不要直接执行新迁移，需要专门迁移方案。
@@ -55,6 +55,7 @@ npm run test:mock
 npm run build
 npx playwright install chromium
 npm run test:e2e
+npm run test:e2e:http
 cd ../..
 node --test tests/baseline.test.cjs
 python scripts/check_contract.py
