@@ -122,7 +122,7 @@ fn browser_cookie(headers: &HeaderMap) -> Result<String, AuthFailure> {
     }
     value.ok_or(AuthFailure::State)
 }
-#[utoipa::path(get,path="/api/v1/auth/google/callback",params(("iss"=String,Query,description="Must exactly equal https://accounts.google.com"),("state"=String,Query),("code"=Option<String>,Query)),responses((status=303,description="Session issued; redirect to settings"),(status=401,body=ErrorResponse),(status=403,body=ErrorResponse),(status=409,body=ErrorResponse),(status=429,body=ErrorResponse),(status=503,body=ErrorResponse)))]
+#[utoipa::path(get,path="/api/v1/auth/google/callback",params(("iss"=String,Query,description="Must exactly equal https://accounts.google.com"),("state"=String,Query),("code"=Option<String>,Query)),responses((status=303,description="Session issued; redirect to workspace"),(status=401,body=ErrorResponse),(status=403,body=ErrorResponse),(status=409,body=ErrorResponse),(status=429,body=ErrorResponse),(status=503,body=ErrorResponse)))]
 pub async fn google_callback(
     State(state): State<AppState>,
     method: Method,
@@ -170,8 +170,7 @@ pub async fn google_callback(
                 context,
             )
             .await?;
-        let mut response =
-            (StatusCode::SEE_OTHER, [(header::LOCATION, "/settings")]).into_response();
+        let mut response = (StatusCode::SEE_OTHER, [(header::LOCATION, "/")]).into_response();
         response.headers_mut().append(
             header::SET_COOKIE,
             secrets.cookie().parse().map_err(|_| AuthFailure::Store)?,

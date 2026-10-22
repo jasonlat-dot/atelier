@@ -462,7 +462,7 @@
         ],
         "responses": {
           "303": {
-            "description": "Session issued; redirect to settings"
+            "description": "Session issued; redirect to workspace"
           },
           "401": {
             "description": "",

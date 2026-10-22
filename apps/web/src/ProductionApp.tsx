@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import { sessionApi, SessionError, type Me } from './features/auth/sessionApi';
+import WorkspaceShell from './features/workspace/WorkspaceShell';
+import HomePage from './features/workspace/HomePage';
 import SettingsPage from './features/settings/SettingsPage';
 import LoginPage from './features/auth/LoginPage';
 import MfaPage from './features/auth/MfaPage';
@@ -13,6 +15,7 @@ type AuthState =
   | { status: 'error' }
   | { status: 'authenticated'; me: Me };
 export default function ProductionApp() {
+  const navigate = useNavigate();
   const [state, setState] = useState<AuthState>({ status: 'loading' });
   const generation = useRef(0);
   const load = useCallback(async (signal?: AbortSignal) => {
@@ -92,47 +95,56 @@ export default function ProductionApp() {
     );
   const { me } = state;
   if (me.mfa_required)
-    return <MfaPage me={me} onVerified={reload} onExpired={expired} />;
+    return (
+      <MfaPage
+        me={me}
+        onVerified={() => {
+          navigate('/', { replace: true });
+          reload();
+        }}
+        onExpired={expired}
+      />
+    );
   return (
-    <Routes>
-      <Route
-        path="/"
-        element={
-          <WalletPage me={me} onExpired={expired} onReload={reload} home />
-        }
-      />
-      <Route
-        path="/wallet"
-        element={<WalletPage me={me} onExpired={expired} onReload={reload} />}
-      />
-      <Route
-        path="/admin/credits"
-        element={
-          <AdminCreditsPage me={me} onExpired={expired} onReload={reload} />
-        }
-      />
-      <Route
-        path="/settings"
-        element={
-          <SettingsPage
-            me={me}
-            onChange={changed}
-            onExpired={expired}
-            onReload={reload}
-          />
-        }
-      />
-      <Route
-        path="/admin/*"
-        element={
-          <main className="account-shell">
-            <h1>
-              {me.user.role === 'USER' ? '无权访问' : '管理功能正在准备中'}
-            </h1>
-          </main>
-        }
-      />
-      <Route path="*" element={<Navigate to="/settings" replace />} />
-    </Routes>
+    <WorkspaceShell me={me} onExpired={expired} onReload={reload}>
+      <Routes>
+        <Route
+          path="/"
+          element={<HomePage me={me} onExpired={expired} onReload={reload} />}
+        />
+        <Route
+          path="/wallet"
+          element={<WalletPage me={me} onExpired={expired} onReload={reload} />}
+        />
+        <Route
+          path="/admin/credits"
+          element={
+            <AdminCreditsPage me={me} onExpired={expired} onReload={reload} />
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <SettingsPage
+              me={me}
+              onChange={changed}
+              onExpired={expired}
+              onReload={reload}
+            />
+          }
+        />
+        <Route
+          path="/admin/*"
+          element={
+            <main className="account-shell">
+              <h1>
+                {me.user.role === 'USER' ? '无权访问' : '管理功能正在准备中'}
+              </h1>
+            </main>
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </WorkspaceShell>
   );
 }

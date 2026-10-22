@@ -19,7 +19,7 @@ node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('b
 ## 功能回归
 
 1. 匿名 GET /api/v1/me 返回 401；public/config 仅返回注册模式和版本。登录页显示当前注册模式，按钮只导航到后端 start。
-2. 自己的 Bootstrap Gmail 经 Google 登录后进入 MFA 绑定页，不能先访问设置或管理业务。绑定个人验证器，输入六位码，成功后进入账号设置；同一码重复验证被拒，12 小时后重新验证。
+2. 自己的 Bootstrap Gmail 经 Google 登录后进入 MFA 绑定页，不能先访问设置或管理业务。绑定个人验证器，输入六位码，成功后进入工作台，可从侧栏打开账号设置；同一码重复验证被拒，12 小时后重新验证。
 3. 设置页修改显示名，刷新后保留；在另一浏览器登录，设备列表可见；取消撤销无变化，确认撤销使该设备后续请求 401。退出所有设备使原 Cookie 全部失效。
 4. 使用其他个人 Gmail：CLOSED 时新用户被拒；切 OPEN 后新用户可登录，切回 CLOSED 后已有用户仍可登录。INVITE_ONLY 下有效邀请码或规范化白名单可注册，失效/用完的邀请码不可注册；同 IP 24 小时配额生效。
 5. 非 Gmail 与带 Workspace hd 声明的身份被拒；伪造/重放 state、伪造 Cookie/id_token 均不能建立会话。自动化矩阵另覆盖 Gmail 别名、错误签名/issuer/audience/nonce/过期。

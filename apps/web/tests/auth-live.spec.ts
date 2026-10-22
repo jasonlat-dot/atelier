@@ -47,11 +47,13 @@ function otp(secret: string): string {
     .toString()
     .padStart(6, '0');
 }
-test('real database and Redis login reaches settings, survives reload and revokes the old cookie', async ({
+test('real database and Redis login reaches workspace, survives reload and revokes the old cookie', async ({
   page,
   context,
 }) => {
   await google(page, 'user');
+  await expect(page).toHaveURL(/\/$/);
+  await page.getByRole('link', { name: '账号设置', exact: true }).click();
   await expect(page.getByRole('heading', { name: '账号设置' })).toBeVisible();
   const cookie = (await context.cookies()).find((c) => c.name === '__Host-sid');
   expect(cookie?.secure).toBe(true);
@@ -65,7 +67,7 @@ test('real database and Redis login reaches settings, survives reload and revoke
   await expect(page.getByText('显示名已更新')).toBeVisible();
   await page.reload();
   await expect(page.getByLabel('显示名')).toHaveValue('Live account');
-  await page.getByRole('link', { name: '积分账本', exact: true }).click();
+  await page.getByRole('link', { name: '积分与订阅', exact: true }).click();
   await expect(page.getByRole('heading', { name: '我的积分' })).toBeVisible();
   await expect(page.getByRole('cell', { name: '注册赠送' })).toBeVisible();
   const initial = await (await page.request.get('/api/v1/wallet')).json();
@@ -104,6 +106,8 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   const code = otp(secret);
   await page.getByLabel('六位验证码').fill(code);
   await page.getByRole('button', { name: '验证并继续' }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await page.getByRole('link', { name: '账号设置', exact: true }).click();
   await expect(page.getByRole('heading', { name: '账号设置' })).toBeVisible();
   me = await (await page.request.get('/api/v1/me')).json();
   expect(me.mfa_required).toBe(false);

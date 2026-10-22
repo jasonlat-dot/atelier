@@ -726,7 +726,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Session issued; redirect to settings */
+            /** @description Session issued; redirect to workspace */
             303: {
                 headers: {
                     [name: string]: unknown;

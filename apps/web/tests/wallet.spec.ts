@@ -95,7 +95,7 @@ test('wallet checkin, retry-safe redemption and server ledger pagination', async
   await expect(page.getByRole('button', { name: '加载更多' })).toHaveCount(0);
   await page.getByRole('link', { name: '工作台', exact: true }).click();
   await expect(
-    page.getByRole('heading', { name: '你好，Wallet' }),
+    page.getByRole('heading', { name: '欢迎回来，Wallet' }),
   ).toBeVisible();
   await page.goto('/admin/credits');
   await expect(page.getByRole('heading', { name: '无权访问' })).toBeVisible();
@@ -114,6 +114,11 @@ test('administrator adjustment confirms reason and preserves retry key', async (
           csrf_token: 'csrf',
           mfa_required: false,
         },
+      });
+    if (route.request().method() === 'GET')
+      return route.fulfill({
+        status: 503,
+        json: { error: { code: 'UNAVAILABLE' } },
       });
     const req = route.request();
     expect(req.headers()['x-csrf-token']).toBe('csrf');

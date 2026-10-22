@@ -25,7 +25,7 @@
 | GET /api/v1/health | 进程存活检查，不替代基础设施就绪检查 |
 | GET /api/v1/public/config | 最新 registration_mode 与版本；不返回白名单/凭据；no-store |
 | GET /api/v1/auth/google/start?invite=… | 20 次/10 分钟/IP；state/nonce/S256 PKCE，Redis TTL 600 秒，浏览器绑定 Cookie，302 Google；邀请码只绑定在服务端 state 中 |
-| GET /api/v1/auth/google/callback | 回调 iss 必填且严格等于 https://accounts.google.com → 原子消费 state → 后端换 code → ring 验 RS256/JWKS/iss/aud/exp/nonce/Gmail/hd → 事务注册/登录与会话轮换 → 303 /settings；缺失/重复/错误回调 issuer 拒绝且不消费 state；前端不上传 id_token |
+| GET /api/v1/auth/google/callback | 回调 iss 必填且严格等于 https://accounts.google.com → 原子消费 state → 后端换 code → ring 验 RS256/JWKS/iss/aud/exp/nonce/Gmail/hd → 事务注册/登录与会话轮换 → 303 /（工作台）；缺失/重复/错误回调 issuer 拒绝且不消费 state；前端不上传 id_token |
 | GET /api/v1/me | 服务端 user、csrf_token、mfa_required；不返回 token_hash、Google sub/token、MFA 密钥或虚构积分 |
 | PATCH /api/v1/me | 仅 display_name，trim 后 1..100 字符，修改与审计同事务 |
 | GET /api/v1/me/sessions | 当前用户有效设备列表，独立 UUID、时间、IP、UA、当前设备标志 |

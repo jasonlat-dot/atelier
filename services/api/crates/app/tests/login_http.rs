@@ -127,7 +127,7 @@ async fn oidc_start_callback_replay_and_invite_binding_are_enforced_over_http() 
     );
     let response = get(state.clone(), &callback, &cookie).await;
     assert_eq!(response.status(), StatusCode::SEE_OTHER);
-    assert_eq!(response.headers()["location"], "/settings");
+    assert_eq!(response.headers()["location"], "/");
     assert!(response
         .headers()
         .get_all("set-cookie")

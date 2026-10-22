@@ -166,7 +166,7 @@ test('login reads current registration mode and sends invitation only to the bac
   await expect(page.getByText('后端登录入口已收到请求')).toBeVisible();
 });
 
-test('administrator enrolls MFA through CSRF protected endpoints and returns to settings', async ({
+test('administrator enrolls MFA through CSRF protected endpoints and returns to workspace', async ({
   page,
 }) => {
   let verified = false;
@@ -197,6 +197,19 @@ test('administrator enrolls MFA through CSRF protected endpoints and returns to 
       verified = true;
       return route.fulfill({ status: 204 });
     }
+    if (path === '/api/v1/wallet')
+      return route.fulfill({
+        json: {
+          balance: 20,
+          held: 0,
+          available: 20,
+          local_date: '2026-10-22',
+          timezone: 'Asia/Shanghai',
+          checked_in_today: false,
+          streak: 0,
+          next_reward: 10,
+        },
+      });
     return route.fulfill({ json: { sessions: [] } });
   });
   await page.goto('/settings');
@@ -240,7 +253,9 @@ test('administrator enrolls MFA through CSRF protected endpoints and returns to 
   await codeInput.press('5');
   await expect(codeInput).toHaveValue('123456');
   await page.getByRole('button', { name: '验证并继续' }).click();
-  await expect(page.getByRole('heading', { name: '账号设置' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: '欢迎回来，Account' }),
+  ).toBeVisible();
 });
 
 test('MFA binding has no native confirmation and logout uses an accessible modal', async ({

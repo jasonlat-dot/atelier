@@ -1,0 +1,234 @@
+.live-workspace .app-content {
+  overflow-y: auto;
+}
+.live-workspace .app-sidebar {
+  flex-shrink: 0;
+}
+.live-workspace .app-sidebar[inert] {
+  visibility: hidden;
+}
+.live-workspace .nav-pending {
+  color: #777d85;
+}
+.live-workspace .nav-pending:hover {
+  background: transparent;
+}
+.live-workspace .nav-pending small {
+  margin-left: auto;
+  color: #93979d;
+  font-size: 9px;
+  white-space: nowrap;
+}
+.live-workspace .identity-button {
+  width: 100%;
+}
+.live-workspace .identity-button div {
+  min-width: 0;
+}
+.live-workspace .identity-button strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 137px;
+}
+.live-workspace .credits-box a {
+  margin-top: 10px;
+}
+.live-workspace .new-space:disabled {
+  opacity: 0.7;
+}
+.live-workspace .account-shell {
+  max-width: 1120px;
+  padding: 39px clamp(24px, 5vw, 76px);
+  width: 100%;
+}
+.live-workspace .account-shell > header > p {
+  color: #858b94;
+}
+.live-workspace .wallet-hero {
+  flex-direction: column;
+  align-items: flex-start;
+}
+.live-workspace .account-section {
+  border-radius: 12px;
+}
+.live-workspace .account-section h2 {
+  margin-bottom: 14px;
+}
+.live-workspace .account-section label {
+  color: #5e6670;
+}
+.live-workspace .account-section .input {
+  background: #fcfcfb;
+  border-color: #e7e7e5;
+}
+.live-workspace .dashboard-page {
+  height: auto;
+  min-height: 100%;
+  overflow: visible;
+}
+.live-workspace .page-title-row h1 {
+  overflow-wrap: anywhere;
+}
+.live-workspace .quick-cards > article {
+  background: #fff;
+  border: 1px solid #e5e7e8;
+  border-radius: 12px;
+  padding: 23px;
+  min-height: 158px;
+}
+.quick-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.live-workspace .quick-cards article strong {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 14px;
+  margin: 15px 0 10px;
+}
+.live-workspace .quick-cards article p {
+  font-size: 11px;
+  color: #8a9099;
+  margin: 0;
+  line-height: 1.8;
+}
+.feature-pending {
+  color: #8a9099;
+  background: #f6f6f4;
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 10px;
+}
+.workspace-projects {
+  display: grid;
+  grid-template-columns: minmax(190px, 1fr) 2fr;
+  gap: 16px;
+}
+.workspace-projects .create-card:disabled {
+  opacity: 1;
+  color: #858b94;
+  background: #fafaf9;
+  border-style: dashed;
+}
+.workspace-empty {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 28px;
+  text-align: center;
+  color: #858b94;
+}
+.workspace-empty h3 {
+  font-size: 14px;
+  font-weight: 500;
+  margin: 14px 0 8px;
+  color: #5e6570;
+}
+.workspace-empty p {
+  line-height: 1.8;
+  font-size: 12px;
+  margin-bottom: 0;
+  max-width: 400px;
+}
+.dashboard-wallet {
+  display: grid;
+  grid-template-columns: 1fr 1.45fr;
+  gap: 16px;
+  align-items: stretch;
+}
+.dashboard-wallet .wallet-hero {
+  margin: 0;
+  padding: 23px;
+  border: 1px solid #e5e7e8;
+  border-radius: 12px;
+  background: #fafaf8;
+  color: #282e36;
+}
+.dashboard-wallet .wallet-hero span,
+.dashboard-wallet .wallet-hero p {
+  color: #777e88;
+}
+.dashboard-wallet .wallet-hero strong {
+  font-size: 32px;
+}
+.dashboard-wallet .account-section {
+  margin: 0;
+  padding: 23px;
+}
+.dashboard-wallet > .text-action,
+.dashboard-wallet > [role] {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+.workspace-scrim,
+.mobile-nav-close {
+  display: none;
+}
+@media (max-width: 1020px) {
+  .live-workspace .quick-cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .live-workspace .quick-cards > article {
+    padding: 17px;
+  }
+  .dashboard-wallet {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 720px) {
+  .live-workspace .app-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 31;
+  }
+  .workspace-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: #1d242b55;
+    border: 0;
+    z-index: 30;
+  }
+  .mobile-nav-close {
+    display: inline-flex;
+    margin-left: auto;
+  }
+  .live-workspace .brand {
+    padding-right: 10px;
+  }
+  .live-workspace .topbar-breadcrumb {
+    display: none;
+  }
+  .live-workspace .account-shell {
+    padding: 25px 18px;
+  }
+  .live-workspace .page-title-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .live-workspace .quick-cards,
+  .workspace-projects {
+    grid-template-columns: 1fr;
+  }
+  .live-workspace .section-head {
+    gap: 12px;
+    align-items: flex-start;
+  }
+  .live-workspace .section-head .muted {
+    text-align: right;
+    font-size: 10px;
+  }
+  .workspace-empty {
+    padding: 20px 10px;
+  }
+  .dashboard-wallet .checkin-row {
+    align-items: flex-start;
+  }
+}

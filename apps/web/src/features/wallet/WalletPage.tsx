@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useWalletSummaryUpdate } from '../workspace/WorkspaceShell';
 import { Link } from 'react-router-dom';
 import { type Me, SessionError } from '../auth/sessionApi';
 import { walletApi, type Summary, type Entry } from './walletApi';
@@ -25,6 +26,8 @@ export default function WalletPage({
   onReload: () => void;
   home?: boolean;
 }) {
+  const updateSummary = useWalletSummaryUpdate();
+  const Container = home ? 'section' : 'main';
   const [summary, setSummary] = useState<Summary>();
   const [entries, setEntries] = useState<Entry[]>([]);
   const [cursor, setCursor] = useState<number | null>();
@@ -74,6 +77,7 @@ export default function WalletPage({
         ]);
         if (!signal?.aborted) {
           setSummary(wallet);
+          updateSummary(wallet);
           setEntries(ledger?.items || []);
           setCursor(ledger?.next_cursor);
         }
@@ -83,7 +87,7 @@ export default function WalletPage({
         if (!signal?.aborted) setLoading(false);
       }
     },
-    [failed, home],
+    [failed, home, updateSummary],
   );
   useEffect(() => {
     const controller = new AbortController();
@@ -142,22 +146,16 @@ export default function WalletPage({
     }
   };
   return (
-    <main className="account-shell wallet-page">
-      <header>
-        <div className="eyebrow">
-          ATELIER / {home ? 'WORKSPACE' : 'CREDITS'}
-        </div>
-        <h1>{home ? `你好，${me.user.display_name}` : '我的积分'}</h1>
-        <p>
-          {home ? '每天积累一点创作的可能。' : '每一笔获得与使用，都有记录。'}
-        </p>
-        <nav className="account-nav" aria-label="账号导航">
-          <Link to="/">工作台</Link>
-          <Link to="/wallet">积分账本</Link>
-          <Link to="/settings">账号设置</Link>
-          {me.user.role !== 'USER' && <Link to="/admin/credits">积分管理</Link>}
-        </nav>
-      </header>
+    <Container
+      className={home ? 'dashboard-wallet' : 'account-shell wallet-page'}
+    >
+      {!home && (
+        <header>
+          <div className="eyebrow">ATELIER / CREDITS</div>
+          <h1>我的积分</h1>
+          <p>每一笔获得与使用，都有记录。</p>
+        </header>
+      )}
       {loading && !summary && <p role="status">正在读取积分…</p>}
       {summary && (
         <>
@@ -292,6 +290,6 @@ export default function WalletPage({
       >
         刷新积分
       </button>
-    </main>
+    </Container>
   );
 }
