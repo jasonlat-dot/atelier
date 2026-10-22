@@ -18,6 +18,7 @@ jobs:
       - run: npm ci
         working-directory: apps/web
       - run: node --check scripts/dev.mjs
+      - run: node --test tests/dev-proxy.test.mjs
       - run: cargo fmt --all --check
         working-directory: services/api
       - run: cargo clippy --locked --workspace --all-targets -- -D warnings

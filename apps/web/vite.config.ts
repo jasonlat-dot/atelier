@@ -23,7 +23,13 @@ export default defineConfig(({ command, mode }) => {
       host: '127.0.0.1',
       port: 5173,
       strictPort: true,
-      proxy: { '/api': 'http://127.0.0.1:8080' },
+      proxy: {
+        '/api': {
+          target: 'http://127.0.0.1:8080',
+          // The API validates the browser-facing Host against PUBLIC_BASE_URL.
+          changeOrigin: false,
+        },
+      },
     },
     build: { outDir: mock ? 'dist-mock' : 'dist', sourcemap: true },
   };

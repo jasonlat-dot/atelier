@@ -95,7 +95,7 @@ M1 历史交付未打包、未部署。条款仍是开发占位，正式法律�
 - 用户实账号返回标准 iss，旧回调结构将其当未知参数拒绝；app/src/login_http.rs 补充必填 issuer 和严格 Google HTTPS 匹配，错误响应不消费 state。未修改数据库、Cookie 策略或令牌验签。
 - app/tests/login_http.rs 真实响应参数回归先失败后通过，合计 5/5；覆盖错误/缺失/重复 issuer、未知参数和重放。Playwright 的 Google 模拟回调同步带 iss，避免再次漏测。
 - 本地 fmt/clippy/workspace test/check（45 项普通测试）、前端 typecheck/lint/format:check/build、契约与 baseline 3/3 通过。使用独立构建目录避开用户运行中的 exe；未在占用中的 8080 启动第二份浏览器夹具，完整真实 PG/Redis 浏览器链路交由本次 Actions 再验收。
-- 另验证 Google JWKS 直连失败、本机 7890 代理可达；后端本地 .env 已补现有代理地址（未提交）。用户需重启 npm run dev 并从登录页重新授权；尚不宣称真实 Google 实账号登录已通过。
+- 另验证 Google JWKS 直连失败、本机 7890 代理可达；后端本地 .env 已补现有代理地址（未提交）。用户随后确认真实 Google 验证成功并进入管理员 MFA 页面；此确认仅覆盖本机 Google 登录，不代表 MFA 或生产部署验收已完成。
 
 ## M2 · 登录页参考图调整
 
@@ -103,3 +103,10 @@ M1 历史交付未打包、未部署。条款仍是开发占位，正式法律�
 - 保留服务端注册三态、邀请码提交、加载禁用、配置重试、账号禁用提示和真实 Google 导航。无新依赖、迁移或 API 变化。
 - 前端 typecheck/lint/format:check/build、Mock 源码回归通过；现有 HTTP 浏览器 7/7 通过，测试使用独立 5174 端口，未停止用户开发服务。Rust fmt/clippy/workspace test 通过，45 项普通测试；基础设施测试按现有规则忽略，本次未重跑真实 PG/Redis。
 - 隔离浏览器检查 CLOSED/OPEN/INVITE_ONLY、配置加载/失败重试、禁用账号、条款导航及键盘焦点通过，无页面脚本错误；已检查 1280×800 桌面、390×844 手机与 320×480 小屏截图，小屏可滚动访问条款。检查截图保留于忽略目录 `.tools/`，不作为产品静态资源发布。
+
+## M2 · 开发代理与管理员 MFA 绑定
+
+- 用户已确认登录页视觉效果及真实 Google 登录成功，随后 MFA setup 返回 FORBIDDEN / Request origin or CSRF token rejected。定位到 Vite 的字符串代理隐式 changeOrigin=true，将 Host 改成内部 8080，与 PUBLIC_BASE_URL 的 5173 不符。
+- `apps/web/vite.config.ts` 改为显式 target / changeOrigin=false，保持原始 Host、Origin 和 CSRF 请求头。后端来源、Host、CSRF、管理员权限及 TOTP 检查保持严格，不修改用户数据库或绑定状态。
+- 新增 `tests/dev-proxy.test.mjs`，加载实际 Vite 配置、使用随机隔离端口验证 POST MFA setup 的请求头转发；修复前明确在 Host 断言失败，修复后通过，并断言外部 Origin 不会被改成可信来源。CI 已增加此检查。
+- 前端 typecheck/lint/format:check/build、代理回归、基线 3/3、OpenAPI 契约检查均通过。需用户刷新或重启开发服务后再次绑定验证器；尚未替用户完成真实 MFA 绑定。
