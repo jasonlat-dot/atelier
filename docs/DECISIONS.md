@@ -179,3 +179,11 @@
 - 检查通过后记录 M3 完成；本轮不自动启动 M4。
 
 - 高分辨率用户视频复现 x264 前瞻缓存内存分配失败；采用 zerolatency 限制缓存，保留原有进程内存、时间和并发限制。以同尺寸合成夹具做持续回归，用户原文件仅用于本机只读验证，不提交其媒体内容。
+
+## 2026-10-23 · M4 范围与适配边界
+
+- 负责人要求完成 M4 后停止，不继续 M5；覆盖 M3 停止点，S3 保持待定。M3 修复提交 3852747 的 Actions #39821826331 已确认 success。
+- 管理页沿用现有原型。按规格的严格保密规则，地址、密钥和真实上游模型标识均只写不读；编辑留空表示保留，视图与审计仅含脱敏配置。MASTER_KEY 以独立域派生 XChaCha20-Poly1305 密钥，关联账号 ID 与版本，避免与 MFA 密文混用。
+- 规格引用视频 4.8 但正文没有该章节：M4 采用官方兼容 /videos 提交、查询、内容下载协议；视频模型能力显式包含可选秒数和尺寸，价格按秒配置。现有核心 SQL 的 models.kind 示例补入 video。图片采用 /images/generations 和 multipart /images/edits。参考：[Images](https://developers.openai.com/api/reference/resources/images/methods/generate)、[Videos](https://developers.openai.com/api/reference/resources/videos/methods/create)。
+- 兼容供应商没有统一额度查询协议，因此提供真实连通性测试和管理员手动额度更新，不伪造供应商实时余额。M4 提供可测试的适配与调度 service；生成任务队列、用户生成接口、报价授权、钱包预占/结算与 SSE 均留在 M5。
+- 出站请求每次校验并固定 DNS 解析结果，拒绝私网/元数据/特殊用途地址、重定向和环境代理。开发白名单仅允许明确 loopback origin，且只有服务绑定与 PUBLIC_BASE_URL 都为 loopback 时可配置；无默认放行。

@@ -73,7 +73,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg util-linux
-      - run: cargo test --locked -p atelier-auth -p atelier-wallet -p atelier-assets --tests -- --ignored
+      - run: cargo test --locked -p atelier-auth -p atelier-wallet -p atelier-assets -p atelier-upstream --tests -- --ignored
         working-directory: services/api
       - run: cargo test --locked -p atelier-app --test wallet_http -- --ignored
         working-directory: services/api
