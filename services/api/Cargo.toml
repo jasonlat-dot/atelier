@@ -23,6 +23,7 @@ tower-http = { version = "0.6", features = ["fs", "trace"] }
 utoipa = { version = "5", features = ["uuid", "chrono"] }
 atelier-common = { path = "crates/common" }
 atelier-auth = { path = "crates/auth" }
+atelier-wallet = { path = "crates/wallet" }
 
 chrono = { version = "0.4", features = ["serde"] }
 base64 = "0.22"

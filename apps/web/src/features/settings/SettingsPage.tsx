@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   sessionApi,
   SessionError,
@@ -122,6 +123,10 @@ export default function SettingsPage({
         <div className="eyebrow">ATELIER / ACCOUNT</div>
         <h1>账号设置</h1>
         <p>{me.user.email}</p>
+        <nav className="account-nav" aria-label="账号导航">
+          <Link to="/">工作台</Link>
+          <Link to="/wallet">积分账本</Link>
+        </nav>
       </header>
       <section className="surface-block account-section">
         <h2>个人资料</h2>

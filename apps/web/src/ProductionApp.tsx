@@ -4,6 +4,8 @@ import { sessionApi, SessionError, type Me } from './features/auth/sessionApi';
 import SettingsPage from './features/settings/SettingsPage';
 import LoginPage from './features/auth/LoginPage';
 import MfaPage from './features/auth/MfaPage';
+import WalletPage from './features/wallet/WalletPage';
+import AdminCreditsPage from './features/wallet/AdminCreditsPage';
 
 type AuthState =
   | { status: 'loading' }
@@ -93,6 +95,22 @@ export default function ProductionApp() {
     return <MfaPage me={me} onVerified={reload} onExpired={expired} />;
   return (
     <Routes>
+      <Route
+        path="/"
+        element={
+          <WalletPage me={me} onExpired={expired} onReload={reload} home />
+        }
+      />
+      <Route
+        path="/wallet"
+        element={<WalletPage me={me} onExpired={expired} onReload={reload} />}
+      />
+      <Route
+        path="/admin/credits"
+        element={
+          <AdminCreditsPage me={me} onExpired={expired} onReload={reload} />
+        }
+      />
       <Route
         path="/settings"
         element={

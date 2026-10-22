@@ -1,6 +1,24 @@
-# M1 API 契约
+# M1 / M2 API 契约
 
 结构化契约：`openapi.json`（utoipa）；前端类型：`apps/web/src/lib/generated/api.d.ts`。一致性检查：`python scripts/check_contract.py`。
+
+## M2 钱包接口
+
+下表路径均以 `/api/v1` 为前缀；只读取当前会话所属钱包。非 GET 必须通过同源、CSRF 校验；管理员还要求有效 MFA 与写限流。请求体不接受客户端价格或余额。
+
+| 方法与路径 | 行为 |
+| --- | --- |
+| GET /wallet | balance、held、available、local_date、timezone、checked_in_today、streak、next_reward |
+| GET /wallet/ledger?before=ID&limit=25 | 当前用户账本按 ID 倒序；limit 1–100；返回 items、next_cursor |
+| POST /wallet/checkin | Redis 10 次/分钟/用户；自然日一次。返回 local_date、streak、credits、already_checked_in，重复签到不发积分 |
+| POST /wallet/redeem | body: code；必填 UUID Idempotency-Key；返回首次 CreditReceipt；同键异码 422 |
+| POST /admin/users/{id}/credits | ADMIN：amount 非零整数、reason 必填且最多 500 字符；UUID Idempotency-Key；审计与调账同事务 |
+| POST /admin/redeem-codes | ADMIN：count 1–100、credits 正数、max_uses 1–10000、expires_at 可选；随机明文仅本次返回，不自动重试 |
+| GET /admin/redeem-codes?before=UUID | ADMIN：按 UUID 倒序，最多 50 条；before 为末项 ID。仅元数据，不返回明文或哈希 |
+
+余额不足为 402 INSUFFICIENT_CREDITS；请求键异参为 422 IDEMPOTENCY_CONFLICT；无效/已用/过期兑换码统一为 422 INVALID_REDEEM_CODE；存储故障为 503，限流 429。认证响应均 no-store。资金请求返回的是不可变首次收据，余额应重新 GET /wallet。注册默认赠送 20，只针对 M2 之后成功创建的新身份。
+
+## M1 身份接口
 
 | 方法与路径 | 行为 |
 | --- | --- |

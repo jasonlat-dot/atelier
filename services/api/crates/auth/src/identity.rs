@@ -235,6 +235,11 @@ impl IdentityRepository for PostgresIdentity {
                 let owner:uuid::Uuid=sqlx::query_scalar("INSERT INTO users(google_sub,email,canonical_email,display_name,role,signup_ip) VALUES($1,$2,$3,$4,$5,$6::inet) RETURNING id").bind(&identity.google_sub).bind(&identity.email).bind(&identity.canonical_email).bind(verified.display_name()).bind(if bootstrap {"SUPER_ADMIN"}else{"USER"}).bind(&ip).fetch_one(&mut *tx).await?;
                 (owner, true)
             };
+            if registered {
+                atelier_wallet::WalletService::signup_in_transaction(&mut tx, owner)
+                    .await
+                    .map_err(|_| AuthFailure::Store)?;
+            }
             let secrets = SessionSecrets::generate().map_err(|_| AuthFailure::Store)?;
             if let Some(hash) = context.previous_token_hash {
                 sqlx::query("UPDATE sessions SET revoked_at=now() WHERE token_hash=$1 AND revoked_at IS NULL").bind(hash.as_slice()).execute(&mut *tx).await?;

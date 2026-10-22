@@ -1,5 +1,20 @@
 # Atelier 开发决策
 
+## 2026-10-22 · M2 与现有 WSL 基础设施
+
+- 用户新要求覆盖 M1 停止约定：先补部署好的 PG/Redis，再完成 M2。阶段切片完成后自行提交上传，让 GitHub Actions 验收；本轮停在 M2。
+- 复用 WSL PG 16 / Redis 7（15432 / 16380），不安装启动服务。新建独立业务库与测试库、不同角色；测试角色有 CREATEDB。随机凭据不输出，仅在 services/api/.env 和 .env.test.local。Redis 测试逻辑库 15，不执行 FLUSHDB。
+- scripts/api.ps1 只解析 KEY=VALUE，不执行配置文本；提供 run/infrastructure/test-infrastructure/test-browser。BAT 复用入口，不再覆盖地址。Google/MASTER_KEY/Bootstrap 仍由负责人配置，没有生产默认凭据。
+- 既有 M1 账号建空钱包，不追溯赠送；仅新身份在注册事务内调用 wallet 写默认 20 分 SIGNUP_BONUS，审计失败整体回滚。
+- 钱包行锁和账本参数核对防止重复操作；结算/释放核对该 job 剩余 held，不能占其他任务额度。apply_in_transaction 供未来生成/订单共享事务，当前不实现生成任务。
+- 签到时区取数据库设置并用 PostgreSQL AT TIME ZONE 计算日界，避免新增时区依赖。时区回拨到上次签到日期之前拒绝发奖；连续、断签、上限与奖励在同一锁内计算。
+- 兑换请求作用域为用户，调账为操作者；保存首次收据、哈希参数，不存兑换码明文。兑换码生成 API 仅返回一次明文，不自动重试；全量后台 UI 属 M9。
+- 规格未指定调账路径，补 POST /admin/users/{id}/credits，要求 MFA、原因、UUID 幂等键；扣减不得低于 held。/me 保持身份响应，钱包独立 GET /wallet。
+- 对账在启动及每 24 小时运行，单条 SQL 在同一 MVCC 快照核对 balance/held。异常 tracing error 明确报告；外部监控通知属 M10。
+- 触发器禁止账本 UPDATE/DELETE，额外禁止 TRUNCATE；启动及基础设施检查撤销当前角色这些权限。当前本地角色仍有迁移能力，生产独立迁移/运行角色最小权限留给 M10。
+- 测试迁移和断言先加入再实现；本地真实基础设施 18 项、浏览器 10 项通过。浏览器夹具改为 SQLx 随机隔离库，生产无测试提供方或开发登录。
+- npm 镜像不支持 audit，改官方 registry；Rust 下载经本机已有代理。Cargo.lock 仅新增本地 workspace 模块的依赖边，无第三方版本变动；两种审计均 0 漏洞，无豁免。
+
 ## 2026-10-22 · M0 基线整理
 
 - 当前提示词中的 M{n} 未替换，仓库没有历史提交或里程碑进度；按规格第 0、10 章从 M0 开始。原始原型先提交为 c3384c5。

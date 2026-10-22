@@ -1924,3 +1924,54 @@ small {
   color: var(--danger);
   margin: 12px 0;
 }
+.account-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 22px;
+  margin-top: 24px;
+}
+.account-nav a {
+  color: inherit;
+  text-underline-offset: 5px;
+}
+.checkin-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.wallet-page .wallet-hero {
+  margin: 24px 0;
+}
+.ledger-scroll {
+  overflow-x: auto;
+}
+.ledger-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+.ledger-table th,
+.ledger-table td {
+  padding: 18px 12px;
+  border-bottom: 1px solid #e7e3db;
+  white-space: nowrap;
+}
+.ledger-table th {
+  font-size: 12px;
+  font-weight: 500;
+  color: #767267;
+}
+.ledger-table small {
+  display: block;
+  white-space: normal;
+  max-width: 280px;
+  margin-top: 6px;
+}
+@media (max-width: 600px) {
+  .checkin-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

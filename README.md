@@ -2,7 +2,22 @@
 
 按根目录《Atelier AI 创作平台 · 产品与工程开发规格书（AI 开发版）》逐里程碑开发。
 当前状态以 [docs/PROGRESS.md](docs/PROGRESS.md) 为准；假设见 [docs/DECISIONS.md](docs/DECISIONS.md)。
-原始原型保存在提交 `c3384c5`。M0 基线与 M1 认证权限已完成自动化验收；Google 登录、注册控制、会话/权限守卫、账号设置与管理员 TOTP 的 [CI 全部通过](https://github.com/jasonlat-dot/atelier/actions/runs/39759708282)。按要求停在 M1，不进入 M2；实际部署与 Google 实账号回归见 [docs/M1_VALIDATION.md](docs/M1_VALIDATION.md)。
+原始原型保存在提交 `c3384c5`。M0/M1 已完成验收，本轮 M2 积分账本与签到已通过本地真实 PG/Redis 及浏览器测试，详见 [M2 验收记录](docs/PR_M2.md)；远端 Actions 推送后确认。当前停在 M2，不进入 M3；实际部署与 Google 实账号回归见 [M1 部署清单](docs/M1_VALIDATION.md)。
+
+## 已部署 WSL 数据库
+
+已接入 PostgreSQL 16（127.0.0.1:15432）、Redis 7（127.0.0.1:16380）。独立业务库 atelier 已应用 M0–M2 迁移；测试库 atelier_test 及 CREATEDB 测试角色独立。连接配置在 Git 忽略的 services/api/.env 与 .env.test.local，禁止提交凭据。
+
+```powershell
+./scripts/api.ps1 -Action infrastructure
+./scripts/api.ps1 -Action test-infrastructure
+$env:PLAYWRIGHT_CHANNEL = 'chrome' # 已装 Chrome；CI 使用 Playwright Chromium
+./scripts/api.ps1 -Action test-browser
+# 补齐服务端 Google/MASTER_KEY/Bootstrap 后启动：
+./scripts/api.ps1 -Action run
+```
+
+登录后 `/` 为签到工作台，`/wallet` 查看真实余额/兑换/流水，`/settings` 管理账号，`/admin/credits` 提供有审计的 MFA 管理员调账。
 
 ## 本地 Mock UI
 
@@ -36,9 +51,9 @@ cargo run -p atelier-app
 `npm run build:mock` 单独输出 `dist-mock`，只能用于本地预览。生产构建显式设置 `VITE_API_MODE=mock` 会失败。
 Rust 自动执行 `services/api/migrations`，并可托管 `WEB_DIR` 的 SPA。
 配置样例见 `services/api/.env.example`。启动进程必须注入 DATABASE_URL、REDIS_URL、PUBLIC_BASE_URL、GOOGLE_CLIENT_ID、GOOGLE_CLIENT_SECRET、MASTER_KEY、BOOTSTRAP_ADMIN_EMAILS。认证凭据和主密钥没有默认值，缺失会拒绝启动；不要把任何服务端凭据写入 VITE_* 或前端文件。Google OAuth Web 客户端的回调为 PUBLIC_BASE_URL + /api/v1/auth/google/callback。MASTER_KEY 为持久保存的随机 32 字节 base64。没有开发登录或内存 Session。
-账号资料、设备列表/撤销、全设备注销已接服务端会话；积分/生成等业务按后续里程碑接入。
+账号资料、设备列表/撤销、全设备注销已接服务端会话；M2 已接积分、签到、兑换和管理员调账，生成等业务随后续里程碑接入。
 
-开发基础设施：`infra/compose.yaml` 提供 PostgreSQL 16 与带密码 Redis 7，仅绑定 127.0.0.1；本轮不安装或启动这些服务。
+开发基础设施：`infra/compose.yaml` 提供 PostgreSQL 16 与带密码 Redis 7，仅绑定 127.0.0.1；当前复用已部署 WSL 服务，无需另启动 compose。
 旧原型迁移已归档到 `docs/legacy`；已有旧版数据库不要直接执行新迁移，需要专门迁移方案。
 
 ## 检查

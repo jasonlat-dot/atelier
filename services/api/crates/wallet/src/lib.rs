@@ -1,1 +1,22 @@
-//! wallet module boundary established in M0. No user-facing functionality yet.
+//! The only module permitted to write wallet balances.
+mod postgres;
+mod service;
+mod views;
+pub use service::{Operation, WalletError, WalletService};
+pub use views::*;
+
+use atelier_common::ApiError;
+use axum::http::StatusCode;
+impl From<WalletError> for ApiError {
+    fn from(error: WalletError) -> Self {
+        let (status, code) = match error {
+            WalletError::Insufficient => (StatusCode::PAYMENT_REQUIRED, "INSUFFICIENT_CREDITS"),
+            WalletError::Conflict => (StatusCode::UNPROCESSABLE_ENTITY, "IDEMPOTENCY_CONFLICT"),
+            WalletError::Validation => (StatusCode::UNPROCESSABLE_ENTITY, "VALIDATION"),
+            WalletError::InvalidCode => (StatusCode::UNPROCESSABLE_ENTITY, "INVALID_REDEEM_CODE"),
+            WalletError::NotFound => (StatusCode::NOT_FOUND, "NOT_FOUND"),
+            WalletError::Store => (StatusCode::SERVICE_UNAVAILABLE, "SERVICE_UNAVAILABLE"),
+        };
+        ApiError::new(status, code, &error.to_string())
+    }
+}

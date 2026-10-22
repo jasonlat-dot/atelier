@@ -128,9 +128,10 @@ async fn revoke_device(
 
 #[derive(OpenApi)]
 #[openapi(
-    paths(health, me, rename, logout, devices, revoke_device,crate::login_http::google_start,crate::login_http::google_callback,crate::login_http::public_config,crate::login_http::mfa_setup,crate::login_http::mfa_verify),
+    paths(crate::wallet_http::summary,crate::wallet_http::ledger,crate::wallet_http::checkin,crate::wallet_http::redeem,crate::wallet_http::adjust,crate::wallet_http::create_codes,crate::wallet_http::codes,health, me, rename, logout, devices, revoke_device,crate::login_http::google_start,crate::login_http::google_callback,crate::login_http::public_config,crate::login_http::mfa_setup,crate::login_http::mfa_verify),
     modifiers(&CookieSecurity),
     components(schemas(
+        atelier_wallet::WalletSummary, atelier_wallet::LedgerPage, atelier_wallet::LedgerEntry, atelier_wallet::CheckinReceipt, atelier_wallet::CreditReceipt, atelier_wallet::RedeemRequest, atelier_wallet::AdjustRequest, atelier_wallet::CreateCodesRequest, atelier_wallet::CreatedCodes, atelier_wallet::CreatedCode, atelier_wallet::CodeInfo,
         Health,
         ErrorResponse,
         ErrorDetail,
@@ -152,6 +153,32 @@ pub fn openapi() -> utoipa::openapi::OpenApi {
 
 pub fn router(state: AppState) -> Router {
     let protected = Router::new()
+        .route(
+            "/api/v1/wallet",
+            get(crate::wallet_http::summary).fallback(protected_missing),
+        )
+        .route(
+            "/api/v1/wallet/ledger",
+            get(crate::wallet_http::ledger).fallback(protected_missing),
+        )
+        .route(
+            "/api/v1/wallet/checkin",
+            post(crate::wallet_http::checkin).fallback(protected_missing),
+        )
+        .route(
+            "/api/v1/wallet/redeem",
+            post(crate::wallet_http::redeem).fallback(protected_missing),
+        )
+        .route(
+            "/api/v1/admin/users/{id}/credits",
+            post(crate::wallet_http::adjust).fallback(admin_missing),
+        )
+        .route(
+            "/api/v1/admin/redeem-codes",
+            get(crate::wallet_http::codes)
+                .post(crate::wallet_http::create_codes)
+                .fallback(admin_missing),
+        )
         .route(
             "/api/v1/me",
             get(me).patch(rename).fallback(protected_missing),

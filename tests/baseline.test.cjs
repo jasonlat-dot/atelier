@@ -8,7 +8,7 @@ const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 test('active migrations never install the prototype balance schema', () => {
   const files = fs.readdirSync(path.join(root, 'services/api/migrations'));
   assert.ok(files.some((f) => f.endsWith('.sql')));
-  for (const file of files) assert.doesNotMatch(read('services/api/migrations/' + file), /credits bigint|wallet_ledger/);
+  for (const file of files) assert.doesNotMatch(read('services/api/migrations/' + file), /ALTER TABLE users ADD.*credits|wallet_ledger/);
   assert.match(read('docs/legacy/202610210001_init.sql'), /credits bigint/);
 });
 

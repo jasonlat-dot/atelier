@@ -76,6 +76,7 @@ version = "0.1.0"
 dependencies = [
  "atelier-auth",
  "atelier-common",
+ "atelier-wallet",
  "axum",
  "base64 0.22.1",
  "chrono",
@@ -104,6 +105,7 @@ name = "atelier-auth"
 version = "0.1.0"
 dependencies = [
  "atelier-common",
+ "atelier-wallet",
  "axum",
  "base64 0.22.1",
  "chacha20poly1305",
@@ -154,6 +156,22 @@ version = "0.1.0"
 [[package]]
 name = "atelier-wallet"
 version = "0.1.0"
+dependencies = [
+ "atelier-common",
+ "axum",
+ "base64 0.22.1",
+ "chrono",
+ "getrandom 0.4.3",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "utoipa",
+ "uuid",
+]
 
 [[package]]
 name = "atoi"

@@ -9,7 +9,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .json()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "atelier_app=info,tower_http=info".into()),
+                .unwrap_or_else(|_| "atelier_app=info,atelier_wallet=info,tower_http=info".into()),
         )
         .init();
     let config = Config::from_env()?;
@@ -19,6 +19,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .connect(&config.database_url)
         .await?;
     sqlx::migrate!("../../migrations").run(&db).await?;
+    atelier_wallet::WalletService::new(db.clone())
+        .restrict_ledger()
+        .await?;
     let limits = Arc::new(
         atelier_auth::transient::RedisTransient::connect(&config.redis_url)
             .await
@@ -67,6 +70,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         expose_openapi: config.expose_openapi,
     };
     let listener = tokio::net::TcpListener::bind(config.bind_address).await?;
+    let reconciliation =
+        tokio::spawn(atelier_wallet::WalletService::new(db.clone()).reconciliation_loop());
     tracing::info!(address = %config.bind_address, "Atelier API listening");
     axum::serve(
         listener,
@@ -74,6 +79,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .with_graceful_shutdown(shutdown())
     .await?;
+    reconciliation.abort();
     db.close().await;
     Ok(())
 }

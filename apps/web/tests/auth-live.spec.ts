@@ -64,6 +64,18 @@ test('real database and Redis login reaches settings, survives reload and revoke
   await expect(page.getByText('显示名已更新')).toBeVisible();
   await page.reload();
   await expect(page.getByLabel('显示名')).toHaveValue('Live account');
+  await page.getByRole('link', { name: '积分账本', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '我的积分' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: '注册赠送' })).toBeVisible();
+  const initial = await (await page.request.get('/api/v1/wallet')).json();
+  expect(initial.balance).toBe(20);
+  await page.getByRole('button', { name: '领取今日积分' }).click();
+  await expect(page.getByRole('button', { name: '今日已签到' })).toBeDisabled();
+  await page.reload();
+  await expect(page.getByRole('button', { name: '今日已签到' })).toBeDisabled();
+  const wallet = await (await page.request.get('/api/v1/wallet')).json();
+  expect(wallet.balance).toBe(30);
+  await page.getByRole('link', { name: '账号设置', exact: true }).click();
   page.once('dialog', (d) => d.accept());
   await page.getByRole('button', { name: '退出所有设备' }).click();
   await expect(page).toHaveURL(/\/login$/);

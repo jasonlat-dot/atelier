@@ -70,16 +70,10 @@ impl IdentityProvider for FixtureProvider {
         })
     }
 }
-#[tokio::test]
+#[sqlx::test(migrations = "../../migrations")]
 #[ignore = "Opt-in Playwright fixture with isolated PostgreSQL/Redis; never a production login mode"]
-async fn browser_harness() {
+async fn browser_harness(db: sqlx::PgPool) {
     assert_eq!(std::env::var("TEST_AUTH_HARNESS").as_deref(), Ok("1"));
-    let db = sqlx::postgres::PgPoolOptions::new()
-        .max_connections(8)
-        .connect(&std::env::var("DATABASE_URL").expect("isolated test database only"))
-        .await
-        .unwrap();
-    sqlx::migrate!("../../migrations").run(&db).await.unwrap();
     sqlx::query("UPDATE system_settings SET value='\"OPEN\"' WHERE key='registration_mode'")
         .execute(&db)
         .await

@@ -11,15 +11,17 @@ export class SessionError extends Error {
     super(message);
   }
 }
-async function request<T>(
+export async function request<T>(
   path: string,
   method = 'GET',
   csrf?: string,
   body?: unknown,
   signal?: AbortSignal,
+  idempotencyKey?: string,
 ): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (csrf) headers['X-CSRF-Token'] = csrf;
+  if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   const response = await fetch(`/api/v1${path}`, {
     method,

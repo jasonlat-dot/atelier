@@ -155,6 +155,268 @@
         ]
       }
     },
+    "/api/v1/admin/redeem-codes": {
+      "get": {
+        "tags": [
+          "crate::wallet_http"
+        ],
+        "operationId": "codes",
+        "parameters": [
+          {
+            "name": "before",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CodeInfo"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "crate::wallet_http"
+        ],
+        "operationId": "create_codes",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCodesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedCodes"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "csrf": [],
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/users/{id}/credits": {
+      "post": {
+        "tags": [
+          "crate::wallet_http"
+        ],
+        "operationId": "adjust",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdjustRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "csrf": [],
+            "session": []
+          }
+        ]
+      }
+    },
     "/api/v1/auth/google/callback": {
       "get": {
         "tags": [
@@ -639,10 +901,459 @@
           }
         }
       }
+    },
+    "/api/v1/wallet": {
+      "get": {
+        "tags": [
+          "crate::wallet_http"
+        ],
+        "operationId": "summary",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WalletSummary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/wallet/checkin": {
+      "post": {
+        "tags": [
+          "crate::wallet_http"
+        ],
+        "operationId": "checkin",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckinReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "csrf": [],
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/wallet/ledger": {
+      "get": {
+        "tags": [
+          "crate::wallet_http"
+        ],
+        "operationId": "ledger",
+        "parameters": [
+          {
+            "name": "before",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/wallet/redeem": {
+      "post": {
+        "tags": [
+          "crate::wallet_http"
+        ],
+        "operationId": "redeem",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RedeemRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "csrf": [],
+            "session": []
+          }
+        ]
+      }
     }
   },
   "components": {
     "schemas": {
+      "AdjustRequest": {
+        "type": "object",
+        "required": [
+          "amount",
+          "reason"
+        ],
+        "properties": {
+          "amount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CheckinReceipt": {
+        "type": "object",
+        "required": [
+          "local_date",
+          "streak",
+          "credits",
+          "already_checked_in"
+        ],
+        "properties": {
+          "already_checked_in": {
+            "type": "boolean"
+          },
+          "credits": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "local_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "streak": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "CodeInfo": {
+        "type": "object",
+        "required": [
+          "id",
+          "credits",
+          "max_uses",
+          "used_count",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "credits": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "expires_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "max_uses": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "used_count": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "CreateCodesRequest": {
+        "type": "object",
+        "required": [
+          "count",
+          "credits",
+          "max_uses"
+        ],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "credits": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "expires_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "max_uses": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreatedCode": {
+        "type": "object",
+        "required": [
+          "id",
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "CreatedCodes": {
+        "type": "object",
+        "required": [
+          "codes"
+        ],
+        "properties": {
+          "codes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatedCode"
+            }
+          }
+        }
+      },
+      "CreditReceipt": {
+        "type": "object",
+        "required": [
+          "ledger_id",
+          "credits"
+        ],
+        "properties": {
+          "credits": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "ledger_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "DeviceList": {
         "type": "object",
         "required": [
@@ -741,6 +1452,64 @@
           }
         }
       },
+      "LedgerEntry": {
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "balance_delta",
+          "held_delta",
+          "created_at"
+        ],
+        "properties": {
+          "balance_delta": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "held_delta": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "type": {
+            "type": "string"
+          }
+        }
+      },
+      "LedgerPage": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LedgerEntry"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        }
+      },
       "MeResponse": {
         "type": "object",
         "required": [
@@ -798,6 +1567,18 @@
           }
         }
       },
+      "RedeemRequest": {
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
       "RenameRequest": {
         "type": "object",
         "required": [
@@ -843,6 +1624,51 @@
           },
           "role": {
             "$ref": "#/components/schemas/Role"
+          }
+        }
+      },
+      "WalletSummary": {
+        "type": "object",
+        "required": [
+          "balance",
+          "held",
+          "available",
+          "local_date",
+          "timezone",
+          "checked_in_today",
+          "streak",
+          "next_reward"
+        ],
+        "properties": {
+          "available": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "balance": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "checked_in_today": {
+            "type": "boolean"
+          },
+          "held": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "local_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "next_reward": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "streak": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "timezone": {
+            "type": "string"
           }
         }
       }

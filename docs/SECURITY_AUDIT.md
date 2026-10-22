@@ -1,5 +1,7 @@
 # 依赖审计记录 · 2026-10-22
 
+M2 本地复验：cargo-audit 0.22.2 使用本日新克隆的官方 RustSec 库（1349 条公告）扫描完整 282 依赖，退出码 0，无漏洞。npm 官方 registry audit 0 漏洞。Cargo.lock 只增加本地 wallet 模块依赖边，没有新增/升级第三方版本；没有豁免。M2 本地真实 PG/Redis 18 项、浏览器 10 项通过，远端结果见 PROGRESS.md。
+
 当前结论：项目已移除触发 RUSTSEC-2023-0071 的 rsa 依赖，当前完整锁文件没有 rsa 或 openidconnect。M1 最终源码 `1683788` 的 [CI #6](https://github.com/jasonlat-dot/atelier/actions/runs/39759708282) 全部通过，cargo audit 与 npm audit 均为 0 漏洞，未设置公告豁免。M1 认证自动化验收已完成；实际 Google 部署回归和 M10 全量上线安全验收尚待完成。
 
 ## 原因与处理历史

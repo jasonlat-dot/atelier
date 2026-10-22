@@ -125,6 +125,15 @@ async fn concurrent_registration_obeys_ip_quota_and_subject_uniqueness(pool: PgP
         .await
         .unwrap();
     assert_eq!(count, 1);
+    let bonus_count:i64=sqlx::query_scalar("SELECT count(*) FROM credit_ledger l JOIN users u ON u.id=l.user_id WHERE u.google_sub='one-sub' AND l.type='SIGNUP_BONUS'").fetch_one(&pool).await.unwrap();
+    assert_eq!(bonus_count, 1);
+    let balance: i64 = sqlx::query_scalar(
+        "SELECT balance FROM wallets w JOIN users u ON u.id=w.user_id WHERE u.google_sub='one-sub'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(balance, 20);
 }
 #[sqlx::test(migrations = "../../migrations")]
 #[ignore = "Requires isolated PostgreSQL 16; executed by CI"]

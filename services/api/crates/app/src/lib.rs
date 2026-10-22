@@ -2,6 +2,7 @@ pub mod auth_http;
 pub mod config;
 pub mod login_http;
 pub mod routes;
+pub mod wallet_http;
 use atelier_auth::{
     postgres::PostgresSessions,
     service::{PublicOrigin, SessionService},
