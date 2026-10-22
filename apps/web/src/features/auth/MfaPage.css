@@ -359,6 +359,43 @@
   outline-offset: 3px;
 }
 
+.mfa-confirm {
+  width: min(420px, calc(100vw - 40px));
+  max-height: calc(100dvh - 48px);
+  margin: auto;
+  padding: 28px;
+  border: 1px solid #e5e1da;
+  border-radius: 20px;
+  background: #fff;
+  color: #202b38;
+  box-shadow: 0 20px 60px #202b3826;
+}
+
+.mfa-confirm::backdrop {
+  background: #202b3866;
+}
+
+.mfa-confirm h2 {
+  margin: 0 0 12px;
+  font-size: 20px;
+  letter-spacing: 0;
+}
+
+.mfa-confirm p {
+  margin-bottom: 24px;
+}
+
+.mfa-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.mfa-confirm-actions .btn {
+  margin: 0;
+}
+
 @media (max-width: 600px) {
   .signin-screen.mfa-screen {
     padding: 24px 16px;

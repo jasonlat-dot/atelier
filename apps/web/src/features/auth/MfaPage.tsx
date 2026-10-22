@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Check, QrCode } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { sessionApi, SessionError, type Me } from './sessionApi';
@@ -15,6 +15,9 @@ function VerificationCode({
 }) {
   const input = useRef<HTMLInputElement>(null);
   const [cursor, setCursor] = useState(0);
+  useEffect(() => {
+    if (!disabled) input.current?.focus({ preventScroll: true });
+  }, [disabled]);
   return (
     <>
       <label className="mfa-code-label" htmlFor="mfa-code">
@@ -82,7 +85,23 @@ export default function MfaPage({
 }) {
   const [uri, setUri] = useState('');
   const [code, setCode] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState<'setup' | 'verify' | 'logout' | null>(
+    null,
+  );
+  const busy = pending !== null;
+  const inFlight = useRef(false);
+  const logoutDialog = useRef<HTMLDialogElement>(null);
+  const logoutConfirm = useRef<HTMLButtonElement>(null);
+  const begin = (action: 'setup' | 'verify' | 'logout') => {
+    if (inFlight.current) return false;
+    inFlight.current = true;
+    setPending(action);
+    return true;
+  };
+  const finish = () => {
+    inFlight.current = false;
+    setPending(null);
+  };
   const [error, setError] = useState('');
   const [showSecret, setShowSecret] = useState(false);
   const [copyMessage, setCopyMessage] = useState('');
@@ -115,8 +134,7 @@ export default function MfaPage({
       className="mfa-form"
       onSubmit={(event) => {
         event.preventDefault();
-        if (busy || !ready || code.length !== 6) return;
-        setBusy(true);
+        if (!ready || code.length !== 6 || !begin('verify')) return;
         setError('');
         void sessionApi
           .mfaVerify(code, me.csrf_token)
@@ -127,7 +145,7 @@ export default function MfaPage({
             onVerified();
           })
           .catch((reason: unknown) => fail(reason, 'verify'))
-          .finally(() => setBusy(false));
+          .finally(finish);
       }}
     >
       <VerificationCode
@@ -151,7 +169,7 @@ export default function MfaPage({
         type="submit"
         disabled={busy || !ready || code.length !== 6}
       >
-        {busy ? '正在验证…' : '验证并继续'}
+        {pending === 'verify' ? '正在验证…' : '验证并继续'}
       </button>
     </form>
   );
@@ -205,10 +223,9 @@ export default function MfaPage({
                 <button
                   className="btn btn-dark"
                   disabled={busy}
+                  aria-busy={pending === 'setup'}
                   onClick={() => {
-                    if (!window.confirm('为当前账号绑定验证器，是否继续？'))
-                      return;
-                    setBusy(true);
+                    if (!begin('setup')) return;
                     setError('');
                     void sessionApi
                       .mfaSetup(me.csrf_token)
@@ -218,11 +235,11 @@ export default function MfaPage({
                         setCopyMessage('');
                       })
                       .catch((reason: unknown) => fail(reason, 'setup'))
-                      .finally(() => setBusy(false));
+                      .finally(finish);
                   }}
                 >
                   <QrCode size={18} aria-hidden="true" />
-                  {busy ? '正在生成二维码…' : '绑定验证器'}
+                  {pending === 'setup' ? '正在生成二维码…' : '绑定验证器'}
                 </button>
               )}
               {uri && (
@@ -318,18 +335,80 @@ export default function MfaPage({
             className="btn btn-light"
             disabled={busy}
             onClick={() => {
-              if (!window.confirm('将退出所有设备，是否继续？')) return;
-              setBusy(true);
-              void sessionApi
-                .logout(me.csrf_token)
-                .then(onExpired)
-                .catch((reason: unknown) => fail(reason, 'logout'))
-                .finally(() => setBusy(false));
+              logoutDialog.current?.showModal();
+              logoutConfirm.current?.focus();
             }}
           >
-            退出所有设备
+            {pending === 'logout' ? '正在退出…' : '退出所有设备'}
           </button>
         </div>
+        <dialog
+          ref={logoutDialog}
+          className="mfa-confirm"
+          aria-modal="true"
+          aria-labelledby="mfa-logout-title"
+          aria-describedby="mfa-logout-description"
+          onKeyDown={(event) => {
+            if (event.key !== 'Tab') return;
+            const buttons =
+              event.currentTarget.querySelectorAll<HTMLButtonElement>(
+                'button:not(:disabled)',
+              );
+            const first = buttons[0];
+            const last = buttons[buttons.length - 1];
+            if (!first || !last) return;
+            if (!event.shiftKey && document.activeElement === last) {
+              event.preventDefault();
+              first.focus();
+            } else if (event.shiftKey && document.activeElement === first) {
+              event.preventDefault();
+              last.focus();
+            }
+          }}
+          onClick={(event) => {
+            if (event.target !== event.currentTarget) return;
+            const bounds = event.currentTarget.getBoundingClientRect();
+            if (
+              event.clientX < bounds.left ||
+              event.clientX > bounds.right ||
+              event.clientY < bounds.top ||
+              event.clientY > bounds.bottom
+            )
+              logoutDialog.current?.close();
+          }}
+        >
+          <h2 id="mfa-logout-title">退出所有设备？</h2>
+          <p id="mfa-logout-description">
+            当前浏览器和其他设备的登录都会失效，再次使用 Atelier
+            时需要重新登录。
+          </p>
+          <div className="mfa-confirm-actions">
+            <button
+              className="btn btn-light"
+              type="button"
+              onClick={() => logoutDialog.current?.close()}
+            >
+              取消
+            </button>
+            <button
+              className="btn btn-dark"
+              type="button"
+              ref={logoutConfirm}
+              onClick={() => {
+                if (!begin('logout')) return;
+                logoutDialog.current?.close();
+                setError('');
+                void sessionApi
+                  .logout(me.csrf_token)
+                  .then(onExpired)
+                  .catch((reason: unknown) => fail(reason, 'logout'))
+                  .finally(finish);
+              }}
+            >
+              退出所有设备并返回登录
+            </button>
+          </div>
+        </dialog>
       </section>
     </main>
   );

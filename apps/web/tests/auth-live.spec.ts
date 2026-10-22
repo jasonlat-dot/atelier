@@ -95,7 +95,6 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   let me = await (await page.request.get('/api/v1/me')).json();
   expect(me.user.role).toBe('SUPER_ADMIN');
   expect((await page.request.get('/api/v1/admin/users')).status()).toBe(403);
-  page.once('dialog', (d) => d.accept());
   await page.getByRole('button', { name: '绑定验证器' }).click();
   await expect(
     page.getByRole('img', { name: 'Atelier 验证器绑定二维码' }),

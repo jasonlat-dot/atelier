@@ -209,10 +209,10 @@ test('administrator enrolls MFA through CSRF protected endpoints and returns to 
   ).toBeVisible();
   await expect(page.getByLabel('六位验证码')).toBeDisabled();
   await expect(page.getByRole('button', { name: '验证并继续' })).toBeDisabled();
-  page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: '绑定验证器' }).click();
   const qr = page.getByRole('img', { name: 'Atelier 验证器绑定二维码' });
   await expect(qr).toBeVisible();
+  await expect(page.getByLabel('六位验证码')).toBeFocused();
   await expect(page.getByLabel('验证器密钥')).toHaveCount(0);
   await page.getByRole('button', { name: '无法扫码？使用密钥' }).click();
   await expect(qr).toHaveCount(0);
@@ -241,4 +241,99 @@ test('administrator enrolls MFA through CSRF protected endpoints and returns to 
   await expect(codeInput).toHaveValue('123456');
   await page.getByRole('button', { name: '验证并继续' }).click();
   await expect(page.getByRole('heading', { name: '账号设置' })).toBeVisible();
+});
+
+test('MFA binding has no native confirmation and logout uses an accessible modal', async ({
+  page,
+}) => {
+  let setupRequests = 0;
+  let logoutRequests = 0;
+  let releaseSetup!: () => void;
+  const setupGate = new Promise<void>((resolve) => {
+    releaseSetup = resolve;
+  });
+  const nativeDialogs: string[] = [];
+  page.on('dialog', async (dialog) => {
+    nativeDialogs.push(dialog.type());
+    await dialog.dismiss();
+  });
+  await page.route('**/api/v1/**', async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === '/api/v1/me')
+      return route.fulfill({
+        json: {
+          ...me,
+          user: { ...user, role: 'ADMIN' },
+          mfa_required: true,
+        },
+      });
+    if (path === '/api/v1/admin/mfa/setup') {
+      setupRequests++;
+      expect(route.request().headers()['x-csrf-token']).toBe(csrf);
+      await setupGate;
+      return route.fulfill({
+        json: {
+          otpauth_uri:
+            'otpauth://totp/Atelier:test?secret=TESTSECRET&issuer=Atelier',
+        },
+      });
+    }
+    if (path === '/api/v1/auth/logout') {
+      logoutRequests++;
+      expect(route.request().method()).toBe('POST');
+      expect(route.request().headers()['x-csrf-token']).toBe(csrf);
+      return route.fulfill({ status: 204 });
+    }
+    if (path === '/api/v1/public/config')
+      return route.fulfill({
+        json: { registration_mode: 'CLOSED', version: 'test' },
+      });
+    return route.fulfill({ status: 404 });
+  });
+  await page.goto('/settings');
+  await page
+    .getByRole('button', { name: '绑定验证器', exact: true })
+    .dblclick();
+  await expect(
+    page.getByRole('button', { name: '正在生成二维码…' }),
+  ).toBeDisabled();
+  await expect.poll(() => setupRequests).toBe(1);
+  releaseSetup();
+  await expect(
+    page.getByRole('img', { name: 'Atelier 验证器绑定二维码' }),
+  ).toBeVisible();
+  await expect(page.getByLabel('六位验证码')).toBeFocused();
+  expect(nativeDialogs).toEqual([]);
+  const logout = page.getByRole('button', {
+    name: '退出所有设备',
+    exact: true,
+  });
+  const dialog = page.getByRole('dialog', { name: '退出所有设备？' });
+  const confirm = dialog.getByRole('button', {
+    name: '退出所有设备并返回登录',
+  });
+  const cancel = dialog.getByRole('button', { name: '取消', exact: true });
+  await logout.click();
+  await expect(dialog).toBeVisible();
+  await expect(confirm).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(cancel).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(confirm).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(dialog).not.toBeVisible();
+  await expect(logout).toBeFocused();
+  await logout.click();
+  await cancel.click();
+  await expect(dialog).not.toBeVisible();
+  await logout.click();
+  await page.mouse.click(5, 5);
+  await expect(dialog).not.toBeVisible();
+  expect(logoutRequests).toBe(0);
+  await logout.click();
+  await confirm.click();
+  await expect(page).toHaveURL(/\/login$/);
+  expect(logoutRequests).toBe(1);
+  expect(setupRequests).toBe(1);
+  expect(nativeDialogs).toEqual([]);
 });
