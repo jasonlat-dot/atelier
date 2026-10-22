@@ -138,6 +138,56 @@ async function fixture(page: Page, failLimits = false) {
     },
   };
 }
+test('video processing stays unplayable until server completion and failures stay actionable', async ({
+  page,
+}) => {
+  await fixture(page);
+  let completed = false;
+  await page.route(/\/api\/v1\/assets(?:\?.*)?$/, (route) => {
+    return route.fulfill({
+      json: {
+        items: [
+          {
+            ...initial(1, 'Film.mp4'),
+            kind: 'video',
+            duration_ms: 2000,
+            state: completed ? 'READY' : 'PROCESSING',
+            thumbnail_url: completed ? '/media/film/thumbnail' : null,
+            media_url: completed ? '/media/film/original' : null,
+          },
+          {
+            ...initial(2, 'Broken.mp4'),
+            kind: 'video',
+            state: 'FAILED',
+            thumbnail_url: null,
+            media_url: null,
+          },
+        ],
+        total: 2,
+        next_cursor: null,
+      },
+    });
+  });
+  await page.goto('/assets');
+  await expect(
+    page.getByRole('button', { name: '预览 Film.mp4' }),
+  ).toBeDisabled();
+  await expect(page.getByText('正在处理…', { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: '预览 Broken.mp4' }),
+  ).toBeDisabled();
+  await expect(
+    page.getByText('处理失败，请重新上传', { exact: true }),
+  ).toBeVisible();
+  completed = true;
+  await expect(page.getByRole('button', { name: '预览 Film.mp4' })).toBeEnabled(
+    { timeout: 10000 },
+  );
+  await expect(page.getByText('16 × 8 · 1 KB · 2.0 秒')).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: '删除 Broken.mp4' }),
+  ).toBeEnabled();
+});
 test('prototype library uploads multipart, previews fresh media, filters and confirms batch deletion', async ({
   page,
 }) => {

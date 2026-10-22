@@ -53,8 +53,11 @@ async fn assets_are_private_paginated_soft_deleted_and_expired(db: PgPool) {
         .media(owner, asset.id, "original", expires, sig, None)
         .await
         .unwrap();
+    let media_bytes = axum::body::to_bytes(media.body, 20 * 1024 * 1024)
+        .await
+        .unwrap();
     assert_eq!(
-        image::guess_format(&media.bytes).unwrap(),
+        image::guess_format(&media_bytes).unwrap(),
         image::ImageFormat::Png
     );
     assert!(service
@@ -69,7 +72,10 @@ async fn assets_are_private_paginated_soft_deleted_and_expired(db: PgPool) {
         .media(owner, asset.id, "original", expires, sig, Some("bytes=1-4"))
         .await
         .unwrap();
-    assert_eq!(&range.bytes[..], &media.bytes[1..5]);
+    assert_eq!(
+        &axum::body::to_bytes(range.body, 1024).await.unwrap()[..],
+        &media_bytes[1..5]
+    );
     assert!(range.partial);
     assert!(service
         .media(owner, asset.id, "original", expires - 1, sig, None)

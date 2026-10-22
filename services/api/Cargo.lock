@@ -123,6 +123,7 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "chrono",
+ "futures-util",
  "image",
  "object_store",
  "reqwest 0.13.5",

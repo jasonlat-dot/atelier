@@ -66,7 +66,9 @@ export default function AssetsPage({
           return;
         }
         const messages: Record<string, string> = {
-          INVALID_MEDIA: '文件格式或内容无效，请选择 PNG、JPEG 或 WebP 图片。',
+          INVALID_MEDIA:
+            '文件格式或内容无效，请选择 PNG、JPEG、WebP 图片或 MP4、WebM 视频。',
+          VIDEO_UNAVAILABLE: '视频处理暂不可用，请稍后再上传。',
           MEDIA_TOO_LARGE: '文件超过上传限制，请压缩后重试。',
           ASSET_QUOTA_EXCEEDED: '素材空间已满，请删除不需要的素材后重试。',
           TOO_MANY_REQUESTS: '上传或处理较繁忙，请稍后重试。',
@@ -162,10 +164,12 @@ export default function AssetsPage({
         if (
           (!video &&
             !['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) ||
-          (video && !limits.video_enabled)
+          (video &&
+            (!limits.video_enabled ||
+              !['video/mp4', 'video/webm'].includes(file.type)))
         ) {
           setError(
-            `“${file.name}”暂不支持上传，请选择 PNG、JPEG 或 WebP 图片。`,
+            `“${file.name}”暂不支持上传。请选择 PNG、JPEG、WebP 图片${limits.video_enabled ? '或 MP4、WebM 视频' : ''}。`,
           );
           continue;
         }
@@ -468,6 +472,9 @@ export default function AssetsPage({
                     ? `${asset.width} × ${asset.height} · `
                     : ''}
                   {size(asset.bytes)}
+                  {asset.duration_ms
+                    ? ` · ${(asset.duration_ms / 1000).toFixed(1)} 秒`
+                    : ''}
                 </span>
                 <div className="asset-card-footer">
                   <small>
@@ -527,8 +534,8 @@ export default function AssetsPage({
       <p className="assets-help">
         图片支持 PNG、JPEG、WebP，单张不超过 20 MB。
         {limits?.video_enabled
-          ? '视频不超过 200 MB、60 秒，上传后自动转码。'
-          : '视频上传正在准备中。'}
+          ? '视频支持 MP4、WebM，不超过 200 MB、60 秒，上传后自动转码。'
+          : '视频处理服务尚未启用，当前可上传图片。'}
         素材默认保留 30 天。
       </p>
       {dragging && (
@@ -587,8 +594,12 @@ export default function AssetsPage({
           </div>
           <footer>
             <span>
-              {preview.width} × {preview.height} · {size(preview.bytes)} ·
-              保留至 {new Date(preview.expires_at).toLocaleDateString('zh-CN')}
+              {preview.width} × {preview.height} · {size(preview.bytes)}
+              {preview.duration_ms
+                ? ` · ${(preview.duration_ms / 1000).toFixed(1)} 秒`
+                : ''}{' '}
+              · 保留至{' '}
+              {new Date(preview.expires_at).toLocaleDateString('zh-CN')}
             </span>
             {preview.media_url && (
               <a

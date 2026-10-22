@@ -106,11 +106,21 @@ async fn browser_harness(db: sqlx::PgPool) {
     let cipher = MfaCipher::from_base64(&STANDARD.encode(key)).unwrap();
     let mut state = AppState::test();
     state.db = db.clone();
-    state.assets = Some(atelier_assets::AssetService::new(
+    let video = atelier_assets::video::VideoProcessor::from_lookup(|key| std::env::var(key).ok())
+        .unwrap()
+        .expect("Browser fixture requires FFmpeg");
+    assert!(
+        video.available().await,
+        "Browser fixture requires FFmpeg/ffprobe"
+    );
+    let assets = atelier_assets::AssetService::new(
         db.clone(),
         atelier_assets::storage::Storage::memory(),
         atelier_assets::signing::MediaSigner::from_base64(&STANDARD.encode(key)).unwrap(),
-    ));
+    )
+    .with_video(video);
+    let processing = tokio::spawn(assets.clone().processing_loop());
+    state.assets = Some(assets);
     state.auth = SessionService::new(
         Arc::new(PostgresSessions::new(db)),
         PublicOrigin::parse(&base_url).unwrap(),
@@ -133,4 +143,5 @@ async fn browser_harness(db: sqlx::PgPool) {
     )
     .await
     .unwrap();
+    processing.abort();
 }

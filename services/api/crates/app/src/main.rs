@@ -53,7 +53,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build(&config.web_dir)
         .await
         .map_err(|_| "Media storage configuration unavailable")?;
-    let assets = atelier_assets::AssetService::new(db.clone(), media_storage, config.media_signer);
+    let mut assets =
+        atelier_assets::AssetService::new(db.clone(), media_storage, config.media_signer);
+    if let Some(processor) = config.video {
+        if processor.available().await {
+            assets = assets.with_video(processor);
+        } else {
+            tracing::warn!("Video tools unavailable; image uploads remain available");
+        }
+    }
     let state = AppState {
         assets: Some(assets.clone()),
         login: Some(atelier_auth::login::LoginService::new(
@@ -79,6 +87,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let listener = tokio::net::TcpListener::bind(config.bind_address).await?;
     let reconciliation =
         tokio::spawn(atelier_wallet::WalletService::new(db.clone()).reconciliation_loop());
+    let video_processing = tokio::spawn(assets.clone().processing_loop());
     let media_maintenance = tokio::spawn(assets.maintenance_loop());
     tracing::info!(address = %config.bind_address, "Atelier API listening");
     axum::serve(
@@ -89,6 +98,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .await?;
     reconciliation.abort();
     media_maintenance.abort();
+    video_processing.abort();
     db.close().await;
     Ok(())
 }

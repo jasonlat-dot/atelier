@@ -3,6 +3,8 @@ pub mod imaging;
 mod service;
 pub mod signing;
 pub mod storage;
+pub mod video;
+mod video_service;
 mod views;
 use atelier_common::ApiError;
 use axum::http::StatusCode;
@@ -26,6 +28,8 @@ pub enum AssetError {
     Busy,
     #[error("Media quota exceeded")]
     Quota,
+    #[error("Video processing unavailable")]
+    VideoUnavailable,
 }
 impl From<sqlx::Error> for AssetError {
     fn from(_: sqlx::Error) -> Self {
@@ -60,6 +64,11 @@ impl From<AssetError> for ApiError {
                 StatusCode::CONFLICT,
                 "ASSET_QUOTA_EXCEEDED",
                 "Media storage quota reached",
+            ),
+            AssetError::VideoUnavailable => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "VIDEO_UNAVAILABLE",
+                "Video processing unavailable",
             ),
         };
         Self::new(status, code, message)

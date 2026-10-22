@@ -109,6 +109,42 @@ test('real database and Redis login reaches workspace, survives reload and revok
   await expect(
     page.getByText('已删除 1 个素材', { exact: true }),
   ).toBeVisible();
+  const video = readFileSync(
+    new URL(
+      '../../../services/api/crates/app/tests/fixtures/reference.mp4',
+      import.meta.url,
+    ),
+  );
+  await page.getByLabel('选择上传素材', { exact: true }).setInputFiles({
+    name: 'Live film.mp4',
+    mimeType: 'video/mp4',
+    buffer: video,
+  });
+  const film = page.getByRole('button', { name: '预览 Live film.mp4' });
+  await expect(film).toBeEnabled({ timeout: 20000 });
+  await page.reload();
+  await film.click();
+  const player = page
+    .getByRole('dialog', { name: 'Live film.mp4' })
+    .locator('video');
+  await expect
+    .poll(() => player.evaluate((element) => element.readyState), {
+      timeout: 15000,
+    })
+    .toBeGreaterThanOrEqual(2);
+  expect(await player.evaluate((element) => element.duration)).toBeGreaterThan(
+    1,
+  );
+  await player.evaluate((element) => {
+    element.currentTime = 1;
+  });
+  await expect
+    .poll(() => player.evaluate((element) => element.currentTime))
+    .toBeGreaterThanOrEqual(1);
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: '删除 Live film.mp4' }).click();
+  await page.getByRole('button', { name: '确认删除素材' }).click();
+  await expect(film).toHaveCount(0);
   await page.getByRole('link', { name: '账号设置', exact: true }).click();
   page.once('dialog', (d) => d.accept());
   await page.getByRole('button', { name: '退出所有设备' }).click();

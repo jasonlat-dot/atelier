@@ -3,6 +3,7 @@ use crate::{
     AssetView,
 };
 use chrono::Utc;
+use futures_util::StreamExt;
 use sha2::{Digest, Sha256};
 use sqlx::{PgPool, Row};
 use std::{sync::Arc, time::Duration};
@@ -15,11 +16,12 @@ pub struct AssetService {
     pub(crate) storage: Storage,
     pub(crate) signer: MediaSigner,
     ingest: Arc<Semaphore>,
-    processing: Arc<Semaphore>,
+    pub(crate) processing: Arc<Semaphore>,
+    pub(crate) video: Option<crate::video::VideoProcessor>,
     media: Arc<Semaphore>,
 }
 pub struct MediaData {
-    pub bytes: bytes::Bytes,
+    pub body: axum::body::Body,
     pub mime: String,
     pub total: u64,
     pub start: u64,
@@ -34,6 +36,7 @@ impl AssetService {
             signer,
             ingest: Arc::new(Semaphore::new(2)),
             processing: Arc::new(Semaphore::new(2)),
+            video: None,
             media: Arc::new(Semaphore::new(16)),
         }
     }
@@ -42,6 +45,37 @@ impl AssetService {
             .clone()
             .try_acquire_owned()
             .map_err(|_| AssetError::Busy)
+    }
+    pub(crate) async fn reservation(
+        &self,
+        owner: Uuid,
+        bytes: i64,
+    ) -> Result<(sqlx::Transaction<'static, sqlx::Postgres>, i32), AssetError> {
+        let mut tx = self.db.begin().await?;
+        let active: Option<Uuid> =
+            sqlx::query_scalar("SELECT id FROM users WHERE id=$1 AND status='ACTIVE' FOR UPDATE")
+                .bind(owner)
+                .fetch_optional(&mut *tx)
+                .await?;
+        if active.is_none() {
+            return Err(AssetError::NotFound);
+        }
+        let quota=sqlx::query("SELECT count(*) AS count,coalesce(sum(greatest(bytes,reserved_bytes)),0)::bigint AS bytes FROM assets WHERE owner_id=$1 AND deleted_at IS NULL AND expires_at>clock_timestamp()") .bind(owner).fetch_one(&mut *tx).await?;
+        if quota.get::<i64, _>("count") >= 500
+            || quota.get::<i64, _>("bytes") + bytes > 2 * 1024 * 1024 * 1024
+        {
+            return Err(AssetError::Quota);
+        }
+        let retention: serde_json::Value = sqlx::query_scalar(
+            "SELECT value FROM system_settings WHERE key='asset_retention_days_free'",
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+        let retention = retention
+            .as_i64()
+            .filter(|n| (1..=3650).contains(n))
+            .ok_or(AssetError::Store)?;
+        Ok((tx, retention as i32))
     }
     pub async fn upload_image(
         &self,
@@ -67,33 +101,17 @@ impl AssetService {
         let object_key = format!("assets/{id}/original.png");
         let thumb_key = format!("assets/{id}/thumbnail.jpg");
         let hash = Sha256::digest(&prepared.original).to_vec();
-        let mut tx = self.db.begin().await?;
-        let active: Option<Uuid> =
-            sqlx::query_scalar("SELECT id FROM users WHERE id=$1 AND status='ACTIVE' FOR UPDATE")
-                .bind(owner)
-                .fetch_optional(&mut *tx)
-                .await?;
-        if active.is_none() {
-            return Err(AssetError::NotFound);
-        }
-        let quota=sqlx::query("SELECT count(*) AS count,coalesce(sum(bytes),0)::bigint AS bytes FROM assets WHERE owner_id=$1 AND deleted_at IS NULL AND expires_at>clock_timestamp()") .bind(owner).fetch_one(&mut *tx).await?;
-        if quota.get::<i64, _>("count") >= 500
-            || quota.get::<i64, _>("bytes") + prepared.original.len() as i64
-                > 2 * 1024 * 1024 * 1024
-        {
-            return Err(AssetError::Quota);
-        }
-        let retention: serde_json::Value = sqlx::query_scalar(
-            "SELECT value FROM system_settings WHERE key='asset_retention_days_free'",
-        )
-        .fetch_one(&mut *tx)
-        .await?;
-        let retention = retention
-            .as_i64()
-            .filter(|n| (1..=3650).contains(n))
-            .ok_or(AssetError::Store)?;
+        let (mut tx, retention) = self
+            .reservation(owner, prepared.original.len() as i64)
+            .await?;
         sqlx::query("INSERT INTO assets(id,owner_id,name,kind,source,object_key,thumb_key,mime,bytes,thumb_bytes,width,height,sha256,expires_at,lease_until) VALUES($1,$2,$3,'image','upload',$4,$5,'image/png',$6,$7,$8,$9,$10,clock_timestamp()+make_interval(days=>$11),clock_timestamp()+interval '5 minutes')")
-            .bind(id).bind(owner).bind(&name).bind(&object_key).bind(&thumb_key).bind(prepared.original.len() as i64).bind(prepared.thumbnail.len() as i64).bind(prepared.width as i32).bind(prepared.height as i32).bind(hash).bind(retention as i32).execute(&mut *tx).await?;
+            .bind(id).bind(owner).bind(&name).bind(&object_key).bind(&thumb_key).bind(prepared.original.len() as i64).bind(prepared.thumbnail.len() as i64).bind(prepared.width as i32).bind(prepared.height as i32).bind(hash).bind(retention).execute(&mut *tx).await?;
+        sqlx::query("INSERT INTO asset_blobs(object_key,asset_id) VALUES($1,$3),($2,$3)")
+            .bind(&object_key)
+            .bind(&thumb_key)
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
         tx.commit().await?;
         let stored = async {
             self.storage.put(&object_key, prepared.original).await?;
@@ -232,12 +250,15 @@ impl AssetService {
         };
         let total = total as u64;
         let (start, end) = parse_range(range, total)?;
-        let bytes = self.storage.get(&key, start..end).await?;
-        if bytes.len() as u64 != end - start {
+        let result = self.storage.stream(&key, start..end).await?;
+        if result.range != (start..end) {
             return Err(AssetError::Store);
         }
+        let stream = result.into_stream().inspect(move |_| {
+            let _ = &_slot;
+        });
         Ok(MediaData {
-            bytes,
+            body: axum::body::Body::from_stream(stream),
             mime,
             total,
             start,
@@ -246,21 +267,34 @@ impl AssetService {
         })
     }
     pub async fn cleanup(&self) -> Result<u64, AssetError> {
+        sqlx::query("UPDATE assets SET state='FAILED',error_code='VIDEO_PROCESSING_INTERRUPTED',bytes=0,lease_until=NULL,lease_token=NULL WHERE state='PROCESSING' AND upload_ready=true AND attempts>=3 AND lease_until<clock_timestamp()").execute(&self.db).await?;
         sqlx::query("UPDATE assets SET deleted_at=coalesce(deleted_at,clock_timestamp()) WHERE purged_at IS NULL AND deleted_at IS NULL AND (expires_at<=clock_timestamp() OR (state='PROCESSING' AND upload_ready=false AND created_at<clock_timestamp()-interval '10 minutes'))") .execute(&self.db).await?;
         let mut tx = self.db.begin().await?;
-        let rows:Vec<AssetRecord>=sqlx::query_as("SELECT * FROM assets WHERE deleted_at IS NOT NULL AND purged_at IS NULL AND (lease_until IS NULL OR lease_until<clock_timestamp()) ORDER BY id LIMIT 100 FOR UPDATE SKIP LOCKED").fetch_all(&mut *tx).await?;
+        let rows:Vec<AssetRecord>=sqlx::query_as("SELECT * FROM assets WHERE (deleted_at IS NOT NULL OR state='FAILED') AND purged_at IS NULL AND (lease_until IS NULL OR lease_until<clock_timestamp()) ORDER BY id LIMIT 100 FOR UPDATE SKIP LOCKED").fetch_all(&mut *tx).await?;
         let count = rows.len() as u64;
         for row in rows {
-            self.storage.delete(&row.object_key).await?;
-            self.storage.delete(&row.thumb_key).await?;
-            self.storage
-                .delete(&format!("assets/{}/source.bin", row.id))
-                .await?;
-            sqlx::query("UPDATE assets SET purged_at=clock_timestamp() WHERE id=$1")
-                .bind(row.id)
-                .execute(&mut *tx)
-                .await?;
+            let keys:Vec<String>=sqlx::query_scalar("SELECT object_key FROM asset_blobs WHERE asset_id=$1 AND purged_at IS NULL ORDER BY object_key").bind(row.id).fetch_all(&mut *tx).await?;
+            for key in keys {
+                self.storage.delete(&key).await?;
+                sqlx::query("UPDATE asset_blobs SET purged_at=clock_timestamp() WHERE object_key=$1 AND asset_id=$2").bind(key).bind(row.id).execute(&mut *tx).await?;
+            }
+            sqlx::query(
+                "UPDATE assets SET purged_at=clock_timestamp(),reserved_bytes=0 WHERE id=$1",
+            )
+            .bind(row.id)
+            .execute(&mut *tx)
+            .await?;
         }
+        tx.commit().await?;
+        let mut tx = self.db.begin().await?;
+        let orphaned=sqlx::query("SELECT b.object_key,b.asset_id FROM asset_blobs b JOIN assets a ON a.id=b.asset_id WHERE b.purged_at IS NULL AND (a.purged_at IS NOT NULL OR (a.state='READY' AND b.object_key<>a.object_key AND b.object_key<>a.thumb_key AND (b.created_at<clock_timestamp()-interval '30 minutes' OR b.object_key='assets/'||a.id::text||'/source.bin'))) LIMIT 100 FOR UPDATE OF b SKIP LOCKED").fetch_all(&mut *tx).await?;
+        for row in orphaned {
+            let key: String = row.get("object_key");
+            let id: Uuid = row.get("asset_id");
+            self.storage.delete(&key).await?;
+            sqlx::query("UPDATE asset_blobs SET purged_at=clock_timestamp() WHERE object_key=$1 AND asset_id=$2").bind(key).bind(id).execute(&mut *tx).await?;
+        }
+        sqlx::query("UPDATE assets a SET reserved_bytes=0 WHERE a.state='READY' AND a.reserved_bytes>0 AND EXISTS(SELECT 1 FROM asset_blobs b WHERE b.asset_id=a.id AND b.object_key='assets/'||a.id::text||'/source.bin' AND b.purged_at IS NOT NULL)").execute(&mut *tx).await?;
         tx.commit().await?;
         Ok(count)
     }
@@ -274,7 +308,7 @@ impl AssetService {
         }
     }
 }
-fn clean_name(name: &str) -> Result<String, AssetError> {
+pub(crate) fn clean_name(name: &str) -> Result<String, AssetError> {
     let name: String = name.chars().filter(|c| !c.is_control()).take(160).collect();
     let name = name.trim();
     if name.is_empty() {

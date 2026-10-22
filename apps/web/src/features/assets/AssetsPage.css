@@ -291,6 +291,12 @@
   object-fit: contain;
   display: block;
 }
+.asset-preview-content video {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #17191b;
+  border-radius: 10px;
+}
 .asset-preview > footer {
   display: flex;
   justify-content: space-between;

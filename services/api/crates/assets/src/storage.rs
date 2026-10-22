@@ -1,6 +1,6 @@
 use crate::AssetError;
 use bytes::Bytes;
-use object_store::{path::Path, ObjectStore, ObjectStoreExt};
+use object_store::{path::Path, GetOptions, GetRange, GetResult, ObjectStore, ObjectStoreExt};
 use std::{ops::Range, path::PathBuf, sync::Arc, time::Duration};
 #[derive(Clone)]
 pub struct Storage {
@@ -114,20 +114,43 @@ impl Storage {
         }
     }
     pub async fn put(&self, key: &str, data: Vec<u8>) -> Result<(), AssetError> {
-        self.inner
-            .put(&Path::from(key), data.into())
-            .await
-            .map_err(|_| AssetError::Store)?;
+        self.put_bytes(key, data.into()).await?;
+        Ok(())
+    }
+    pub async fn put_bytes(&self, key: &str, data: Bytes) -> Result<(), AssetError> {
+        tokio::time::timeout(
+            Duration::from_secs(30),
+            self.inner.put(&Path::from(key), data.into()),
+        )
+        .await
+        .map_err(|_| AssetError::Store)?
+        .map_err(|_| AssetError::Store)?;
         Ok(())
     }
     pub async fn get(&self, key: &str, range: Range<u64>) -> Result<Bytes, AssetError> {
-        self.inner
-            .get_range(&Path::from(key), range)
-            .await
-            .map_err(|_| AssetError::Store)
+        tokio::time::timeout(
+            Duration::from_secs(30),
+            self.inner.get_range(&Path::from(key), range),
+        )
+        .await
+        .map_err(|_| AssetError::Store)?
+        .map_err(|_| AssetError::Store)
+    }
+    pub async fn stream(&self, key: &str, range: Range<u64>) -> Result<GetResult, AssetError> {
+        let options = GetOptions::default().with_range(Some(GetRange::Bounded(range)));
+        tokio::time::timeout(
+            Duration::from_secs(30),
+            self.inner.get_opts(&Path::from(key), options),
+        )
+        .await
+        .map_err(|_| AssetError::Store)?
+        .map_err(|_| AssetError::Store)
     }
     pub async fn delete(&self, key: &str) -> Result<(), AssetError> {
-        match self.inner.delete(&Path::from(key)).await {
+        match tokio::time::timeout(Duration::from_secs(30), self.inner.delete(&Path::from(key)))
+            .await
+            .map_err(|_| AssetError::Store)?
+        {
             Ok(()) | Err(object_store::Error::NotFound { .. }) => Ok(()),
             Err(_) => Err(AssetError::Store),
         }

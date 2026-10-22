@@ -162,3 +162,14 @@ M1 历史交付未打包、未部署。条款仍是开发占位，正式法律�
 - 本地：Rust fmt/clippy/check/普通测试通过（50 项）；真实 PG/Redis 基础设施 22/22；Mock 浏览器 1/1、HTTP 页面 16/16、真实认证/钱包/上传/刷新持久化/签名图片显示/删除浏览器 2/2；前端 typecheck/lint/format:check/test:mock/build、契约、实际媒体/API 代理通过。桌面和 320px 手机素材库/预览/删除截图已核对，合成素材无脚本错误。
 - 安全审计：官方 RustSec 当日公告 1349 条、锁文件 339 依赖，cargo audit 退出 0。新媒体存储统一 ring，避免多 TLS provider；npm 官方审计 0 漏洞，无漏洞忽略。S3 实服务和视频处理尚未验收，M3 不能标完成。当前测试不停止用户 8080；真实浏览器夹具改用可配置 loopback 端口，本地使用 8082。
 - 上阶段 `f4f918e` 工作台恢复的 [Actions #39804929413](https://github.com/jasonlat-dot/atelier/actions/runs/39804929413) 已确认 completed/success。
+
+## M3 · 视频素材接入原型（2026-10-23，里程碑进行中）
+
+- 新迁移 `202610230100_m3_video.sql` 增加原始大小、空间预占、任务租约令牌和全部存储对象登记，不改已发布迁移。`assets/src/video.rs`、`video_service.rs` 接入真实 FFmpeg/ffprobe，上传校验后返回 PROCESSING；后台转成 H.264/AAC MP4、生成 JPEG 封面后才开放签名链接。支持 MP4/WebM、200 MiB、60 秒；源文件不提供给浏览器，成功后回收。
+- PostgreSQL 持久队列、SKIP LOCKED 领取、独立输出键和租约令牌防止重复领取/过期进程发布；最多三次重试，处理失败和删除/到期均可回收。READY 与审计原子提交，丢失提交响应不删除已发布输出。预占转码空间，媒体 Range 改为流式响应并持有并发槽至响应结束。
+- 只通过 stdin 传上传体，禁止 file/concat/网络输入；FFmpeg 独立 Linux timeout/prlimit 限制 1 GiB、转码 120 秒、探测/封面 20 秒和有限线程/并发。Windows 开发经 WSL，Linux 直接调用；工具缺失时禁用视频，页面明确提示。没有把工具二进制或本机路径写进仓库；本机已忽略 .env 配置工具目录，重启 npm run dev 后生效。
+- 素材库继续沿用原型，新增视频时长、处理中/失败状态、完成轮询和自适应播放器，支持预览、进度跳转、下载、筛选和删除。首次视觉检查发现低分辨率视频的原生控件过小，已扩大视频显示区；桌面和 320px 手机截图检查通过，无脚本错误。
+- Rust fmt/clippy/workspace test/check 通过，普通测试 51 项；真实基础设施与视频处理合计 25 项通过。视频回归包括 MP4、含音轨 WebM、恰好 60 秒、61 秒拒绝、伪装/截断拒绝、重编码去元数据、可解码封面、并发单次领取、Range、跨用户拒绝、删除、损坏失败、审计回滚重试与重试耗尽回收。针对 AAC 编码填充，仅自产转码输出允许最多 100 毫秒容器延迟，上传始终严格 <=60 秒；展示/记录最大 60 秒。
+- 前端 typecheck/lint/format:check/test:mock/build、API 契约与代理/基线 4/4 通过；HTTP 浏览器既有 16 项及新增视频状态测试通过，Mock 1/1、真实 PG/Redis/合成 Google + 图片/视频播放/删除浏览器 2/2 通过；真实浏览器使用隔离 8082，不停止用户 8080/5173。
+- cargo audit：当日官方公告 1349 条、339 个依赖，0 漏洞；npm 官方 audit 0 漏洞。CI 加入 FFmpeg/util-linux 安装，执行相同真实视频与浏览器验证。图片阶段 `a8554f2` 的 [Actions #39812886454](https://github.com/jasonlat-dot/atelier/actions/runs/39812886454) 已确认 completed/success。本次提交后跟进远端检查。
+- S3 实服务尚未验收，M3 继续进行；本次不进入 M4，不打包部署。

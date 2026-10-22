@@ -46,14 +46,14 @@ MFA 验证额外限制 5 次/5 分钟/用户。角色改变/禁用通过触发�
 
 默认只信真实 TCP 对端 IP，忽略 X-Forwarded-For。只有显式配置 TRUSTED_PROXY_IPS 的对端可提供单值 X-Real-IP；代理必须覆盖该头，禁止透传客户端伪造值。Google Client Secret 和 MASTER_KEY 仅后端环境变量必填，无默认值。
 
-## M3 素材接口 · 图片接入切片
+## M3 素材接口 · 图片与视频
 
 路径以 `/api/v1` 为前缀，媒体读取路径除外。所有接口经过真实 Session/账号状态检查，管理员要求最近 MFA；非 GET 要求同源和 CSRF。
 
 | 方法与路径 | 行为 |
 | --- | --- |
-| GET /assets/limits | 图片/视频大小上限、视频能力开关和最大时长；此切片 video_enabled=false |
-| POST /assets/uploads | multipart，且只能包含一个 file 字段；PNG/JPEG/WebP，单张最多 20 MiB；魔数与声明 MIME 一致，解码与尺寸/像素/内存校验，方向校正、重新编码为 PNG、JPEG 缩略图；201 AssetView |
+| GET /assets/limits | 图片/视频大小上限、视频能力开关和最大时长；video_enabled 取决于服务启动时的工具检查 |
+| POST /assets/uploads | multipart，且只能包含一个 file 字段；PNG/JPEG/WebP 最多 20 MiB，校验后重新编码为 PNG、JPEG 缩略图；MP4/WebM 最多 200 MiB、60 秒，校验后返回 PROCESSING，后台转码后为 READY；201 AssetView |
 | GET /assets?kind=image&source=upload&search=名称&before=UUID&limit=24 | 当前用户素材按 created_at/id 倒序，kind/source 可省略，search 按名称字面子串匹配、最多 100 字符；limit 1–100；items、total、next_cursor |
 | GET /assets/{id} | 当前用户单个未删除/未过期素材及新签名链接；跨用户、不存在、删除或到期统一 404 |
 | DELETE /assets/{id} | 本人素材软删，立即撤销所有签名链接；204 |
@@ -62,4 +62,6 @@ MFA 验证额外限制 5 次/5 分钟/用户。角色改变/禁用通过触发�
 
 默认 FREE 素材保留 30 天；预留订阅保留设置 180 天，订阅业务尚未实现。当前每用户最多 500 个未到期素材、合计 2 GiB，上传 10 次/分钟/用户；全局并发与流式读取限额约束内存。INVALID_MEDIA 422、MEDIA_TOO_LARGE 413、ASSET_QUOTA_EXCEEDED 409、繁忙/限流 429、存储故障 503。删除/到期后台每分钟重试清理文件；中断上传可回收。未实现画布引用，未提供拖到画布的假操作。
 
-媒体默认 MEDIA_STORAGE=local、MEDIA_DIR=data/media，拒绝与现有 WEB_DIR 重叠；文件路径从服务器 UUID 生成，不使用原始文件名。可配置 HTTPS S3 兼容后端（服务端 S3_ENDPOINT/BUCKET/REGION/ACCESS_KEY_ID/SECRET_ACCESS_KEY）；未提供实 S3 凭据，当前验收覆盖本地存储，S3 实服务及视频转码仍待后续切片验证。
+视频只接受单视频流的 H.264/HEVC/VP8/VP9/AV1、最大 4096 边长和 900 万像素。FFmpeg 以管道输入，协议白名单仅 pipe/cache，禁用输入 file/concat/网络协议；单进程内存上限 1 GiB、探测/封面 20 秒、转码 120 秒，共用有限处理并发。重新编码为 H.264/AAC MP4 后才生成可读链接，原始上传体从不对外提供，成功后删除。任务在 PostgreSQL 持久化，以租约和唯一令牌领取，最多三次尝试；FAILED 可删除并重新上传，签名读取与断点 Range 使用流式响应。待处理视频按 400 MiB 预占用户空间，避免转码膨胀绕过 2 GiB 配额；源文件回收后释放预占。VIDEO_UNAVAILABLE 为 503。
+
+媒体默认 MEDIA_STORAGE=local、MEDIA_DIR=data/media，拒绝与现有 WEB_DIR 重叠；文件路径从服务器 UUID 生成，不使用原始文件名。可配置 HTTPS S3 兼容后端（服务端 S3_ENDPOINT/BUCKET/REGION/ACCESS_KEY_ID/SECRET_ACCESS_KEY）；当前验收覆盖本地存储与真实视频转码，S3 实服务仍待验证。

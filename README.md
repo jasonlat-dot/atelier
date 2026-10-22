@@ -101,4 +101,6 @@ cargo test --locked -p atelier-auth --tests -- --ignored
 
 需先设置 DATABASE_URL 与 TEST_REDIS_URL 指向专用测试实例；不要对生产数据库执行。CI 另运行 `npm run test:e2e:auth`，用 tests/browser_harness.rs 的合成 Google 签名提供方、真实 PostgreSQL/Redis 和浏览器验证登录/设置/退出/MFA。该夹具不被生产 main 引用，无测试登录开关。真实 Google 凭据与实际部署回归由项目负责人后续完成。
 
-素材文件默认写入 API 工作目录的 `data/media`（Git 忽略且不在网页静态目录），沿用现有 MASTER_KEY 生成私有签名链接。图片支持 PNG/JPEG/WebP、20 MiB、默认保留 30 天；视频处理为 M3 后续切片，当前明确禁用。S3 配置见 services/api/.env.example，真实服务尚未验收。
+素材文件默认写入 API 工作目录的 `data/media`（Git 忽略且不在网页静态目录），沿用现有 MASTER_KEY 生成私有签名链接。素材库沿用原型，支持图片 PNG/JPEG/WebP（20 MiB）和视频 MP4/WebM（200 MiB、60 秒）。视频先显示处理中，后台重新转码为 MP4、生成封面后可播放、拖动进度和下载；默认保留 30 天。
+
+视频依赖 FFmpeg/ffprobe、timeout 和 prlimit。Linux 使用本机 PATH；Windows 默认经 WSL 调用，可在后端 `.env` 配置 `FFMPEG_DIR=/绝对/Linux/目录`。本机已配置工作区内的工具，重启 `npm run dev` 即可启用。换机器时需安装工具或重新配置路径；设置 `VIDEO_MODE=disabled` 可只启用图片，工具缺失时页面明确提示视频不可用。S3 配置见 services/api/.env.example，真实服务尚未验收，M3 仍在进行中。
