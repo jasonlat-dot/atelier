@@ -100,3 +100,5 @@ M1 当前切片验证（2026-10-22）：`cargo fmt --all`、`cargo clippy --lock
 - 用户要求完成 M1 即停止，不进入 M2。本机不安装/启动 PostgreSQL 或 Redis；真实 Google 凭据由部署时配置。
 
 本地最终源码回归：Rust 44 项通过、12 项按环境跳过（11 项真实基础设施断言 + 1 个浏览器服务夹具）；fmt、严格 clippy 通过。前端 typecheck/lint/format/test:mock/build、npm audit（0）通过；HTTP 浏览器 5/5。CI 真库/Redis/浏览器待当前源码推送后确认。
+
+首次收尾 CI：d8872b9 / run 39758306218 的 baseline 通过，11 项 PostgreSQL/Redis 回归全部通过；完整浏览器因 Playwright 重定向链拦截方式失败，已修正测试夹具，等待重跑。未提前标记 M1 完整验收通过。

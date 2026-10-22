@@ -1,8 +1,13 @@
 import { test, expect, type Page } from '@playwright/test';
 import { createHmac } from 'node:crypto';
 async function google(page: Page, kind: 'user' | 'admin') {
-  await page.route('https://accounts.google.com/**', async (route) => {
-    const query = new URL(route.request().url()).searchParams;
+  await page.route('**/api/v1/auth/google/start*', async (route) => {
+    const response = await route.fetch({ maxRedirects: 0 });
+    expect(response.status()).toBe(302);
+    const authorization = new URL(response.headers().location);
+    expect(authorization.origin).toBe('https://accounts.google.com');
+    expect(authorization.pathname).toBe('/o/oauth2/v2/auth');
+    const query = authorization.searchParams;
     expect(query.get('client_id')).toBe('browser-test');
     expect(query.get('code_challenge_method')).toBe('S256');
     const code = [kind, query.get('nonce'), query.get('code_challenge')].join(
@@ -13,9 +18,11 @@ async function google(page: Page, kind: 'user' | 'admin') {
     );
     callback.searchParams.set('state', query.get('state') || '');
     callback.searchParams.set('code', code);
+    // Playwright routes only the first request in a redirect chain. Preserve
+    // the real backend cookie and assert its Google URL before emulating IdP.
     await route.fulfill({
-      status: 302,
-      headers: { location: callback.toString() },
+      response,
+      headers: { ...response.headers(), location: callback.toString() },
     });
   });
   await page.goto('/login');

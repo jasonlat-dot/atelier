@@ -74,3 +74,5 @@
 - 新迁移 202610220300_m1_login_mfa.sql 添加待绑定状态与防重放时间步，不修改已提交迁移。OpenAPI 与生成类型同步；Google 真凭据/部署回归仍由用户后续自行完成。
 - 测试签名私钥仅为本轮本机生成的合成夹具，在 tests/fixtures 下；真实浏览器夹具也只在 tests/browser_harness.rs 中，需 TEST_AUTH_HARNESS=1 和隔离数据库/Redis，生产 main 没有该模式或测试提供方。
 - Windows 本机 session_http 的默认调试产物反复遇到 LNK1104，检查无对应运行进程、无 Defender 检测事件；清理该包构建缓存后仍出现。仅对本机测试设置 CARGO_PROFILE_TEST_DEBUG=0（不改断言、优化级别或安全逻辑）后 14 项权限 HTTP 测试通过；CI 保留标准配置运行。
+
+- CI 完整浏览器夹具需拦截 start 的首跳：Playwright 不对重定向链后续 URL 再调用 route。夹具用 route.fetch(maxRedirects=0) 取得真实后端 302/绑定 Cookie，断言原 Google URL 和全部安全参数，再模拟提供方回调；保留 PKCE/nonce 签名验证与全部权限断言，不访问真实 Google。
