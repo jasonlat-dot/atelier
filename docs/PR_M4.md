@@ -69,7 +69,7 @@
 
 运行真实基础设施回归：先在 `.env.test.local` 配好专用 DATABASE_URL / TEST_REDIS_URL 和 FFmpeg，再执行 `./scripts/api.ps1 -Action test-infrastructure`。浏览器先 `npm --prefix apps/web run build`，再执行 `./scripts/api.ps1 -Action test-browser`；本机已有 8080 时，可设置 `TEST_AUTH_BASE_URL=http://127.0.0.1:8082`，不停止已有服务。
 
-远端 Actions 的准确提交和结论以 `PROGRESS.md` 最后记录为准，不能把排队/运行中写成通过。
+最终功能提交 `9fa4b8b3485b50daace051f8860f67f214c3c4aa` 的 [Actions #39834923711](https://github.com/jasonlat-dot/atelier/actions/runs/39834923711) 已核对 baseline、identity-schema 均 completed/success。此前页面切片 7f78f18 和后端切片 ddb984b 的 Actions 也均成功；准确续接记录见 PROGRESS.md。
 
 ## 本轮停止点
 
