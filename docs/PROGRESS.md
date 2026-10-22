@@ -4,7 +4,7 @@
 
 - [x] 原始工程保全：c3384c5，未验证的原型快照，不是可上线版本。
 - [x] M0：基线整理（功能验收通过，2026-10-22；本地依赖审计工具与基础设施验证边界见下）。
-- [ ] M1：认证与权限。
+- [ ] M1：认证与权限（进行中；先完成身份表与策略测试，正式流程未接通）。
 - [ ] M2：积分账本与签到。
 - [ ] M3：素材与存储。
 - [ ] M4：账号池与模型。
@@ -31,3 +31,20 @@
 - [ ] PostgreSQL/Redis 真实实例、迁移执行、Google OIDC 与正式业务回归：按用户要求待自行部署；M0 不宣称这些能力可用。
 
 验收描述：`docs/PR_M0.md`。下一步严格按 M1，先迁移与测试。
+
+## M1 · 认证与权限（进行中，未验收）
+
+- [x] 先写 `migrations/202610220100_m1_identity.sql`、`auth/tests/policy.rs`、`auth/tests/session.rs`、`auth/tests/schema.rs`；测试先因缺实现失败，再补 `auth/src/policy.rs` 与 `session.rs`。
+- [x] 身份基础源码：users、sessions、system_settings、invite_codes、audit_logs；默认 CLOSED；角色/禁用事务触发撤销会话。**迁移尚未在真实 PostgreSQL 执行，未认定可部署通过。**
+- [x] 纯规则测试：Gmail 别名、已验证邮箱/hd 条件、注册三态/Bootstrap/IP 配额、禁用/空闲 7 天/绝对 30 天、管理员角色和 MFA 12 小时窗口、同源 CSRF、重复安全头、256 位令牌、重复/伪造 Cookie 和 Debug 脱敏。
+- [ ] 两项 SQLx 真实数据库测试：身份唯一约束/默认注册关闭、角色变更与禁用撤销会话；已编译，因无数据库显式跳过。CI identity-schema 作业配置执行，远端未运行。
+- [ ] OIDC Authorization Code + PKCE、JWKS 签名/iss/aud/exp/nonce 校验、Redis state 一次性消费和限流。
+- [ ] 注册事务、即时设置、邀请码消费、IP 并发限额、Bootstrap 仅首次登录。
+- [ ] 数据库 Session repo/service、AuthUser/RequireRole 提取器、逐请求状态/角色查询、登出和撤销、CSRF 中间件。
+- [ ] TOTP 绑定/验证/重放防护与加密存储。
+- [ ] 前端 /login、路由守卫、/settings（在真实契约接通时同步实现，不提供假登录）。
+- [ ] 第 8 章身份/注册/授权全链路矩阵，用户部署后的 PostgreSQL/Redis/OIDC 回归。
+
+当前公开 API 和 OpenAPI 无新增；纯策略与迁移不是用户已可使用功能。M1 未完成，不进入 M2。
+
+M1 当前切片验证（2026-10-22）：`cargo fmt --all`、`cargo clippy --locked --offline --workspace --all-targets -- -D warnings`、`cargo test --locked --offline --workspace`、`cargo check --locked --offline --workspace` 均通过；总计 15 个测试通过、2 个 PostgreSQL 测试显式跳过。`npm run typecheck` / `npm run build` 重新通过；生产产物 2/2 与 API 一致性再次通过。M0 UI、lint、Mock/E2E 与 npm audit 的通过结果见上一节，前端在本切片没有改动。cargo audit 与真实数据库/Redis 仍未验证。

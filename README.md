@@ -2,7 +2,7 @@
 
 按根目录《Atelier AI 创作平台 · 产品与工程开发规格书（AI 开发版）》逐里程碑开发。
 当前状态以 [docs/PROGRESS.md](docs/PROGRESS.md) 为准；假设见 [docs/DECISIONS.md](docs/DECISIONS.md)。
-原始原型保存在提交 `c3384c5`，当前正在执行 M0 基线整理。
+原始原型保存在提交 `c3384c5`，已完成 M0 基线整理（`b3cc451`），正在推进 M1 身份基础；正式认证流程尚未接通。
 
 ## 本地 Mock UI
 

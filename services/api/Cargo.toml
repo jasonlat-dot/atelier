@@ -24,5 +24,11 @@ utoipa = { version = "5", features = ["uuid"] }
 atelier-common = { path = "crates/common" }
 atelier-auth = { path = "crates/auth" }
 
+chrono = { version = "0.4", features = ["serde"] }
+base64 = "0.22"
+sha2 = "0.10"
+subtle = "2"
+getrandom = "0.4"
+
 [workspace.lints.rust]
 unsafe_code = "forbid"

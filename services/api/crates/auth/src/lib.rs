@@ -1,4 +1,4 @@
-//! M0 security boundary. Replaced by database-backed authentication in M1.
+//! M1 policy and session foundations. Database-backed authentication is not wired yet.
 //! There are no development identities or in-memory sessions.
 use atelier_common::ApiError;
 
@@ -6,3 +6,6 @@ use atelier_common::ApiError;
 pub async fn require_authenticated() -> ApiError {
     ApiError::unauthenticated()
 }
+
+pub mod policy;
+pub mod session;

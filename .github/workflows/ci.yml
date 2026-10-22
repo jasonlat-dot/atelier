@@ -39,3 +39,25 @@ jobs:
       # Keep the complete report, including moderate findings, in CI logs.
       - run: npm audit
         working-directory: apps/web
+
+  identity-schema:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: atelier_test
+          POSTGRES_PASSWORD: isolated_ci_only
+          POSTGRES_DB: atelier_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U atelier_test -d atelier_test"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      DATABASE_URL: postgres://atelier_test:isolated_ci_only@127.0.0.1:5432/atelier_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --locked -p atelier-auth --test schema -- --ignored
+        working-directory: services/api
