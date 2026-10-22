@@ -27,7 +27,7 @@
 - [x] `docs/openapi.json` 从 utoipa 生成，`apps/web/src/lib/generated/api.d.ts` 从契约生成；`scripts/check_contract.py` 一致性通过。
 - [x] 本地 Rust：fmt、clippy（-D warnings）、test（6 个测试，其中权限矩阵覆盖 105 组请求）、check 全通过。
 - [x] 本地前端：typecheck、lint、format:check、test:mock、build、build:mock 全通过；Playwright 在 Edge 1/1 通过（生成回流、刷新保存、签到去重、角色切换）；生产产物测试 2/2 通过；npm audit 0 漏洞。
-- [ ] cargo audit：工具安装受网络/缓存限制，本机未运行；CI 仍配置为硬门禁。
+- [ ] cargo audit：最初因工具安装受阻未运行；现已本机复现 rsa / RUSTSEC-2023-0071 失败，CI 保留硬门禁，详见末尾审计记录。
 - [ ] PostgreSQL/Redis 真实实例、迁移执行、Google OIDC 与正式业务回归：按用户要求待自行部署；M0 不宣称这些能力可用。
 
 验收描述：`docs/PR_M0.md`。下一步严格按 M1，先迁移与测试。
@@ -62,3 +62,17 @@ M1 当前切片验证（2026-10-22）：`cargo fmt --all`、`cargo clippy --lock
 - 后续提交使用 jasonlat-dot 的已核对 noreply 邮箱；用户已授权检查/文档完成后自动推送到 origin/main，旧三个提交不重写。
 
 下一项：M1 OIDC state/PKCE/nonce、Redis 一次性状态与限流，再接注册事务和 Google 回调。完整 M1 仍未验收。
+
+## M1 · OIDC state / PKCE 与 Redis 基础（2026-10-22，尚未接通登录）
+
+- [x] 测试先行：`auth/tests/oidc_attempt.rs` 先因缺实现失败；再写 `auth/src/oidc_attempt.rs` 与 `transient.rs`。无 SQL schema 变化，沿用 M1 迁移；无公开接口变化。
+- [x] 授权 URL 具备独立 state/nonce、S256 PKCE，Redis TTL 10 分钟、NX 防覆盖、浏览器 Cookie 绑定、原子一次性消费、故障拒绝；内存实现仅存在测试文件。
+- [x] 登录滑动窗口 20 次/10 分钟/IP；IPv4-mapped IPv6 不能换格式绕过。100 并发回调仅一次成功；缺失/伪造/过期、错误绑定、后端故障、非法配置均有自动化测试。
+- [ ] `auth/tests/redis_transient.rs` 真实 Redis 的 100 并发/NX/TTL/滑动窗口测试本机显式跳过；CI identity-schema 已加 Redis 7 与专门执行命令，本次远端结果尚未确认。按用户要求不启动本机基础服务。
+- [ ] 该组件尚未接 app 路由/启动，未交换 code、未验证 ID token、未创建用户/Session；Google 登录和完整 M1 验收仍未通过。下一项为 Google token 验证及注册事务。
+- [ ] cargo audit 已真实运行，1 个 rsa 0.9.10 / RUSTSEC-2023-0071，退出码 1；没有可升级修复版本，详见 SECURITY_AUDIT.md。保留门禁，npm audit 改为前序失败仍执行。
+- 用户截图显示此前 identity-schema 作业成功；仅记录这张截图证据，不等同本机 PostgreSQL 或当前新 Redis 测试已经执行。
+
+本切片最终验证：`cargo fmt --all` / `cargo fmt --all --check`、`cargo clippy --locked --offline --workspace --all-targets -- -D warnings`、`cargo test --locked --offline --workspace` 通过（33 项测试通过，5 项 PostgreSQL + 1 项 Redis 测试按环境要求跳过）；`npm run typecheck`、`npm run build` 通过，`npm audit` 为 0 漏洞。cargo audit 失败（1 项 rsa 公告），如实保留，不宣称全部检查通过。
+
+补充检查：OpenAPI/生成 TypeScript 一致性、生产产物隔离测试 2/2、`git diff --check` 均通过。

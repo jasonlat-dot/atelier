@@ -38,8 +38,9 @@ jobs:
       - run: cargo install cargo-audit --locked
       - run: cargo audit
         working-directory: services/api
-      # Keep the complete report, including moderate findings, in CI logs.
-      - run: npm audit
+      # Report both ecosystems even when the Rust audit fails.
+      - if: ${{ always() }}
+        run: npm audit
         working-directory: apps/web
 
   identity-schema:
@@ -56,10 +57,20 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U atelier_test -d atelier_test"
           --health-interval 5s --health-timeout 3s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 127.0.0.1:6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 10
     env:
+      TEST_REDIS_URL: redis://127.0.0.1:6379/15
       DATABASE_URL: postgres://atelier_test:isolated_ci_only@127.0.0.1:5432/atelier_test
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test --locked -p atelier-auth --test schema -- --ignored
+        working-directory: services/api
+      - run: cargo test --locked -p atelier-auth --test redis_transient -- --ignored
         working-directory: services/api

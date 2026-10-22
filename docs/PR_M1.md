@@ -15,3 +15,19 @@
 数据库 repo 另备真实往返及审计失败回滚测试；本机无 PostgreSQL/Redis，未运行。cargo audit 尚未运行，远端 CI 结果读取受出口限流。未宣称全 CI 绿或完整登录可用。
 
 变更位置：`auth/src/{postgres,repository,service,views}.rs`、`app/src/{auth_http,routes}.rs`、`app/tests/session_http.rs`、`web/src/features/{auth,settings}`。假设见 DECISIONS.md，后续见 PROGRESS.md。不修改积分，不放前端密钥，不打包、不部署。
+
+
+本次增量：OIDC state/nonce/S256 PKCE 与 Redis 临时存储、登录滑动窗口；5 项组件测试，另有真实 Redis 并发测试由 CI 执行。仍未接通 Google 登录回调，因此上表完整验收仍不通过。沿用既有 M1 迁移，公开 API 未改变；无空迁移或虚构 API 更新。
+
+新增验收对照：
+
+| 检查 | 结果 | 证据 / 缺口 |
+| --- | --- | --- |
+| state 一次性 / 重放拒绝 | 通过组件测试；真实 Redis 待验证 | 100 并发单次成功，错误浏览器不销毁合法 state；Lua/NX/TTL 集成测试已加 CI |
+| PKCE / nonce 材料 | 通过材料测试；完整校验未通过 | S256、nonce、独立浏览器绑定；换 token 与 ID token 验证仍待实现 |
+| 登录起点限流 | 通过 service 替身测试；中间件未接入 | 20 次/10 分钟，IPv4 映射归一；真实滑动窗口测试待 CI |
+| 依赖审计 | 未通过 | 已本机复现 rsa / RUSTSEC-2023-0071，暂无修复版本；未豁免，见 SECURITY_AUDIT.md |
+
+本切片最终验证：`cargo fmt --all` / `cargo fmt --all --check`、`cargo clippy --locked --offline --workspace --all-targets -- -D warnings`、`cargo test --locked --offline --workspace` 通过（33 项测试通过，5 项 PostgreSQL + 1 项 Redis 测试按环境要求跳过）；`npm run typecheck`、`npm run build` 通过，`npm audit` 为 0 漏洞。cargo audit 失败（1 项 rsa 公告），如实保留，不宣称全部检查通过。
+
+补充检查：OpenAPI/生成 TypeScript 一致性、生产产物隔离测试 2/2、`git diff --check` 均通过。

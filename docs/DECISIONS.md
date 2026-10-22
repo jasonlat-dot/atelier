@@ -36,3 +36,14 @@
 - Session last_seen_at 使用 GREATEST 更新，避免并发请求覆盖为更早时间；条件更新拒绝查询后发生的会话撤销和角色变化。不是会话缓存，不在内存保存生产 Session。
 - /me 暂不返回虚构钱包/订阅摘要，待 M2/M8 按模块接入。没有 OIDC 前不提供任何开发或测试登录给用户，Google 按钮暂禁用。
 - 前端浏览器测试使用 HTTP 响应合同替身，Rust HTTP 测试使用测试仓库替身；它们不替代真实 PostgreSQL/Redis/OIDC 回归。远端 CI 状态读取遭 API 限流，结果仍按未确认记录。
+
+## 2026-10-22 · OIDC 临时状态与依赖审计
+
+- 本切片仍属 M1，只提供 OIDC 发起材料与 Redis 原子存储，不新增 HTTP 入口，不签发 Session；消费 state 不代表用户已认证。前端继续禁用 Google 登录，直到 token 校验、注册事务和回调完整接通。
+- 继续沿用 M1 身份及设备迁移；state 与限流仅存 Redis，不新增空 SQL 迁移。公开 API 无变化，OpenAPI/前端生成类型不变。
+- state、PKCE verifier 和浏览器绑定值各自独立；state 使用 32 字节随机值，避免 oauth2 默认 16 字节 state 与严格回调格式不一致。nonce/verifier 保留服务端，浏览器绑定 Cookie 使用 __Host-oidc、Secure、HttpOnly、SameSite=Lax、10 分钟。
+- Redis SET NX EX 保存 10 分钟 state；Lua 仅在浏览器绑定摘要匹配时原子消费，错误浏览器不能销毁合法登录。服务端额外检查时间，Redis 故障返回不可用，生产不降级到内存。
+- 登录限流用 Redis TIME 与原子滑动窗口；IPv4-mapped IPv6 归并同一 IP。当前只是 service，尚未接入中间件；其他限流常量也未代表对应业务已可用。IP 后续取可信连接来源，不直接信任客户端转发头。
+- 本机不安装/启动 PostgreSQL 和 Redis；新增 Redis 真实实例测试显式 ignore，CI 使用独占 runner 的回环 Redis 7（数据库 15、临时数据），验证 100 并发 state 单次消费、NX/TTL 和滑动窗口。CI 临时 Redis 不对公网开放，不作为生产无密码配置示例。
+- 已在项目忽略目录安装 cargo-audit；其直接拉取公告库失败，改用现有本机代理进行普通 Git clone 后对该新鲜公告库 --no-fetch 审计，未禁用漏洞匹配。实际发现 rsa 0.9.10 / RUSTSEC-2023-0071；详见 SECURITY_AUDIT.md。保留 CI cargo audit 硬门禁，不加 ignore 或 continue-on-error。
+- npm audit 改为即使前序步骤失败仍执行，使 Rust 告警不会遮蔽 JavaScript 审计结果；失败仍会使整个作业失败。
