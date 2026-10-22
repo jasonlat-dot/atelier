@@ -427,6 +427,7 @@ impl UpstreamService {
             .ok_or(Error::NoCapacity)?;
         let started = Instant::now();
         let result = tokio::select! {result=self.inner.provider.probe(&lease.context)=>result,_=lease.invalid()=>Err(Error::Store)};
+        let result = upstream_only(result)?;
         let failure = result.as_ref().err().map(error_failure);
         let elapsed = started.elapsed().as_millis() as i64;
         let code = failure.as_ref().map(|f| f.code);
@@ -474,6 +475,7 @@ impl UpstreamService {
                 crate::validation::size_for("image", &input.ratio, &input.resolution, &model.caps)?;
             let started = Instant::now();
             let result = tokio::select! {result=self.inner.provider.images(&lease.context,&input,&size)=>result,_=lease.invalid()=>Err(Error::Store)};
+            let result = upstream_only(result)?;
             let failure = result.as_ref().err().map(error_failure);
             let retry = failure
                 .as_ref()
@@ -560,6 +562,7 @@ impl UpstreamService {
                 }
             };
             let result = tokio::select! {result=tokio::time::timeout(Duration::from_secs(300),operation)=>result.unwrap_or_else(|_|Err(Error::Provider(ProviderFailure::network()))),_=lease.invalid()=>Err(Error::Store)};
+            let result = upstream_only(result)?;
             let failure = result.as_ref().err().map(|e| {
                 let mut f = error_failure(e);
                 f.produced |= accepted.load(Ordering::Acquire);
@@ -653,6 +656,14 @@ fn error_failure(error: &Error) -> ProviderFailure {
             f.produced = true;
             f
         }
+    }
+}
+// Local validation, transport capacity and storage errors are not upstream health events.
+// Returning early drops the lease and releases capacity without cooling a healthy account.
+fn upstream_only<T>(result: Result<T, Error>) -> Result<Result<T, Error>, Error> {
+    match result {
+        Err(error) if !matches!(&error, Error::Provider(_)) => Err(error),
+        result => Ok(result),
     }
 }
 fn heartbeat(

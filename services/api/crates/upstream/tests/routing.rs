@@ -396,6 +396,22 @@ async fn edits_video_partial_results_and_health_retry_boundaries_work(db: PgPool
     let id = account(&service, actor, &fixture, "Main", "good", "pool", (0, 100)).await;
     model(&service, actor, "image", "image", "pool").await;
     model(&service, actor, "video", "video", "pool").await;
+    for _ in 0..3 {
+        let mut invalid = image();
+        invalid.references.push(ReferenceImage {
+            bytes: Bytes::from_static(b"not-an-image"),
+            mime: "image/png".into(),
+        });
+        assert!(matches!(
+            service.run_image("image", invalid).await,
+            Err(Error::Validation)
+        ));
+        released(&service, &slots, id).await;
+    }
+    let healthy = service.account(id).await.unwrap();
+    assert_eq!(healthy.status, "ACTIVE");
+    assert_eq!(healthy.consecutive_failures, 0);
+    assert_eq!(service.stats(id).await.unwrap().total, 0);
     let mut edited = image();
     edited.references.push(ReferenceImage {
         bytes: Bytes::from_static(PNG),

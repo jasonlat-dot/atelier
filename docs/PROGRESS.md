@@ -217,4 +217,12 @@ M1 历史交付未打包、未部署。条款仍是开发占位，正式法律�
 - Rust fmt/clippy/workspace test/check 通过（58 项普通测试），全部真实隔离基础设施/转码回归 35/35；前端 typecheck/lint/format:check/test:mock/build、契约与代理/基线 4/4、Mock 浏览器 1/1、HTTP 页面 23/23、真实 PG/Redis + 合成 Google/MFA 浏览器 2/2 通过。
 - 真实管理员浏览器覆盖账号新增/连接测试/刷新持久化/编辑不回填密钥、模型新增/分组绑定/价格/启用/刷新持久化、公开目录脱敏与钱包余额不变；实际 HTTP Provider 回归覆盖图片/编辑/异步视频、故障分类与容量释放。没有使用真实供应商凭据或发起付费生成。
 - 1440 桌面与 320 手机截图人工核对，修正搜索框和小屏抽屉对齐；合成截图只存 Git 忽略的测试目录。依赖审计：cargo audit 1349 公告/339 依赖，npm audit，均 0 漏洞，无豁免。`scripts/api.ps1 -Action test-infrastructure` 已纳入素材及上游全部回归。
-- 后端切片 `ddb984b` 已推送，Actions #39831744042 的 identity-schema 已成功、baseline 最后为浏览器安装中；最终页面切片将继续跟进远端，尚不将其记作已通过。详细配置、验收与停止点见 `PR_M4.md`。
+- 后端切片 `ddb984b` 的 [Actions #39831744042](https://github.com/jasonlat-dot/atelier/actions/runs/39831744042) 已核对 completed/success，两个 job 均通过；页面切片 `7f78f18` 的 [Actions #39833889184](https://github.com/jasonlat-dot/atelier/actions/runs/39833889184) 已核对 completed/success。详细配置、验收与停止点见 `PR_M4.md`。
+
+
+### M4 收尾回归：本地错误不计入上游健康
+
+- 复核发现无效参考图在 Provider 本地校验失败时，会被路由层误转为 UPSTREAM_ERROR；连续三次会把正常账号标为 COOLDOWN。先新增真实隔离库回归，确认旧实现实际返回 COOLDOWN 而非 ACTIVE。
+- 路由仅对真正的 ProviderFailure 写健康/失败统计；本地参数、全局传输容量或存储异常直接返回原错误，由 RAII 释放账号/额度租约，不换号、不触发账号冷却。图片、视频和连接测试共用该边界。修复不新增 API、迁移或依赖，不进入 M5。
+
+- 修复后完整 Rust fmt/clippy/workspace test/check、M4 隔离回归 9 项及真实 Google/MFA/配置浏览器 2/2 再次通过；仍使用合成身份和假上游，不操作业务账号。修复随独立提交推送，继续核对 Actions 后完成里程碑记录。
