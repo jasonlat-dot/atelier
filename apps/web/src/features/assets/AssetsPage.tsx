@@ -471,7 +471,9 @@ export default function AssetsPage({
                   {asset.width && asset.height
                     ? `${asset.width} × ${asset.height} · `
                     : ''}
-                  {size(asset.bytes)}
+                  {asset.state === 'FAILED'
+                    ? '未生成可用文件'
+                    : size(asset.bytes)}
                   {asset.duration_ms
                     ? ` · ${(asset.duration_ms / 1000).toFixed(1)} 秒`
                     : ''}

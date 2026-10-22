@@ -75,6 +75,19 @@ async fn real_video_is_probed_reencoded_and_has_a_decodable_cover() {
     }
 }
 
+#[tokio::test]
+#[ignore = "Requires FFmpeg/ffprobe and Linux process resource limits"]
+async fn high_resolution_video_fits_the_unchanged_process_memory_budget() {
+    let processor = processor();
+    let data = Bytes::from_static(include_bytes!(
+        "../../app/tests/fixtures/high-resolution.mp4"
+    ));
+    let prepared = processor.transcode(data).await.unwrap();
+    assert_eq!((prepared.info.width, prepared.info.height), (3196, 1844));
+    assert!(image::load_from_memory(&prepared.thumbnail).is_ok());
+    assert!(prepared.original.len() < 200 * 1024 * 1024);
+}
+
 #[sqlx::test(migrations = "../../migrations")]
 #[ignore = "Requires isolated PostgreSQL and FFmpeg/ffprobe"]
 async fn corrupt_jobs_fail_closed_and_audit_rollback_is_retryable(db: PgPool) {

@@ -64,4 +64,4 @@ MFA 验证额外限制 5 次/5 分钟/用户。角色改变/禁用通过触发�
 
 视频只接受单视频流的 H.264/HEVC/VP8/VP9/AV1、最大 4096 边长和 900 万像素。FFmpeg 以管道输入，协议白名单仅 pipe/cache，禁用输入 file/concat/网络协议；单进程内存上限 1 GiB、探测/封面 20 秒、转码 120 秒，共用有限处理并发。重新编码为 H.264/AAC MP4 后才生成可读链接，原始上传体从不对外提供，成功后删除。任务在 PostgreSQL 持久化，以租约和唯一令牌领取，最多三次尝试；FAILED 可删除并重新上传，签名读取与断点 Range 使用流式响应。待处理视频按 400 MiB 预占用户空间，避免转码膨胀绕过 2 GiB 配额；源文件回收后释放预占。VIDEO_UNAVAILABLE 为 503。
 
-媒体默认 MEDIA_STORAGE=local、MEDIA_DIR=data/media，拒绝与现有 WEB_DIR 重叠；文件路径从服务器 UUID 生成，不使用原始文件名。可配置 HTTPS S3 兼容后端（服务端 S3_ENDPOINT/BUCKET/REGION/ACCESS_KEY_ID/SECRET_ACCESS_KEY）；当前验收覆盖本地存储与真实视频转码，S3 实服务仍待验证。
+媒体默认 MEDIA_STORAGE=local、MEDIA_DIR=data/media，拒绝与现有 WEB_DIR 重叠；文件路径从服务器 UUID 生成，不使用原始文件名。当前交付和验收使用本地存储与真实视频转码。S3 按负责人最新指令改为待定；已有 HTTPS S3 兼容适配与服务端配置保留，实服务未验收，不作为本次 M3 完成条件。

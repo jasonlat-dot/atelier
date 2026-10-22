@@ -223,6 +223,11 @@ impl VideoProcessor {
                     "libx264",
                     "-preset",
                     "veryfast",
+                    // Bounded lookahead/sliced threads keep 3K/4K frames within
+                    // the existing process memory budget instead of buffering
+                    // many full-resolution frames in the encoder.
+                    "-tune",
+                    "zerolatency",
                     "-crf",
                     "23",
                     "-pix_fmt",

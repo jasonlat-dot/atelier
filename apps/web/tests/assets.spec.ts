@@ -179,6 +179,7 @@ test('video processing stays unplayable until server completion and failures sta
   await expect(
     page.getByText('处理失败，请重新上传', { exact: true }),
   ).toBeVisible();
+  await expect(page.getByText('未生成可用文件')).toBeVisible();
   completed = true;
   await expect(page.getByRole('button', { name: '预览 Film.mp4' })).toBeEnabled(
     { timeout: 10000 },
