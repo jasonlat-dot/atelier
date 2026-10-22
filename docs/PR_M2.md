@@ -44,6 +44,6 @@ Google 实账号仍需真实 OAuth 配置、持久保存的随机 MASTER_KEY、B
 | OpenAPI + 生成 TypeScript、baseline | 通过；baseline 3/3 |
 | cargo audit / npm 官方 registry audit | 均通过，0 漏洞；Rust 282 个依赖、1349 条官方公告，无豁免 |
 
-Windows 使用进程局部 CARGO_PROFILE_TEST_DEBUG=0；没有修改 CI profile。远端 Actions 在本次推送后确认并记录。
+Windows 使用进程局部 CARGO_PROFILE_TEST_DEBUG=0；没有修改 CI profile。功能提交 `19d3ef279b54dbb691163e397b796639c0c00f59` 的 [Actions #39772855488](https://github.com/jasonlat-dot/atelier/actions/runs/39772855488) 已确认 completed/success，baseline 与 identity-schema 全部通过，未放宽任何检查。
 
 M3 素材、生成任务、套餐支付与正式上线不在此次范围；未打包或部署 Web 服务。后续生成/订单写入必须使用 wallet 共享事务入口。

@@ -2,7 +2,7 @@
 
 按根目录《Atelier AI 创作平台 · 产品与工程开发规格书（AI 开发版）》逐里程碑开发。
 当前状态以 [docs/PROGRESS.md](docs/PROGRESS.md) 为准；假设见 [docs/DECISIONS.md](docs/DECISIONS.md)。
-原始原型保存在提交 `c3384c5`。M0/M1 已完成验收，本轮 M2 积分账本与签到已通过本地真实 PG/Redis 及浏览器测试，详见 [M2 验收记录](docs/PR_M2.md)；远端 Actions 推送后确认。当前停在 M2，不进入 M3；实际部署与 Google 实账号回归见 [M1 部署清单](docs/M1_VALIDATION.md)。
+原始原型保存在提交 `c3384c5`。M0/M1/M2 已完成验收；M2 积分账本与签到的本地真实 PG/Redis、浏览器测试和 [远端 Actions](https://github.com/jasonlat-dot/atelier/actions/runs/39772855488) 全部通过，详见 [M2 验收记录](docs/PR_M2.md)。当前停在 M2，不进入 M3；实际部署与 Google 实账号回归见 [M1 部署清单](docs/M1_VALIDATION.md)。
 
 ## 已部署 WSL 数据库
 
