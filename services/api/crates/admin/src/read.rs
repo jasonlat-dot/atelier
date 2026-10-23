@@ -151,13 +151,30 @@ impl AdminService {
     }
     pub async fn usage(&self, owner: Uuid, days: i32) -> Result<UsageView, AdminError> {
         let mut tx = self.db.begin().await?;
+        sqlx::query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
+            .execute(&mut *tx)
+            .await?;
         let from = since(&mut tx, days).await?;
         let (daily, qualities) = charts(&mut tx, from, Some(owner)).await?;
+        let previous = sqlx::query_as("SELECT (SELECT count(*) FROM generation_jobs WHERE owner_id=$1 AND created_at >= $2 AND created_at < $3) AS jobs, (SELECT coalesce(-sum(balance_delta),0)::bigint FROM credit_ledger WHERE user_id=$1 AND type='SETTLE' AND created_at >= $2 AND created_at < $3) AS consumed")
+            .bind(owner).bind(from - chrono::Duration::days(i64::from(days))).bind(from).fetch_one(&mut *tx).await?;
+        // Returned reservations belong to tasks created in this period, including
+        // tasks hidden from history. They are not additional income or refunds.
+        let released_credits = sqlx::query_scalar("SELECT coalesce(sum(released),0)::bigint FROM generation_jobs WHERE owner_id=$1 AND created_at >= $2")
+            .bind(owner).bind(from).fetch_one(&mut *tx).await?;
+        let kinds = sqlx::query_as("SELECT kind,count(*) AS jobs FROM generation_jobs WHERE owner_id=$1 AND created_at >= $2 GROUP BY kind ORDER BY kind")
+            .bind(owner).bind(from).fetch_all(&mut *tx).await?;
+        let recent = sqlx::query_as("SELECT j.id,j.created_at,j.prompt,j.model_id,m.display_name,coalesce(j.params->>'quality','未分类') AS quality,j.status,j.settled FROM generation_jobs j JOIN models m ON m.id=j.model_id WHERE j.owner_id=$1 AND j.created_at >= $2 AND NOT EXISTS (SELECT 1 FROM generation_history_deleted h WHERE h.job_id=j.id) ORDER BY j.created_at DESC,j.id DESC LIMIT 10")
+            .bind(owner).bind(from).fetch_all(&mut *tx).await?;
         tx.commit().await?;
         Ok(UsageView {
             days,
             daily,
             qualities,
+            previous,
+            released_credits,
+            kinds,
+            recent,
         })
     }
     pub async fn dashboard(&self, days: i32) -> Result<AdminDashboard, AdminError> {

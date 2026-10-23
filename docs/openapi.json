@@ -12486,12 +12486,91 @@
           }
         }
       },
+      "UsageKind": {
+        "type": "object",
+        "required": [
+          "kind",
+          "jobs"
+        ],
+        "properties": {
+          "jobs": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "kind": {
+            "type": "string"
+          }
+        }
+      },
+      "UsageTask": {
+        "type": "object",
+        "required": [
+          "id",
+          "created_at",
+          "prompt",
+          "model_id",
+          "display_name",
+          "quality",
+          "status",
+          "settled"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "model_id": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "quality": {
+            "type": "string"
+          },
+          "settled": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "UsageTotals": {
+        "type": "object",
+        "required": [
+          "jobs",
+          "consumed"
+        ],
+        "properties": {
+          "consumed": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "jobs": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "UsageView": {
         "type": "object",
         "required": [
           "days",
           "daily",
-          "qualities"
+          "qualities",
+          "previous",
+          "released_credits",
+          "kinds",
+          "recent"
         ],
         "properties": {
           "daily": {
@@ -12504,11 +12583,30 @@
             "type": "integer",
             "format": "int32"
           },
+          "kinds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UsageKind"
+            }
+          },
+          "previous": {
+            "$ref": "#/components/schemas/UsageTotals"
+          },
           "qualities": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/AdminQuality"
             }
+          },
+          "recent": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UsageTask"
+            }
+          },
+          "released_credits": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },

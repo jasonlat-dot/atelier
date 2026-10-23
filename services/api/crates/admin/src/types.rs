@@ -274,4 +274,29 @@ pub struct UsageView {
     pub days: i32,
     pub daily: Vec<AdminDay>,
     pub qualities: Vec<AdminQuality>,
+    pub previous: UsageTotals,
+    pub released_credits: i64,
+    pub kinds: Vec<UsageKind>,
+    pub recent: Vec<UsageTask>,
+}
+#[derive(Serialize, sqlx::FromRow, ToSchema)]
+pub struct UsageTotals {
+    pub jobs: i64,
+    pub consumed: i64,
+}
+#[derive(Serialize, sqlx::FromRow, ToSchema)]
+pub struct UsageKind {
+    pub kind: String,
+    pub jobs: i64,
+}
+#[derive(Serialize, sqlx::FromRow, ToSchema)]
+pub struct UsageTask {
+    pub id: Uuid,
+    pub created_at: DateTime<Utc>,
+    pub prompt: String,
+    pub model_id: String,
+    pub display_name: String,
+    pub quality: String,
+    pub status: String,
+    pub settled: i64,
 }

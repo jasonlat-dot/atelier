@@ -590,3 +590,78 @@ async fn manual_cancel_releases_queued_hold_once_and_signals_running_work(db: Pg
         .unwrap()
         .is_empty());
 }
+
+#[sqlx::test(migrations = "../../migrations")]
+#[ignore = "Requires isolated PostgreSQL"]
+async fn personal_usage_reports_real_period_totals_and_bounded_visible_history(db: PgPool) {
+    let admin = user(&db, "ADMIN").await;
+    let owner = user(&db, "USER").await;
+    let other = user(&db, "USER").await;
+    let service = AdminService::new(db.clone());
+    WalletService::new(db.clone())
+        .grant(owner, 200, "usage-fixture")
+        .await
+        .unwrap();
+    let cancelled = job(&db, owner).await;
+    service
+        .job_action(
+            admin,
+            cancelled,
+            Uuid::new_v4(),
+            "cancel",
+            &AdminJobAction {
+                reason: "用量验收取消".into(),
+                expected_credits: None,
+            },
+        )
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO generation_history_deleted(job_id) VALUES($1)")
+        .bind(cancelled)
+        .execute(&db)
+        .await
+        .unwrap();
+    for _ in 0..11 {
+        job(&db, owner).await;
+    }
+    let other_job = job(&db, other).await;
+    service
+        .job_action(
+            admin,
+            other_job,
+            Uuid::new_v4(),
+            "cancel",
+            &AdminJobAction {
+                reason: "他人任务隔离".into(),
+                expected_credits: None,
+            },
+        )
+        .await
+        .unwrap();
+    // Exact UTC boundaries: one task just before this period, one outside both periods.
+    for offset in [7, 14] {
+        sqlx::query("INSERT INTO generation_jobs(id,owner_id,model_id,kind,model_revision,prompt,params,size,cost_per_output,n,cost,idempotency_key,request_hash,created_at) VALUES($1,$2,'admin-fixture','image',1,'previous period','{\"quality\":\"high\"}','1024x1024',1,1,1,$3,$4,((clock_timestamp() AT TIME ZONE 'UTC')::date-$5::int)::timestamp AT TIME ZONE 'UTC'-interval '1 second')")
+            .bind(Uuid::new_v4()).bind(owner).bind(Uuid::new_v4()).bind(vec![7_u8;32]).bind(offset-1).execute(&db).await.unwrap();
+    }
+    let view = serde_json::to_value(service.usage(owner, 7).await.unwrap()).unwrap();
+    assert_eq!(view["daily"].as_array().unwrap().len(), 7);
+    assert_eq!(view["previous"]["jobs"], 1);
+    assert_eq!(view["previous"]["consumed"], 0);
+    assert_eq!(view["released_credits"], 10);
+    assert_eq!(view["kinds"], json!([{"kind":"image","jobs":12}]));
+    let recent = view["recent"].as_array().unwrap();
+    assert_eq!(recent.len(), 10);
+    assert!(recent
+        .iter()
+        .all(|row| row["id"] != cancelled.to_string() && row["id"] != other_job.to_string()));
+    assert_eq!(recent[0]["prompt"], "private prompt");
+    let serialized = view.to_string();
+    assert!(!serialized.contains("private-native-id"));
+    let empty = serde_json::to_value(service.usage(admin, 14).await.unwrap()).unwrap();
+    assert!(empty["recent"].as_array().unwrap().is_empty());
+    assert_eq!(empty["released_credits"], 0);
+    assert!(matches!(
+        service.usage(owner, 0).await,
+        Err(AdminError::Validation)
+    ));
+}

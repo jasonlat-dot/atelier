@@ -138,6 +138,11 @@ async fn every_admin_surface_rejects_users_and_super_settings_remain_protected(d
     assert_eq!(usage.0, StatusCode::OK);
     assert_eq!(usage.1["days"], 1);
     assert_eq!(usage.1["daily"].as_array().unwrap().len(), 1);
+    assert_eq!(usage.1["previous"]["jobs"], 0);
+    assert_eq!(usage.1["previous"]["consumed"], 0);
+    assert_eq!(usage.1["released_credits"], 0);
+    assert!(usage.1["kinds"].as_array().unwrap().is_empty());
+    assert!(usage.1["recent"].as_array().unwrap().is_empty());
     assert_eq!(
         call(
             &s,

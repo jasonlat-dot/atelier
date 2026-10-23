@@ -2389,11 +2389,40 @@ export interface components {
             /** Format: binary */
             file: string;
         };
+        UsageKind: {
+            /** Format: int64 */
+            jobs: number;
+            kind: string;
+        };
+        UsageTask: {
+            /** Format: date-time */
+            created_at: string;
+            display_name: string;
+            /** Format: uuid */
+            id: string;
+            model_id: string;
+            prompt: string;
+            quality: string;
+            /** Format: int64 */
+            settled: number;
+            status: string;
+        };
+        UsageTotals: {
+            /** Format: int64 */
+            consumed: number;
+            /** Format: int64 */
+            jobs: number;
+        };
         UsageView: {
             daily: components["schemas"]["AdminDay"][];
             /** Format: int32 */
             days: number;
+            kinds: components["schemas"]["UsageKind"][];
+            previous: components["schemas"]["UsageTotals"];
             qualities: components["schemas"]["AdminQuality"][];
+            recent: components["schemas"]["UsageTask"][];
+            /** Format: int64 */
+            released_credits: number;
         };
         VideoData: {
             /** Format: uuid */
