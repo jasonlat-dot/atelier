@@ -29,6 +29,8 @@
 
 ## 提交与远端检查
 
-基础切片 e7d7eaf 的 Actions #39881534276 全绿。worker 305383b 与 SSE e062360 的 baseline 均通过，基础设施作业因 Azure 镜像长时间卡住由负责人取消；不能写为全绿。025d572 的三分钟安装时限失败，178caee 已改用 Ubuntu 官方镜像、IPv4 和最小依赖，工具安装与基础设施步骤已通过，最终状态继续核对。
+基础切片 e7d7eaf 的 Actions #39881534276 全绿。worker 305383b 与 SSE e062360 的 baseline 均通过，基础设施作业因 Azure 镜像长时间卡住由负责人取消；不能写为全绿。025d572 的三分钟安装时限失败，178caee 已改用 Ubuntu 官方镜像、IPv4 和最小依赖，工具安装与基础设施步骤已通过；旧运行按负责人指示取消，不再单独跟进。
 
-当前生成页面切片完成本地验收，推送后继续跟进最终代码 Actions。M5 暂不标完成；本轮完成 M5 后停止，不自动进入 M6。
+最终功能提交 `00ccdf7b1f897252add6b8b2ad45cca001d63bb8` 的 [Actions #39888171556](https://github.com/jasonlat-dot/atelier/actions/runs/39888171556) 已核对 completed/success：baseline、identity-schema 均通过。它包含前述所有切片、CI 换源及完整原型生成界面；以此完整代码验收为准。
+
+M5 已完成，本轮停止，不进入 M6；收尾提交仅更新完成/交接文档。S3 仍待定。
