@@ -90,3 +90,18 @@ MFA 验证额外限制 5 次/5 分钟/用户。角色改变/禁用通过触发�
 Provider 和调度为内部 service：图片 generations/edits；视频 /videos 提交、查询、内容下载，返回内部字节而非上游地址。Redis 原子槽与 PG 额度预占防并发超额，60 秒租约/20 秒续期，取消/panic 释放；按优先级、权重、空闲并发和剩余额度选账号。401/403 凭据失效、429 冷却/额度耗尽，5xx/超时连续三次冷却并指数退避；内容拒绝/参数错误不换号。最多三次尝试，已产出图片或已接受视频任务后不重复提交。每五分钟探测到期账号，额度重置只在显式 quota_reset_at 到期且探测成功时执行，未知余额不自动补满。
 
 M4 不开放用户生成/任务/quote/SSE 接口，不修改钱包余额；这些属于 M5。HTTP 后端与现有原型管理页面已接通：`/admin/accounts`、`/admin/models`；历史 `/admin/providers` 导航至账号池。
+
+
+## M5 生成任务（基础接口已接通，worker/界面仍在进行中）
+
+所有路径以 `/api/v1` 为前缀，要求登录，管理员要求最近 MFA；写请求要求同源与 CSRF。客户端价格不被接受。quote/create 各按用户 30 次/分钟，JSON 最多 32 KiB。
+
+| 方法与路径 | 行为 |
+| --- | --- |
+| POST /generation/quote | QuoteInput：model_id、quality、ratio、resolution、n、ref_count、可选 seconds；返回 kind、cost/cost_per_output、实际 size 和版本。仅展示，无授权效力 |
+| POST /generation/jobs | JobInput：模型/提示词/参数、本人 READY 图片 references；UUID Idempotency-Key 必填；服务端重算并原子 HOLD/建任务/事件，202 JobReceipt。当前拒绝非空 project_id/node_id（项目尚未实现） |
+| GET /generation/jobs?before=UUID&status=…&limit=25 | 本人的任务游标列表，limit 1–100，返回 JobPage |
+| GET /generation/jobs/{id} | 本人任务详情和新签名输出链接；跨用户/不存在 404 |
+| POST /generation/jobs/{id}/cancel | 排队/路由中直接原子取消与全额释放；运行/存储中写取消标记，由 worker 停止并释放；终态重复调用只返回当前结果，不重复扣款/释放 |
+
+任务视图不返回账号 ID、租约令牌、真实模型名、上游任务 ID 或地址。价格和参数快照不可修改，终态不可再更新；同请求键异参 422 IDEMPOTENCY_CONFLICT，余额不足 402，活跃任务超限 429 TOO_MANY_ACTIVE_JOBS，免费层越级 403 RESOLUTION_NOT_ALLOWED，黑名单 422 CONTENT_POLICY。

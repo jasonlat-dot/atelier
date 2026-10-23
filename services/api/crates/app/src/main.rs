@@ -73,6 +73,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .map_err(|_| "Upstream Redis unavailable")?,
     );
     let state = AppState {
+        generation: Some(atelier_generation::GenerationService::new(
+            db.clone(),
+            assets.clone(),
+        )),
         upstream: Some(upstream.clone()),
         assets: Some(assets.clone()),
         login: Some(atelier_auth::login::LoginService::new(

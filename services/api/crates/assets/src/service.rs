@@ -29,6 +29,36 @@ pub struct MediaData {
     pub partial: bool,
 }
 impl AssetService {
+    pub async fn validate_references_in_transaction(
+        db: &mut sqlx::PgConnection,
+        owner: Uuid,
+        ids: &[Uuid],
+    ) -> Result<(), AssetError> {
+        if ids.len() > 4 {
+            return Err(AssetError::Validation);
+        }
+        let found:Vec<Uuid>=sqlx::query_scalar("SELECT id FROM assets WHERE owner_id=$1 AND id=ANY($2) AND kind='image' AND state='READY' AND generation_published AND deleted_at IS NULL AND expires_at>clock_timestamp() FOR SHARE")
+            .bind(owner).bind(ids).fetch_all(db).await?;
+        if found.len() != ids.len() {
+            return Err(AssetError::NotFound);
+        }
+        Ok(())
+    }
+    pub async fn reference_bytes(&self, owner: Uuid, id: Uuid) -> Result<Vec<u8>, AssetError> {
+        let row = self.record(owner, id).await?;
+        if row.kind != "image"
+            || row.state != "READY"
+            || row.bytes <= 0
+            || row.bytes > crate::MAX_IMAGE_BYTES as i64
+        {
+            return Err(AssetError::Validation);
+        }
+        Ok(self
+            .storage
+            .get(&row.object_key, 0..row.bytes as u64)
+            .await?
+            .to_vec())
+    }
     pub fn new(db: PgPool, storage: Storage, signer: MediaSigner) -> Self {
         Self {
             db,
@@ -157,7 +187,7 @@ impl AssetService {
         Ok(self.view(self.record(owner, id).await?))
     }
     async fn record(&self, owner: Uuid, id: Uuid) -> Result<AssetRecord, AssetError> {
-        sqlx::query_as("SELECT * FROM assets WHERE id=$1 AND owner_id=$2 AND deleted_at IS NULL AND expires_at>clock_timestamp()") .bind(id).bind(owner).fetch_optional(&self.db).await?.ok_or(AssetError::NotFound)
+        sqlx::query_as("SELECT * FROM assets WHERE id=$1 AND owner_id=$2 AND generation_published AND deleted_at IS NULL AND expires_at>clock_timestamp()") .bind(id).bind(owner).fetch_optional(&self.db).await?.ok_or(AssetError::NotFound)
     }
     pub async fn list(
         &self,
@@ -179,9 +209,9 @@ impl AssetService {
         {
             return Err(AssetError::Validation);
         }
-        let mut rows:Vec<AssetRecord>=sqlx::query_as("SELECT * FROM assets WHERE owner_id=$1 AND deleted_at IS NULL AND expires_at>clock_timestamp() AND ($2::text IS NULL OR kind=$2) AND ($3::text IS NULL OR source=$3) AND strpos(lower(name),lower($4))>0 AND ($5::uuid IS NULL OR (created_at,id)<(SELECT created_at,id FROM assets WHERE id=$5 AND owner_id=$1)) ORDER BY created_at DESC,id DESC LIMIT $6")
+        let mut rows:Vec<AssetRecord>=sqlx::query_as("SELECT * FROM assets WHERE owner_id=$1 AND generation_published AND deleted_at IS NULL AND expires_at>clock_timestamp() AND ($2::text IS NULL OR kind=$2) AND ($3::text IS NULL OR source=$3) AND strpos(lower(name),lower($4))>0 AND ($5::uuid IS NULL OR (created_at,id)<(SELECT created_at,id FROM assets WHERE id=$5 AND owner_id=$1)) ORDER BY created_at DESC,id DESC LIMIT $6")
             .bind(owner).bind(&kind).bind(&source).bind(&search).bind(before).bind(limit+1).fetch_all(&self.db).await?;
-        let total:i64=sqlx::query_scalar("SELECT count(*) FROM assets WHERE owner_id=$1 AND deleted_at IS NULL AND expires_at>clock_timestamp() AND ($2::text IS NULL OR kind=$2) AND ($3::text IS NULL OR source=$3) AND strpos(lower(name),lower($4))>0") .bind(owner).bind(kind).bind(source).bind(search).fetch_one(&self.db).await?;
+        let total:i64=sqlx::query_scalar("SELECT count(*) FROM assets WHERE owner_id=$1 AND generation_published AND deleted_at IS NULL AND expires_at>clock_timestamp() AND ($2::text IS NULL OR kind=$2) AND ($3::text IS NULL OR source=$3) AND strpos(lower(name),lower($4))>0") .bind(owner).bind(kind).bind(source).bind(search).fetch_one(&self.db).await?;
         let more = rows.len() > limit as usize;
         rows.truncate(limit as usize);
         let next_cursor = if more {
@@ -202,7 +232,7 @@ impl AssetService {
         let ids: std::collections::HashSet<_> = ids.into_iter().collect();
         let ids: Vec<_> = ids.into_iter().collect();
         let mut tx = self.db.begin().await?;
-        let found:Vec<Uuid>=sqlx::query_scalar("SELECT id FROM assets WHERE owner_id=$1 AND id=ANY($2) AND deleted_at IS NULL AND expires_at>clock_timestamp() ORDER BY id FOR UPDATE") .bind(owner).bind(&ids).fetch_all(&mut *tx).await?;
+        let found:Vec<Uuid>=sqlx::query_scalar("SELECT id FROM assets WHERE owner_id=$1 AND id=ANY($2) AND generation_published AND deleted_at IS NULL AND expires_at>clock_timestamp() ORDER BY id FOR UPDATE") .bind(owner).bind(&ids).fetch_all(&mut *tx).await?;
         if found.len() != ids.len() {
             return Err(AssetError::NotFound);
         }

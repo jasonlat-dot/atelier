@@ -6,3 +6,26 @@ license.workspace = true
 
 [lints]
 workspace = true
+
+[dependencies]
+atelier-common.workspace = true
+atelier-wallet.workspace = true
+atelier-assets.workspace = true
+atelier-upstream.workspace = true
+axum.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+utoipa.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+sha2.workspace = true
+regex = "1"
+futures-util = "0.3"
+redis = { version = "1.7.1", features = ["tokio-comp", "connection-manager"] }
+
+[dev-dependencies]
+base64.workspace = true

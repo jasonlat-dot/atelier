@@ -1,6 +1,7 @@
 pub mod assets_http;
 pub mod auth_http;
 pub mod config;
+pub mod generation_http;
 pub mod login_http;
 pub mod routes;
 pub mod upstream_http;
@@ -24,6 +25,7 @@ pub struct AppState {
     pub limits: Option<Arc<dyn atelier_auth::transient::TransientStore>>,
     pub assets: Option<atelier_assets::AssetService>,
     pub upstream: Option<atelier_upstream::UpstreamService>,
+    pub generation: Option<atelier_generation::GenerationService>,
     pub trusted_proxy_ips: Arc<std::collections::HashSet<std::net::IpAddr>>,
 }
 
@@ -43,6 +45,7 @@ impl AppState {
             limits: None,
             assets: None,
             upstream: None,
+            generation: None,
             trusted_proxy_ips: Arc::new(std::collections::HashSet::new()),
             db,
             web_dir: "__no_static_assets__".into(),
