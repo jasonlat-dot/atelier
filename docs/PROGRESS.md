@@ -10,12 +10,12 @@
 - [x] M4：账号池与模型，2026-10-23 完成后端、原型接线、本地与远端验收；功能提交 9fa4b8b，历史停止点已被后续 M5 授权覆盖。
 - [x] M5：生成流水线，2026-10-23 完成后端、原型接线、本地与远端验收；最终功能提交 00ccdf7，历史停止点已由后续授权覆盖。
 - [x] M6：画布工作台，2026-10-23 完成本地与远端验收；最终功能 5c7257d。
-- [ ] M7：对话，已开始核心模块、真实会话与 SSE 及计费，页面和最终验收进行中。
+- [x] M7：对话，后端、原型接线、本地与远端验收完成；最终功能 4af169f。
 - [ ] M8：订阅与支付，未开始。
 - [ ] M9：管理后台，未开始。
 - [ ] M10：加固上线，未开始。
 
-**M6 已完成；按负责人最新授权继续完成 M7，再停止，不进入 M8。S3 仍待定。** M6 最终功能 `5c7257d` 的 Actions #39901276711 与 M7 后端切片 `a12699d` 的 Actions #39903985055 两作业均 completed/success。实际域名和付费供应商效果仍由部署者按配置核对，自动化通过不代表已上线。
+**M0–M7 已完成，本轮停在 M7，不进入 M8。S3 仍待定。** 最新完整功能 `4af169f` 的 [Actions #39907015646](https://github.com/jasonlat-dot/atelier/actions/runs/39907015646) 两作业 completed/success。 M6 最终功能 `5c7257d` 的 Actions #39901276711 与 M7 后端切片 `a12699d` 的 Actions #39903985055 两作业均 completed/success。实际域名和付费供应商效果仍由部署者按配置核对，自动化通过不代表已上线。
 
 ## M0 · 基线整理
 
@@ -354,9 +354,16 @@ M1 历史交付未打包、未部署。条款仍是开发占位，正式法律�
 - [x] 新增终态及正文不可修改保护；删除后禁止旧键重放；登录撤销与完成审计失败释放、已完成取消不改写。隔离 Chat 数据库 5 项通过，37 条意图基准全部正确；12 轮压缩后继续保留 Blue Finch/1200 事实。
 - [x] HTTP 浏览器 39/39（新增对话 5 项）、Mock 浏览器 1/1；Rust workspace fmt/clippy/test/check、接口契约、构建隔离/代理及 CI 换源测试通过；cargo audit（342 crates）与官方 npm audit 0 漏洞、无豁免。
 - [x] 完整 PG/Redis/媒体及 app HTTP 均通过；真实 PG/Redis 浏览器 2/2，覆盖 chat 模型配置、SSE 回复保存扣 1、刷新、画布草稿不创建任务、停止、502 和无 DONE 截断均不扣费。没有实际付费供应商调用。
-- [ ] 最终完整功能推送后等待 Actions；未核对前不标 M7 完成。
+- [x] 最终完整功能 4af169f 的 [Actions #39907015646](https://github.com/jasonlat-dot/atelier/actions/runs/39907015646) 两作业 completed/success，M7 完成。
 
 
 ### M7 · 远端浏览器等待修正
 
-完整功能 20a54b3 的 Actions #39905794003：baseline 成功，identity-schema 的 Rust/数据库/Redis/媒体/HTTP 均通过，最后真实浏览器失败。日志显示停止检查中的 view.turns 未定义；测试在“回复已保存”出现后立即从页面取 ID，尚未等待列表/钱包刷新后的路由跳转，快浏览器可能取到 /chat 而非 /chat/UUID。新增明确 UUID URL 等待，轮询同时检查 HTTP 成功；不放宽状态、余额或时限断言，不改生产逻辑。修复后重新本地与远端验收，M7 尚未标记完成。
+完整功能 20a54b3 的 Actions #39905794003：baseline 成功，identity-schema 的 Rust/数据库/Redis/媒体/HTTP 均通过，最后真实浏览器失败。日志显示停止检查中的 view.turns 未定义；测试在“回复已保存”出现后立即从页面取 ID，尚未等待列表/钱包刷新后的路由跳转，快浏览器可能取到 /chat 而非 /chat/UUID。新增明确 UUID URL 等待，轮询同时检查 HTTP 成功；不放宽状态、余额或时限断言，不改生产逻辑。当时 M7 未标记完成；修复后的本地与远端结果见下方完成记录。
+
+
+## M7 · 完成与停止
+
+- 最终完整功能 `4af169f5925ad0839d5eeb208e20b641e303512a` 的 [Actions #39907015646](https://github.com/jasonlat-dot/atelier/actions/runs/39907015646) 已核对 completed/success，baseline 与 identity-schema 均成功，包含完整真实浏览器流程。先前 20a54b3 的远端失败如实保留，已经 UUID 跳转等待修复并通过最新运行。
+- M6 与 M7 标记完成；README、API、DECISIONS、PR_M6/PR_M7 与本进度记录说明配置、能力、验收和限制。收尾仅提交文档，不变更功能，不进入 M8。
+- S3 实服务、视频尾帧协议扩展继续待定；没有供应商付费效果或正式上线声明。后续续接先读 AGENTS、PROGRESS、DECISIONS 与 Git，再根据新阶段授权推进。
