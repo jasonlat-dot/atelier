@@ -661,10 +661,12 @@ test('dragging an output to blank space preserves its preview and creates the ch
     ),
   });
   await page.setViewportSize({ width: 1040, height: 720 });
-  const compact = (await panel.boundingBox())!;
-  expect(compact.x).toBeGreaterThanOrEqual(0);
-  expect(compact.x + compact.width).toBeLessThanOrEqual(1040);
-  expect(compact.y + compact.height).toBeLessThanOrEqual(720);
+  await expect(async () => {
+    const compact = (await panel.boundingBox())!;
+    expect(compact.x).toBeGreaterThanOrEqual(0);
+    expect(compact.x + compact.width).toBeLessThanOrEqual(1040);
+    expect(compact.y + compact.height).toBeLessThanOrEqual(720);
+  }).toPass({ timeout: 5000 });
   await expect(
     panel.getByRole('button', { name: '生成并连接结果' }),
   ).toBeInViewport();

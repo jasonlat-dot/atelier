@@ -1199,6 +1199,15 @@ export default function LiveCanvasEditor({
       : nodeLeft >= 366
         ? nodeLeft - 354
         : Math.max(12, surfaceSize.width - 342);
+  const panelTop = generator
+    ? Math.max(
+        70,
+        Math.min(
+          viewport.y + generator.position.y * viewport.zoom + 54,
+          surfaceSize.height + 38 - Math.min(620, surfaceSize.height - 32),
+        ),
+      )
+    : 70;
   return (
     <div
       className={`canvas-shell live-canvas ${creatorOpen ? 'creator-open' : 'creator-closed'} ${generator ? 'creator-local' : ''} ${inspector ? 'inspector-open' : 'inspector-closed'} ${pan || space ? 'is-panning' : ''} ${readonly ? 'readonly' : ''}`}
@@ -1224,16 +1233,9 @@ export default function LiveCanvasEditor({
         style={
           generator
             ? {
-                left: panelLeft,
-                top: Math.max(
-                  70,
-                  Math.min(
-                    viewport.y + generator.position.y * viewport.zoom + 54,
-                    surfaceSize.height +
-                      38 -
-                      Math.min(620, surfaceSize.height - 32),
-                  ),
-                ),
+                left: `min(${panelLeft}px, calc(100% - 342px))`,
+                top: panelTop,
+                maxHeight: `min(620px, calc(100% - ${panelTop + 16}px))`,
               }
             : undefined
         }
