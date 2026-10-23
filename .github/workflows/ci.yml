@@ -70,10 +70,17 @@ jobs:
           --health-interval 5s --health-timeout 3s --health-retries 10
     env:
       TEST_REDIS_URL: redis://127.0.0.1:6379/15
-      DATABASE_URL: postgres://atelier_test:isolated_ci_only@127.0.0.1:5432/atelier_test
+      DATABASE_URL: postgres://atelier_ci:isolated_ci_role_only@127.0.0.1:5432/atelier_ci
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - name: Create unprivileged PostgreSQL test role
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          docker exec -i "$POSTGRES_CONTAINER" \
+            psql -X -U atelier_test -d atelier_test -v ON_ERROR_STOP=1 \
+            < scripts/ci/bootstrap_test_role.sql
       - name: Cache video apt packages
         uses: actions/cache@v4
         with:

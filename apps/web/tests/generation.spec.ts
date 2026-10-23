@@ -644,13 +644,20 @@ test('quote failures use an overlay and retry only refreshes the price', async (
   ).toBeEnabled();
   let failed = true;
   let requests = 0;
+  let holdFailure = false;
+  let releaseFailure: (() => void) | undefined;
   await page.route('**/api/v1/generation/quote', async (route) => {
     requests++;
-    if (failed)
+    if (failed) {
+      if (holdFailure)
+        await new Promise<void>((resolve) => {
+          releaseFailure = resolve;
+        });
       return route.fulfill({
         status: 503,
         json: { error: { code: 'SERVICE_UNAVAILABLE' } },
       });
+    }
     return route.fallback();
   });
   await page.getByLabel('生成数量').selectOption('2');
@@ -663,7 +670,14 @@ test('quote failures use an overlay and retry only refreshes the price', async (
   await expect(
     page.getByRole('button', { name: '生成图片', exact: true }),
   ).toBeDisabled();
+  holdFailure = true;
   await page.getByRole('button', { name: '重试报价', exact: true }).click();
+  await expect.poll(() => requests).toBe(2);
+  await expect(feedback).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: '生成图片', exact: true }),
+  ).toBeDisabled();
+  releaseFailure!();
   await expect(feedback).toBeVisible();
   failed = false;
   await feedback.getByRole('button', { name: '重试报价', exact: true }).click();

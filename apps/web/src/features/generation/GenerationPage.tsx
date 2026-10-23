@@ -829,11 +829,7 @@ export default function GenerationPage(props: Props) {
                 </p>
                 {quoteError && (
                   <>
-                    <Feedback
-                      variant="error"
-                      title="暂时无法获取报价"
-                      eventKey={quoteRetry}
-                    >
+                    <Feedback variant="error" title="暂时无法获取报价">
                       {quoteError}
                       <button
                         type="button"

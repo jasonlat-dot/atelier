@@ -233,6 +233,15 @@ async fn hundred_retries_hold_once_conflict_and_insufficient_rollback(pool: PgPo
 #[sqlx::test(migrations = "../../migrations")]
 #[ignore = "Requires isolated PostgreSQL; run explicitly"]
 async fn ledger_foreign_keys_work_after_runtime_restriction(pool: PgPool) {
+    let bypasses_permissions: bool =
+        sqlx::query_scalar("SELECT rolsuper FROM pg_roles WHERE rolname=current_user")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(
+        !bypasses_permissions,
+        "Run permission regressions as a non-superuser database owner"
+    );
     let owner = user(&pool).await;
     let wallet = WalletService::new(pool.clone());
     wallet.restrict_ledger().await.unwrap();

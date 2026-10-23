@@ -88,13 +88,14 @@ function Accounts(props: AdminProps) {
     [query, cursor, me, onExpired, onReload],
   );
   useEffect(() => {
+    if (search.trim() === query) return;
     const t = window.setTimeout(() => {
       setQuery(search.trim());
       setCursor(undefined);
       setHistory([]);
     }, 300);
     return () => clearTimeout(t);
-  }, [search]);
+  }, [search, query]);
   useEffect(() => {
     const abort = new AbortController();
     void load(abort.signal);

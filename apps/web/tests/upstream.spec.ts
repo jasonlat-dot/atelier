@@ -368,6 +368,32 @@ test('ordinary users cannot fetch management data; mobile tables scroll within t
   await expect(page.getByRole('heading', { name: '无权访问' })).toBeVisible();
   expect(f.reads.some((p) => p.includes('/admin/'))).toBe(false);
 });
+test('initial empty search never resets a page selected before the search debounce', async ({
+  page,
+}) => {
+  await fixture(page);
+  const now = new Date('2026-10-24T00:00:00Z');
+  await page.clock.install({ time: now });
+  await page.clock.pauseAt(now);
+  await page.route('**/api/v1/admin/upstream-accounts?*', (route) => {
+    const nextPage = new URL(route.request().url()).searchParams.has('before');
+    return route.fulfill({
+      json: {
+        items: [{ ...sampleAccount, name: nextPage ? '备用池' : '图片主池' }],
+        next_cursor: nextPage ? null : sampleAccount.id,
+      },
+    });
+  });
+  await page.goto('/admin/accounts');
+  await page.getByRole('button', { name: '下一页', exact: true }).click();
+  await expect(page.getByRole('button', { name: '编辑 备用池' })).toBeVisible();
+  await page.clock.fastForward(600);
+  await expect(page.getByRole('button', { name: '编辑 备用池' })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: '上一页', exact: true }),
+  ).toBeEnabled();
+});
+
 test('temporary failures retry, cursor paging restores the first page and failed probes are explicit', async ({
   page,
 }) => {
