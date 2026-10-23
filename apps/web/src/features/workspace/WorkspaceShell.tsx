@@ -158,7 +158,9 @@ export default function WorkspaceShell({
   const initial = me.user.display_name.trim().slice(0, 1).toUpperCase();
   return (
     <BalanceContext.Provider value={update}>
-      <div className="app-shell live-workspace">
+      <div
+        className={`app-shell live-workspace ${location.pathname === '/chat' || location.pathname.startsWith('/chat/') ? 'chat-workspace' : ''}`}
+      >
         {open && (
           <button
             className="workspace-scrim"

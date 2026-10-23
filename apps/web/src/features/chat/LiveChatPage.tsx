@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams, useNavigate, useBlocker } from 'react-router-dom';
 import {
   ArrowUp,
+  ArrowUpRight,
   Plus,
   MessageSquare,
   Sparkles,
@@ -28,6 +29,7 @@ import {
 } from './chatApi';
 import SafeMarkdown from './SafeMarkdown';
 import './LiveChat.css';
+import './ChatReference.css';
 type Props = { me: Me; onExpired: () => void; onReload: () => void };
 type Streaming = {
   id?: string;
@@ -44,6 +46,13 @@ const names: Record<string, string> = {
   CANVAS_ASSIST: '画布规划',
   UNSAFE: '内容不支持',
 };
+function conversationDay(value: string) {
+  const day = new Date(value).toDateString();
+  const today = new Date();
+  if (day === today.toDateString()) return '今天';
+  today.setDate(today.getDate() - 1);
+  return day === today.toDateString() ? '昨天' : '更早';
+}
 export default function LiveChatPage({ me, onExpired, onReload }: Props) {
   const { id } = useParams(),
     navigate = useNavigate(),
@@ -57,7 +66,7 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
     [notice, setNotice] = useState(''),
     [uncertain, setUncertain] = useState(false),
     [streaming, setStreaming] = useState<Streaming>(),
-    [contextOpen, setContextOpen] = useState(window.innerWidth >= 1280),
+    [contextOpen, setContextOpen] = useState(window.innerWidth > 1180),
     [historyOpen, setHistoryOpen] = useState(false);
   const [before, setBefore] = useState<string>(),
     [older, setOlder] = useState<Turn[]>([]),
@@ -306,8 +315,25 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
     (t, i, array) =>
       array.findIndex((a) => a.id === t.id) === i && t.id !== streaming?.id,
   );
+  const showWelcome =
+    !busy &&
+    !streaming &&
+    !uncertain &&
+    (!effective || (!!view.data && turns.length === 0));
+  const usedTokens = view.data?.estimated_tokens || 0;
+  const contextPercent = config.data
+    ? Math.min(
+        100,
+        Math.max(
+          0,
+          Math.round((usedTokens / config.data.context_window) * 100),
+        ),
+      )
+    : undefined;
   return (
-    <div className="chat-layout live-chat">
+    <div
+      className={`chat-layout live-chat ${contextOpen ? 'has-context' : ''}`}
+    >
       <aside
         className={`thread-sidebar ${historyOpen ? 'open' : ''}`}
         aria-label="历史对话"
@@ -351,15 +377,24 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
               </button>
             </p>
           )}
-          {list.data?.items.map((c) => (
-            <Link
-              className={effective === c.id ? 'selected' : ''}
-              key={c.id}
-              to={`/chat/${c.id}`}
-            >
-              <MessageSquare size={15} />
-              <span>{c.title}</span>
-            </Link>
+          {list.data?.items.map((c, index, items) => (
+            <Fragment key={c.id}>
+              {(index === 0 ||
+                conversationDay(items[index - 1].updated_at) !==
+                  conversationDay(c.updated_at)) && (
+                <div className="chat-history-day">
+                  {conversationDay(c.updated_at)}
+                </div>
+              )}
+              <Link
+                className={effective === c.id ? 'selected' : ''}
+                to={`/chat/${c.id}`}
+                aria-current={effective === c.id ? 'page' : undefined}
+              >
+                <MessageSquare size={15} />
+                <span>{c.title}</span>
+              </Link>
+            </Fragment>
           ))}
           {list.data?.items.length === 0 && (
             <p className="empty-caption">从一个想法开始，保存你的创作讨论。</p>
@@ -378,7 +413,7 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
             disabled={!list.data?.next_cursor}
             onClick={() => setBefore(list.data?.next_cursor || undefined)}
           >
-            更早对话
+            加载更早对话
           </button>
         </div>
       </aside>
@@ -393,7 +428,7 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
           </button>
           <div>
             <strong>{view.data?.conversation.title || '新的创作讨论'}</strong>
-            <p>真实流式对话 · 仅本人可见</p>
+            <p>实时流式对话 · 仅本人可见</p>
           </div>
           <div className="gen-actions">
             {effective && (
@@ -429,7 +464,11 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
             </button>
           </div>
         </div>
-        <div className="chat-messages" aria-label="对话消息" aria-live="polite">
+        <div
+          className={`chat-messages ${showWelcome ? 'is-empty' : ''}`}
+          aria-label="对话消息"
+          aria-live="polite"
+        >
           {view.isError && (
             <p role="alert">
               {failed(view.error)}
@@ -441,7 +480,7 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
               </button>
             </p>
           )}
-          {!effective && !busy && (
+          {showWelcome && (
             <div className="live-chat-empty">
               <div className="live-chat-mark">
                 <Sparkles size={27} />
@@ -457,7 +496,7 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
                 ].map((text) => (
                   <button key={text} onClick={() => setInput(text)}>
                     {text}
-                    <ArrowUp size={13} />
+                    <ArrowUpRight size={16} />
                   </button>
                 ))}
               </div>
@@ -580,113 +619,115 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
           <div ref={bottom} />
         </div>
         <div className="composer">
-          {error && (
-            <p role="alert">
-              {error}
-              {error.includes('积分') && (
-                <Link className="text-action" to="/wallet">
-                  查看积分
-                </Link>
-              )}
-            </p>
-          )}
-          {notice && <p role="status">{notice}</p>}
-          {config.isError && (
-            <p role="alert">
-              模型配置加载失败。
-              <button
-                className="text-action"
-                onClick={() => void config.refetch()}
-              >
-                重试模型
-              </button>
-            </p>
-          )}
-          {config.data?.models.length === 0 && (
-            <p role="status">
-              还没有可用对话模型，请管理员在模型与定价中配置 chat
-              模型并绑定账号。
-            </p>
-          )}
-          <textarea
-            aria-label="对话内容"
-            maxLength={4000}
-            placeholder="描述你的创意，或让 AI 帮你整理工作流…"
-            value={input}
-            disabled={busy || uncertain || !!busyTurn}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                e.preventDefault();
-                void send();
-              }
-            }}
-          />
-          <div className="composer-actions">
-            <div>
-              <select
-                aria-label="对话模型"
-                value={model}
-                disabled={busy || uncertain}
-                onChange={(e) => setModel(e.target.value)}
-              >
-                <option value="">选择模型</option>
-                {config.data?.models.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.display_name}
-                  </option>
-                ))}
-              </select>
-              <span>
-                {config.data
-                  ? `完整回复 ${config.data.credits_per_message} 积分 · 失败/中断不扣`
-                  : '正在读取模型…'}{' '}
-                · Ctrl + Enter
-              </span>
-            </div>
-            {busy ? (
-              <button
-                className="btn"
-                onClick={(event) => {
-                  if (event.detail <= 1) stop();
-                }}
-              >
-                <Square size={13} />
-                停止回复
-              </button>
-            ) : uncertain ? (
-              <button
-                className="btn btn-dark"
-                onClick={() => void send('', true)}
-              >
-                核对上次回复
-              </button>
-            ) : busyTurn ? (
-              <button
-                className="btn"
-                onClick={() =>
-                  void act(async () => {
-                    await chatApi.cancel(busyTurn.id, me.csrf_token);
-                    await refresh(effective);
-                  })
-                }
-              >
-                <Square size={13} />
-                停止进行中的回复
-              </button>
-            ) : (
-              <button
-                className="btn btn-dark"
-                disabled={
-                  !input.trim() ||
-                  !config.data?.models.some((m) => m.id === model)
-                }
-                onClick={() => void send()}
-              >
-                <ArrowUp size={15} />
-                发送
-              </button>
+          <div className="chat-composer-card">
+            {error && (
+              <p role="alert">
+                {error}
+                {error.includes('积分') && (
+                  <Link className="text-action" to="/wallet">
+                    查看积分
+                  </Link>
+                )}
+              </p>
             )}
+            {notice && <p role="status">{notice}</p>}
+            {config.isError && (
+              <p role="alert">
+                模型配置加载失败。
+                <button
+                  className="text-action"
+                  onClick={() => void config.refetch()}
+                >
+                  重试模型
+                </button>
+              </p>
+            )}
+            {config.data?.models.length === 0 && (
+              <p role="status">
+                还没有可用对话模型，请管理员在模型与定价中配置 chat
+                模型并绑定账号。
+              </p>
+            )}
+            <textarea
+              aria-label="对话内容"
+              maxLength={4000}
+              placeholder="描述你的创意，或让 AI 帮你整理工作流…"
+              value={input}
+              disabled={busy || uncertain || !!busyTurn}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                  e.preventDefault();
+                  void send();
+                }
+              }}
+            />
+            <div className="composer-actions">
+              <div>
+                <select
+                  aria-label="对话模型"
+                  value={model}
+                  disabled={busy || uncertain}
+                  onChange={(e) => setModel(e.target.value)}
+                >
+                  <option value="">选择模型</option>
+                  {config.data?.models.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.display_name}
+                    </option>
+                  ))}
+                </select>
+                <span>
+                  {config.data
+                    ? `完整回复 ${config.data.credits_per_message} 积分 · 失败/中断不扣`
+                    : '正在读取模型…'}{' '}
+                  · Ctrl + Enter
+                </span>
+              </div>
+              {busy ? (
+                <button
+                  className="btn"
+                  onClick={(event) => {
+                    if (event.detail <= 1) stop();
+                  }}
+                >
+                  <Square size={13} />
+                  停止回复
+                </button>
+              ) : uncertain ? (
+                <button
+                  className="btn btn-dark"
+                  onClick={() => void send('', true)}
+                >
+                  核对上次回复
+                </button>
+              ) : busyTurn ? (
+                <button
+                  className="btn"
+                  onClick={() =>
+                    void act(async () => {
+                      await chatApi.cancel(busyTurn.id, me.csrf_token);
+                      await refresh(effective);
+                    })
+                  }
+                >
+                  <Square size={13} />
+                  停止进行中的回复
+                </button>
+              ) : (
+                <button
+                  className="btn btn-dark"
+                  disabled={
+                    !input.trim() ||
+                    !config.data?.models.some((m) => m.id === model)
+                  }
+                  onClick={() => void send()}
+                >
+                  <ArrowUp size={15} />
+                  发送
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </section>
@@ -716,10 +757,16 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
           </div>
           <div className="context-card">
             <strong>上下文用量（估算）</strong>
-            <p>
-              {view.data?.estimated_tokens || 0} /{' '}
-              {config.data?.context_window || '—'} tokens
-            </p>
+            <div className="chat-context-usage">
+              <span>
+                {usedTokens.toLocaleString('zh-CN')} /{' '}
+                {config.data?.context_window.toLocaleString('zh-CN') || '—'}{' '}
+                tokens
+              </span>
+              <span>
+                {contextPercent === undefined ? '—' : `${contextPercent}%`}
+              </span>
+            </div>
             <div className="meter">
               <i
                 style={{

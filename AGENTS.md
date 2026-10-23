@@ -55,3 +55,5 @@
 - M9 已于 2026-10-23 完成本地验收与现有工作台接线：真实业务数据库 73 项、app HTTP 9 项、Chrome HTTP 56 项、真实服务 Chrome 2 项与 Mock Chrome 1 项通过；最后审计计数与拆分加载另做受影响回归。详见 docs/PR_M9.md、PROGRESS、README。本轮完成提交推送后停止，不自动进入 M10；仍不等待或轮询 Actions。下次按负责人新授权继续，S3/在线网关/视频尾帧仍待定。
 
 - 最新范围：负责人要求按 public/ui-register/工作台-html 的参考调整现有工作台 UI，随后明确“改完就行，然后提交代码，交互自行测试”。本轮保留源码静态检查和构建，停止后续交互验收，完成 UI 提交推送即可；不进入 M10，不等待 Actions。详情见 PROGRESS 最新工作台 UI 记录。
+
+- 负责人继续要求按 public/ui-register/AI 智能对话-html 调整对话 UI，沿用“修改后静态检查/构建并提交推送，交互自行测试”的工作方式。接入与检查结果见 PROGRESS 最新对话 UI 记录；不进入 M10，不等待 Actions。
