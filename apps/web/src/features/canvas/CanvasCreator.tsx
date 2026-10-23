@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Image as ImageIcon, Film, Sparkles, Plus, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -20,6 +20,9 @@ export const blankGenerator = (): GenerateData => ({
 });
 export default function CanvasCreator({
   value,
+  style,
+  floating,
+  onClose,
   onChange,
   references,
   onReferences,
@@ -34,6 +37,9 @@ export default function CanvasCreator({
   errorText,
 }: {
   value: GenerateData;
+  style?: CSSProperties;
+  floating?: boolean;
+  onClose: () => void;
   onChange: (value: GenerateData) => void;
   references: Asset[];
   onReferences: (refs: Asset[]) => void;
@@ -47,6 +53,7 @@ export default function CanvasCreator({
   onAdd: (type: 'text' | 'generate' | 'upload' | 'library') => void;
   errorText: (error: unknown) => string;
 }) {
+  const [advanced, setAdvanced] = useState(false);
   const [kind, setKind] = useState('image'),
     [picker, setPicker] = useState(false);
   const catalog = useQuery({
@@ -61,7 +68,7 @@ export default function CanvasCreator({
   });
   const models = catalog.data?.models || [];
   const model = models.find((m) => m.id === value.modelId);
-  const actualKind = model?.kind || kind;
+  const actualKind = model?.kind || (value.seconds != null ? 'video' : kind);
   const level = (s: string) => ({ '1K': 1, '2K': 2, '4K': 3 })[s] || 0;
   const normalize = (
     model: Schema['CatalogModel'],
@@ -95,11 +102,15 @@ export default function CanvasCreator({
   };
   useEffect(() => {
     if (!value.modelId && models.length && !readonly) {
-      const first = models.find((m) => m.kind === kind);
+      const first = models.find((m) => m.kind === actualKind);
       if (first) onChange(normalize(first, value));
     }
     // Initial defaults come from the server; explicit saved choices stay visible if disabled later.
-  }, [catalog.data, limits.data, value.modelId, readonly]);
+  }, [catalog.data, limits.data, value.modelId, readonly, actualKind]);
+  const maxRefs = Math.min(
+    model?.capabilities.max_refs || 0,
+    actualKind === 'video' ? 1 : model?.capabilities.supports_edit ? 4 : 0,
+  );
   const body: Schema['QuoteInput'] = {
     model_id: value.modelId,
     quality: value.quality,
@@ -121,15 +132,11 @@ export default function CanvasCreator({
   const quote = useQuery({
     queryKey: ['canvas-quote', debounced],
     queryFn: ({ signal }) => generationApi.quote(debounced, csrf, signal),
-    enabled: !!model && !readonly && !tail,
+    enabled: !!model && !readonly && !tail && references.length <= maxRefs,
     staleTime: 10000,
     retry: false,
   });
   const stale = JSON.stringify(debounced) !== serialized;
-  const maxRefs = Math.min(
-    model?.capabilities.max_refs || 0,
-    actualKind === 'video' ? 1 : model?.capabilities.supports_edit ? 4 : 0,
-  );
   const blocked =
     readonly ||
     busy ||
@@ -143,12 +150,62 @@ export default function CanvasCreator({
     (linkedPrompt + (value.prompt || '')).length > 4000;
   const change = (patch: Partial<GenerateData>) =>
     onChange({ ...value, ...patch });
+  const submission = (
+    <div className="canvas-submission">
+      <div className="generation-summary">
+        <span>本次预计消耗</span>
+        <strong>
+          {stale || quote.isFetching ? '…' : (quote.data?.cost ?? '—')}{' '}
+          <small>积分</small>
+        </strong>
+      </div>
+      {quote.isError && (
+        <p role="alert">
+          {errorText(quote.error)}
+          <button
+            className="text-action"
+            disabled={readonly || busy}
+            onClick={() => void quote.refetch()}
+          >
+            重试报价
+          </button>
+        </p>
+      )}
+      <button className="btn btn-dark full" disabled={blocked} onClick={onRun}>
+        <Sparkles size={15} />
+        {busy
+          ? '正在确认任务…'
+          : selected
+            ? '生成并连接结果'
+            : '生成并加入画布'}
+      </button>
+      <p className="subtle-hint">
+        积分以服务端确认结果为准。<Link to="/wallet">查看积分</Link>
+      </p>
+    </div>
+  );
   return (
     <section
-      className="canvas-tool-panel live-creator"
+      className={`canvas-tool-panel live-creator ${floating ? 'floating-creator' : ''}`}
+      style={style}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') {
+          event.stopPropagation();
+          onClose();
+        }
+      }}
       aria-label="画布创作参数"
     >
-      <div className="panel-overline">CREATIVE TOOLS</div>
+      <div className="panel-overline">
+        <span>{selected ? '生成节点参数' : '快速创作'}</span>
+        <button
+          className="icon-btn"
+          aria-label="关闭创作参数"
+          onClick={onClose}
+        >
+          <X size={16} />
+        </button>
+      </div>
       <div className="segmented">
         {(['image', 'video'] as const).map((k) => (
           <button
@@ -159,7 +216,13 @@ export default function CanvasCreator({
               setKind(k);
               const next = models.find((m) => m.kind === k);
               onChange(
-                next ? normalize(next, value) : { ...value, modelId: '' },
+                next
+                  ? normalize(next, value)
+                  : {
+                      ...value,
+                      modelId: '',
+                      seconds: k === 'video' ? 4 : null,
+                    },
               );
             }}
           >
@@ -194,6 +257,14 @@ export default function CanvasCreator({
                 </option>
               ))}
           </select>
+          {!catalog.isPending &&
+            !catalog.isError &&
+            !models.some((m) => m.kind === actualKind) && (
+              <p className="subtle-hint">
+                暂未配置可用的{actualKind === 'video' ? '视频' : '图片'}
+                模型，请联系管理员在“模型与定价”中配置。
+              </p>
+            )}
           {catalog.isError && (
             <p role="alert">
               {errorText(catalog.error)}
@@ -223,103 +294,124 @@ export default function CanvasCreator({
               {linkedPrompt.length > 120 ? '…' : ''}（与描述合并提交）
             </p>
           )}
-          <div className="live-field-pair">
-            <div>
-              <label className="field-label" htmlFor="canvas-quality">
-                画质
-              </label>
-              <select
-                className="select"
-                id="canvas-quality"
-                value={value.quality}
-                onChange={(e) => change({ quality: e.target.value })}
-              >
-                {(model?.capabilities.qualities || [value.quality]).map((q) => (
-                  <option key={q} value={q}>
-                    {{ low: '快速', medium: '标准', high: '精细' }[q] || q}
-                    {model
-                      ? ` · ${model.prices.find((p) => p.quality === q)?.base_credits || '—'} 积分起`
-                      : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="field-label" htmlFor="canvas-resolution">
-                分辨率
-              </label>
-              <select
-                id="canvas-resolution"
-                className="select"
-                value={value.resolution}
-                onChange={(e) => change({ resolution: e.target.value })}
-              >
-                {(model?.capabilities.resolutions || [value.resolution])
-                  .filter(
-                    (r) =>
-                      actualKind !== 'image' ||
-                      level(r) <= level(limits.data?.max_resolution || '1K'),
-                  )
-                  .map((r) => (
-                    <option key={r}>{r}</option>
-                  ))}
-              </select>
-            </div>
-          </div>
-          <label className="field-label">画幅比例</label>
-          <div className="ratio-options">
-            {(model?.capabilities.ratios || ['1:1']).map((r) => (
-              <button
-                type="button"
-                key={r}
-                className={value.ratio === r ? 'on' : ''}
-                aria-pressed={value.ratio === r}
-                onClick={() => change({ ratio: r })}
-              >
-                {r}
-              </button>
-            ))}
-          </div>
-          {actualKind === 'video' ? (
-            <>
-              <label className="field-label" htmlFor="canvas-seconds">
-                视频时长
-              </label>
-              <select
-                id="canvas-seconds"
-                className="select"
-                value={value.seconds || 4}
-                onChange={(e) => change({ seconds: Number(e.target.value) })}
-              >
-                {(model?.capabilities.seconds || [4]).map((s) => (
-                  <option key={s} value={s}>
-                    {s} 秒
-                  </option>
-                ))}
-              </select>
-            </>
-          ) : (
-            <>
-              <label className="field-label" htmlFor="canvas-count">
-                生成数量
-              </label>
-              <select
-                id="canvas-count"
-                className="select"
-                value={value.n}
-                onChange={(e) => change({ n: Number(e.target.value) })}
-              >
-                {Array.from(
-                  { length: Math.min(model?.capabilities.max_n || 1, 4) },
-                  (_, i) => i + 1,
-                ).map((n) => (
-                  <option key={n} value={n}>
-                    {n} 张
-                  </option>
-                ))}
-              </select>
-            </>
+          {floating && (
+            <button
+              type="button"
+              className="canvas-parameter-toggle"
+              aria-expanded={advanced}
+              onClick={() => setAdvanced((v) => !v)}
+            >
+              <span>生成参数</span>
+              <span>
+                {value.ratio} · {value.resolution} ·{' '}
+                {actualKind === 'video'
+                  ? `${value.seconds || 4}秒`
+                  : `${value.n}张`}{' '}
+                {advanced ? '⌃' : '⌄'}
+              </span>
+            </button>
           )}
+          <div hidden={floating && !advanced}>
+            <div className="live-field-pair">
+              <div>
+                <label className="field-label" htmlFor="canvas-quality">
+                  画质
+                </label>
+                <select
+                  className="select"
+                  id="canvas-quality"
+                  value={value.quality}
+                  onChange={(e) => change({ quality: e.target.value })}
+                >
+                  {(model?.capabilities.qualities || [value.quality]).map(
+                    (q) => (
+                      <option key={q} value={q}>
+                        {{ low: '快速', medium: '标准', high: '精细' }[q] || q}
+                        {model
+                          ? ` · ${model.prices.find((p) => p.quality === q)?.base_credits || '—'} 积分起`
+                          : ''}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </div>
+              <div>
+                <label className="field-label" htmlFor="canvas-resolution">
+                  分辨率
+                </label>
+                <select
+                  id="canvas-resolution"
+                  className="select"
+                  value={value.resolution}
+                  onChange={(e) => change({ resolution: e.target.value })}
+                >
+                  {(model?.capabilities.resolutions || [value.resolution])
+                    .filter(
+                      (r) =>
+                        actualKind !== 'image' ||
+                        level(r) <= level(limits.data?.max_resolution || '1K'),
+                    )
+                    .map((r) => (
+                      <option key={r}>{r}</option>
+                    ))}
+                </select>
+              </div>
+            </div>
+            <label className="field-label">画幅比例</label>
+            <div className="ratio-options">
+              {(model?.capabilities.ratios || ['1:1']).map((r) => (
+                <button
+                  type="button"
+                  key={r}
+                  className={value.ratio === r ? 'on' : ''}
+                  aria-pressed={value.ratio === r}
+                  onClick={() => change({ ratio: r })}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+            {actualKind === 'video' ? (
+              <>
+                <label className="field-label" htmlFor="canvas-seconds">
+                  视频时长
+                </label>
+                <select
+                  id="canvas-seconds"
+                  className="select"
+                  value={value.seconds || 4}
+                  onChange={(e) => change({ seconds: Number(e.target.value) })}
+                >
+                  {(model?.capabilities.seconds || [4]).map((s) => (
+                    <option key={s} value={s}>
+                      {s} 秒
+                    </option>
+                  ))}
+                </select>
+              </>
+            ) : (
+              <>
+                <label className="field-label" htmlFor="canvas-count">
+                  生成数量
+                </label>
+                <select
+                  id="canvas-count"
+                  className="select"
+                  value={value.n}
+                  onChange={(e) => change({ n: Number(e.target.value) })}
+                >
+                  {Array.from(
+                    { length: Math.min(model?.capabilities.max_n || 1, 4) },
+                    (_, i) => i + 1,
+                  ).map((n) => (
+                    <option key={n} value={n}>
+                      {n} 张
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
+          </div>
           <label className="field-label">
             {actualKind === 'video' ? '首帧参考图片' : '参考图片'}
           </label>
@@ -350,57 +442,36 @@ export default function CanvasCreator({
           <p className="subtle-hint">
             {actualKind === 'video'
               ? '当前视频接口支持一张首帧参考图；尾帧暂不可用。'
-              : `文字生图，或使用最多 ${maxRefs} 张参考图。拖动节点端口可连接提示词与参考。`}
+              : maxRefs === 0
+                ? '当前模型仅支持文字生图。使用参考图需要选择已开启图片编辑的模型。'
+                : `最多使用 ${maxRefs} 张参考图。拖动节点端口可连接提示词与参考。`}
           </p>
           {tail && (
             <p role="alert">当前模型不支持尾帧输入，请移除尾帧连线后继续。</p>
           )}
           {references.length > maxRefs && (
-            <p role="alert">参考图片超过当前模型上限，请移除多余参考。</p>
-          )}
-          <div className="generation-summary">
-            <span>本次预计消耗</span>
-            <strong>
-              {stale || quote.isFetching ? '…' : (quote.data?.cost ?? '—')}{' '}
-              <small>积分</small>
-            </strong>
-          </div>
-          {quote.isError && (
             <p role="alert">
-              {errorText(quote.error)}
-              <button
-                className="text-action"
-                onClick={() => void quote.refetch()}
-              >
-                重试报价
-              </button>
+              {actualKind === 'image' && !model?.capabilities.supports_edit
+                ? '当前模型尚未开启图片编辑。请更换支持参考图的模型，或请管理员核对模型能力。'
+                : `当前模型最多支持 ${maxRefs} 张参考图，已连接 ${references.length} 张，请移除多余参考。`}
             </p>
           )}
-          <button
-            className="btn btn-dark full"
-            disabled={blocked}
-            onClick={onRun}
-          >
-            <Sparkles size={15} />
-            {busy
-              ? '正在确认任务…'
-              : selected
-                ? '生成并连接结果'
-                : '生成并加入画布'}
-          </button>
-          <p className="subtle-hint">
-            积分以服务端确认结果为准。<Link to="/wallet">查看积分</Link>
-          </p>
-          <div className="section-divider" />
-          <h4>添加到画布</h4>
-          <div className="add-tiles">
-            <button onClick={() => onAdd('text')}>文字节点</button>
-            <button onClick={() => onAdd('generate')}>生成节点</button>
-            <button onClick={() => onAdd('upload')}>上传图片／视频</button>
-            <button onClick={() => onAdd('library')}>从素材库添加</button>
-          </div>
+          {!floating && submission}
+          {!floating && (
+            <>
+              <div className="section-divider" />
+              <h4>添加到画布</h4>
+              <div className="add-tiles">
+                <button onClick={() => onAdd('text')}>文字节点</button>
+                <button onClick={() => onAdd('generate')}>生成节点</button>
+                <button onClick={() => onAdd('upload')}>上传图片／视频</button>
+                <button onClick={() => onAdd('library')}>从素材库添加</button>
+              </div>
+            </>
+          )}
         </fieldset>
       </div>
+      {floating && submission}
       {picker && (
         <ReferencePicker
           selected={references}

@@ -109,6 +109,7 @@ test('real database and Redis login reaches workspace, survives reload and revok
   await expect(
     page.getByText('已删除 1 个素材', { exact: true }),
   ).toBeVisible();
+  await expect(page.getByLabel('选择上传素材', { exact: true })).toBeEnabled();
   const video = readFileSync(
     new URL(
       '../../../services/api/crates/app/tests/fixtures/reference.mp4',
@@ -471,6 +472,8 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   await page.getByRole('button', { name: '添加文字节点', exact: true }).click();
   await page.getByRole('button', { name: '撤销', exact: true }).click();
   await page.getByRole('button', { name: '重做', exact: true }).click();
+  await page.locator('.react-flow__pane').click({ position: { x: 8, y: 30 } });
+  await page.getByRole('button', { name: '切换创作参数' }).click();
   await page.getByRole('button', { name: '视频生成', exact: true }).click();
   await page.getByLabel('创意描述').fill('Canvas video waves');
   await page

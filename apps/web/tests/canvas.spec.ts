@@ -25,7 +25,7 @@ const graph = (): Graph => ({
   viewport: { x: 30, y: 50, zoom: 0.7 },
   background: 'dots',
 });
-async function fixture(page: Page, initial = graph()) {
+async function fixture(page: Page, initial = graph(), edit = true) {
   let saved = initial,
     revision = 0,
     conflict = false;
@@ -115,7 +115,7 @@ async function fixture(page: Page, initial = graph()) {
                 resolutions: ['1K'],
                 max_n: 4,
                 max_refs: 4,
-                supports_edit: true,
+                supports_edit: edit,
               },
               prices: [
                 {
@@ -250,7 +250,11 @@ test('canvas edits autosave, survive reload, undo and redo with the prototype la
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(`/canvas/${projectId}`);
+  await expect(page.getByLabel('画布创作参数')).not.toBeVisible();
+  await page.getByRole('button', { name: '切换创作参数' }).click();
   await expect(page.getByLabel('画布创作参数')).toBeVisible();
+  await expect(page.getByLabel('画布检查器')).not.toBeVisible();
+  await page.getByRole('button', { name: '打开属性面板' }).click();
   await expect(page.getByLabel('画布检查器')).toBeVisible();
   await page.getByRole('button', { name: '添加文字节点', exact: true }).click();
   await page.getByLabel('节点文字').fill('A calm coast');
@@ -264,6 +268,7 @@ test('canvas edits autosave, survive reload, undo and redo with the prototype la
   await expect(page.getByLabel('节点文字')).toHaveCount(1);
   await page.getByRole('button', { name: '重做', exact: true }).click();
   await expect(page.getByLabel('节点文字')).toHaveCount(2);
+  await page.getByRole('button', { name: '打开属性面板' }).click();
   await page.getByLabel('画布背景').selectOption('lines');
   await page.getByRole('link', { name: '我的素材库', exact: true }).click();
   await expect(page).toHaveURL(/\/assets$/);
@@ -368,7 +373,7 @@ test('500-node canvas only renders visible nodes and remains responsive while pa
     size: { width: 240, height: 180 },
     data: { text: `Node ${i}` },
   }));
-  await fixture(page, initial);
+  const api = await fixture(page, initial);
   await page.goto(`/canvas/${projectId}`);
   await expect(page.locator('.react-flow__node').first()).toBeVisible();
   expect(await page.locator('.react-flow__node').count()).toBeLessThan(100);
@@ -404,4 +409,310 @@ test('500-node canvas only renders visible nodes and remains responsive while pa
     1000 / 30,
   );
   await expect(page.getByText('已保存', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '选择工具', exact: true }).click();
+  const pick = await page.locator('.react-flow__node').evaluateAll(
+    (nodes) =>
+      nodes
+        .map((n) => ({
+          id: n.getAttribute('data-id'),
+          box: n.getBoundingClientRect(),
+        }))
+        .filter(
+          (n) =>
+            n.box.left > 550 &&
+            n.box.top > 170 &&
+            n.box.right < innerWidth - 30 &&
+            n.box.bottom < innerHeight - 100,
+        )
+        .map((n) => n.id)[0],
+  );
+  expect(pick).toBeTruthy();
+  const moving = page.locator(`.react-flow__node[data-id="${pick}"]`);
+  const box2 = (await moving.boundingBox())!;
+  const original = api.saved().nodes.find((n) => n.id === pick)!.position.x;
+  const nodeFrames = page.evaluate(async () => {
+    const frames: number[] = [];
+    let previous = performance.now();
+    await new Promise<void>((resolve) => {
+      const next = (now: number) => {
+        frames.push(now - previous);
+        previous = now;
+        if (frames.length >= 60) resolve();
+        else requestAnimationFrame(next);
+      };
+      requestAnimationFrame(next);
+    });
+    return frames.slice(5);
+  });
+  await drag(page, box2.x + 70, box2.y + 80, 100, 45);
+  const nodeIntervals = await nodeFrames;
+  expect(
+    nodeIntervals.reduce((a, b) => a + b, 0) / nodeIntervals.length,
+  ).toBeLessThan(1000 / 30);
+  await expect
+    .poll(() => api.saved().nodes.find((n) => n.id === pick)!.position.x)
+    .toBeGreaterThan(original + 80);
+  expect(api.saved().nodes).toHaveLength(500);
+});
+
+const imageNode = () => ({
+  id: 'reference-image',
+  type: 'image' as const,
+  position: { x: 50, y: 60 },
+  size: { width: 280, height: 270 },
+  data: { assetId, naturalW: 16, naturalH: 12, label: 'Reference', gen: null },
+});
+const textNode = () => ({
+  id: 'prompt-text',
+  type: 'text' as const,
+  position: { x: 420, y: 60 },
+  size: { width: 280, height: 200 },
+  data: { text: 'A calm coast' },
+});
+async function drag(page: Page, x: number, y: number, dx: number, dy: number) {
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + dx, y + dy, { steps: 16 });
+  await page.mouse.up();
+}
+test('image and text bodies drag without opening a preview or editing; a gesture saves and undoes once', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  const initial = graph();
+  initial.viewport.zoom = 1;
+  initial.nodes = [imageNode(), textNode()];
+  const api = await fixture(page, initial);
+  await page.goto(`/canvas/${projectId}`);
+  const image = page.locator(
+    '.react-flow__node[data-id="reference-image"] .live-node-media',
+  );
+  const box = (await image.boundingBox())!;
+  await drag(page, box.x + 80, box.y + 80, 85, 45);
+  await expect.poll(() => api.saved().nodes[0].position.x).toBeGreaterThan(120);
+  const draggedX = api.saved().nodes[0].position.x;
+  expect(api.writes.filter((p) => p.endsWith('/graph')).length).toBe(1);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByRole('button', { name: '撤销', exact: true }).click();
+  await expect.poll(() => api.saved().nodes[0].position.x).toBe(50);
+  await page.getByRole('button', { name: '重做', exact: true }).click();
+  await expect.poll(() => api.saved().nodes[0].position.x).toBe(draggedX);
+  const text = page.locator('.react-flow__node[data-id="prompt-text"]');
+  const textBox = (await text.locator('.node-note').boundingBox())!;
+  await drag(page, textBox.x + 75, textBox.y + 65, 45, 65);
+  await expect
+    .poll(
+      () => api.saved().nodes.find((n) => n.id === 'prompt-text')!.position.x,
+    )
+    .toBeGreaterThan(450);
+  await text.dblclick({ position: { x: 80, y: 90 } });
+  await expect(text.getByLabel('节点文字')).toBeEditable();
+  await text.getByLabel('节点文字').fill('Edited without accidental dragging');
+  await page.keyboard.press('Escape');
+  await expect(text.getByLabel('节点文字')).not.toBeEditable();
+  await page.getByRole('button', { name: '继续创作', exact: true }).click();
+  await expect
+    .poll(() => api.saved().edges.filter((e) => e.role === 'prompt').length)
+    .toBe(1);
+  expect(
+    api.writes.filter((p) => p === '/api/v1/generation/jobs'),
+  ).toHaveLength(0);
+});
+test('ports connect by clicking, selected curves disconnect by Delete, and undo restores them', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  const initial = graph();
+  initial.nodes = [imageNode(), { ...gen, position: { x: 450, y: 180 } }];
+  const api = await fixture(page, initial);
+  await page.goto(`/canvas/${projectId}`);
+  await page.locator('[data-id="generator"] .graph-head').click();
+  await expect(page.getByLabel('画布创作参数')).toBeVisible();
+  await page.locator('[data-id="reference-image"] .source').click();
+  await expect(page.getByLabel('画布创作参数')).not.toBeVisible();
+  await page.locator('[data-id="generator"] .target').click();
+  await expect.poll(() => api.saved().edges.length).toBe(1);
+  const edge = page.locator('.react-flow__edge');
+  const midpoint = await edge
+    .locator('.react-flow__edge-path')
+    .evaluate((element) => {
+      const path = element as SVGPathElement;
+      const point = path.getPointAtLength(path.getTotalLength() / 2);
+      const transformed = new DOMPoint(point.x, point.y).matrixTransform(
+        path.getScreenCTM()!,
+      );
+      return { x: transformed.x, y: transformed.y };
+    });
+  await page.mouse.click(midpoint.x, midpoint.y);
+  await page.getByRole('button', { name: '断开连线', exact: true }).click();
+  await expect.poll(() => api.saved().edges.length).toBe(0);
+  await page.getByRole('button', { name: '撤销', exact: true }).click();
+  await expect.poll(() => api.saved().edges.length).toBe(1);
+});
+test('right click creation, zoom controls and quick-reference action stay usable without paid writes', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  const initial = graph();
+  initial.nodes = [imageNode()];
+  const api = await fixture(page, initial);
+  await page.goto(`/canvas/${projectId}`);
+  await page.locator('[data-id="reference-image"] .graph-head').click();
+  await page.getByRole('button', { name: '继续创作', exact: true }).click();
+  await expect
+    .poll(() => api.saved().edges.some((e) => e.role === 'reference'))
+    .toBe(true);
+  expect(api.writes.includes('/api/v1/generation/jobs')).toBe(false);
+  await page.getByRole('button', { name: '切换创作参数' }).click();
+  await expect(page.getByLabel('画布创作参数')).not.toBeVisible();
+  const pane = page.locator('.react-flow__pane'),
+    box = (await pane.boundingBox())!;
+  await page.mouse.click(box.x + 80, box.y + 80, { button: 'right' });
+  await page.getByRole('menuitem', { name: /文字节点/ }).click();
+  await expect(page.getByLabel('节点文字')).toBeEditable();
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: '100%', exact: true }).click();
+  const slider = page.getByLabel('画布缩放', { exact: true });
+  await slider.focus();
+  await slider.press('ArrowRight');
+  await expect(page.getByLabel('当前缩放')).toHaveText('105%');
+  await page.getByRole('button', { name: '100%', exact: true }).click();
+  await expect(page.getByLabel('当前缩放')).toHaveText('100%');
+  await page.getByRole('button', { name: '画布快捷键' }).click();
+  await expect(
+    page.getByRole('dialog', { name: '画布操作与快捷键' }),
+  ).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  await page.screenshot({
+    path: fileURLToPath(
+      new URL(
+        '../../../.tools/canvas-interaction-desktop.png',
+        import.meta.url,
+      ),
+    ),
+  });
+});
+test('node generation explains missing edit support before any job submission', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  const initial = graph();
+  initial.nodes = [
+    imageNode(),
+    { ...gen, data: { ...gen.data, prompt: 'A coast' } },
+  ];
+  initial.edges = [
+    {
+      id: 'reference-link',
+      source: 'reference-image',
+      target: 'generator',
+      role: 'reference',
+    },
+  ];
+  const api = await fixture(page, initial, false);
+  await page.goto(`/canvas/${projectId}`);
+  await page.locator('[data-id="generator"] .graph-head').click();
+  await expect(page.getByLabel('生成模型')).toContainText('Canvas Image');
+  await page
+    .locator('[data-id="generator"]')
+    .getByRole('button', { name: '生成', exact: true })
+    .click();
+  await expect(page.locator('.live-canvas-alert')).toContainText(
+    '尚未开启图片编辑',
+  );
+  expect(api.writes.includes('/api/v1/generation/jobs')).toBe(false);
+});
+
+test('dragging an output to blank space preserves its preview and creates the chosen linked generator without submitting', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  const initial = graph();
+  initial.viewport.zoom = 1;
+  initial.nodes = [textNode()];
+  const api = await fixture(page, initial);
+  await page.goto(`/canvas/${projectId}`);
+  const source = page.locator('[data-id="prompt-text"] .source');
+  const port = (await source.boundingBox())!;
+  const draw = () =>
+    drag(page, port.x + port.width / 2, port.y + port.height / 2, 180, 80);
+  await draw();
+  const menu = page.getByRole('menu', { name: '引用该节点生成' });
+  await expect(menu).toBeVisible();
+  await expect(page.locator('.canvas-pending-link path')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(menu).not.toBeVisible();
+  expect(api.saved().nodes).toHaveLength(1);
+  await draw();
+  await menu.getByRole('menuitem', { name: /图片生成/ }).click();
+  await expect.poll(() => api.saved().nodes.length).toBe(2);
+  expect(api.saved().edges).toHaveLength(1);
+  expect(api.saved().edges[0].role).toBe('prompt');
+  const panel = page.getByLabel('画布创作参数');
+  await expect(panel).toBeVisible();
+  await expect(page.getByLabel('生成模型')).toHaveValue('image');
+  const box = (await panel.boundingBox())!;
+  expect(box.x).toBeGreaterThan(300);
+  expect(box.y + box.height).toBeLessThanOrEqual(1000);
+  await page.screenshot({
+    path: fileURLToPath(
+      new URL('../../../.tools/canvas-local-parameters.png', import.meta.url),
+    ),
+  });
+  await page.setViewportSize({ width: 1040, height: 720 });
+  const compact = (await panel.boundingBox())!;
+  expect(compact.x).toBeGreaterThanOrEqual(0);
+  expect(compact.x + compact.width).toBeLessThanOrEqual(1040);
+  expect(compact.y + compact.height).toBeLessThanOrEqual(720);
+  await expect(
+    panel.getByRole('button', { name: '生成并连接结果' }),
+  ).toBeInViewport();
+  await page.screenshot({
+    path: fileURLToPath(
+      new URL(
+        '../../../.tools/canvas-local-parameters-1040.png',
+        import.meta.url,
+      ),
+    ),
+  });
+  await page.getByRole('button', { name: '关闭创作参数' }).click();
+  await expect(panel).not.toBeVisible();
+  expect(api.writes.includes('/api/v1/generation/jobs')).toBe(false);
+});
+
+test('blank drag pans by default, Shift selects nodes, toolbar hints and layer search are discoverable', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  const initial = graph();
+  initial.viewport.zoom = 1;
+  initial.nodes = [imageNode(), textNode()];
+  const api = await fixture(page, initial);
+  await page.goto(`/canvas/${projectId}`);
+  const pane = (await page.locator('.react-flow__pane').boundingBox())!;
+  await drag(page, pane.x + 100, pane.y + 400, 65, 40);
+  await expect
+    .poll(() => api.saved().viewport.x)
+    .toBeGreaterThan(initial.viewport.x + 50);
+  const nodes = page.locator('.react-flow__node');
+  await nodes.first().locator('.graph-head').click();
+  await nodes
+    .nth(1)
+    .locator('.graph-head')
+    .click({ modifiers: ['Shift'] });
+  await expect(page.locator('.react-flow__node.selected')).toHaveCount(2);
+  await page.getByRole('button', { name: '上传素材到画布' }).hover();
+  await expect(
+    page.getByRole('tooltip', { name: '图片 / 视频 · I' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: '打开属性面板' }).click();
+  await page.getByRole('button', { name: '图层', exact: true }).click();
+  await page.getByLabel('搜索画布节点').fill('calm');
+  await expect(page.locator('.layer-list > button')).toHaveCount(1);
+  await page.getByLabel('搜索画布节点').fill('no such node');
+  await expect(
+    page.getByText('没有匹配的节点，试试其他关键词。'),
+  ).toBeVisible();
+  expect(api.writes.includes('/api/v1/generation/jobs')).toBe(false);
 });

@@ -11,7 +11,9 @@ import {
   ReactFlow,
   Background,
   BackgroundVariant,
-  Controls,
+  MarkerType,
+  SelectionMode,
+  useViewport,
   MiniMap,
   Panel,
   useReactFlow,
@@ -31,6 +33,7 @@ import {
   MousePointer2,
   Plus,
   Redo2,
+  RotateCcw,
   Settings2,
   Sparkles,
   Trash2,
@@ -38,6 +41,10 @@ import {
   Undo2,
   Unlock,
   X,
+  PanelLeftClose,
+  PanelLeftOpen,
+  HelpCircle,
+  Minus,
 } from 'lucide-react';
 import { SessionError } from '../auth/sessionApi';
 import { assetsApi, type Asset } from '../assets/assetsApi';
@@ -57,6 +64,7 @@ import { useWalletSummaryUpdate } from '../workspace/WorkspaceShell';
 import {
   createEditorStore,
   connect,
+  connectionIssue,
   nodeLabel,
   pasteNodes,
 } from './editorStore';
@@ -70,6 +78,8 @@ import {
 import { ProjectSaver, type SaveStatus } from './projectSaver';
 import { CanvasActions, liveNodeTypes, type FlowNode } from './LiveCanvasNodes';
 import CanvasCreator, { blankGenerator } from './CanvasCreator';
+import CanvasToolButton from './CanvasToolButton';
+import CanvasContextMenu, { type CanvasMenu } from './CanvasContextMenu';
 import { projectJobs, reconcileJobs } from './canvasJobs';
 import type { CanvasProps } from './LiveCanvasPage';
 const statusText: Record<SaveStatus, string> = {
@@ -82,7 +92,7 @@ const statusText: Record<SaveStatus, string> = {
 const editableTarget = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
   (!!target.closest('input,textarea,select,[contenteditable=true]') ||
-    !!target.closest('dialog'));
+    !!target.closest('dialog,[role=dialog],[role=menu]'));
 export default function LiveCanvasEditor({
   initial,
   me,
@@ -108,12 +118,35 @@ export default function LiveCanvasEditor({
     [error, setError] = useState(''),
     [notice, setNotice] = useState('');
   const [readonly, setReadonly] = useState(window.innerWidth < 1024),
-    [pan, setPan] = useState(false),
+    [pan, setPan] = useState(true),
     [space, setSpace] = useState(false);
   const [tab, setTab] = useState<'properties' | 'layers' | 'tasks'>(
       'properties',
     ),
     [inspector, setInspector] = useState(false);
+  const viewport = useViewport();
+  const [creatorOpen, setCreatorOpen] = useState(false);
+  const [editingNode, setEditingNode] = useState<string>();
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [miniMapOpen, setMiniMapOpen] = useState(false);
+  const [layerSearch, setLayerSearch] = useState('');
+  const [edgeSelection, setEdgeSelection] = useState<string[]>([]);
+  const [menu, setMenu] = useState<CanvasMenu>();
+  const connectStart = useRef<{ x: number; y: number }>();
+  const [surfaceSize, setSurfaceSize] = useState({ width: 800, height: 600 });
+  useEffect(() => {
+    const surface = canvasSurface.current;
+    if (!surface) return;
+    const observer = new ResizeObserver(() =>
+      setSurfaceSize({
+        width: surface.clientWidth,
+        height: surface.clientHeight,
+      }),
+    );
+    observer.observe(surface);
+    return () => observer.disconnect();
+  }, []);
+  const canvasSurface = useRef<HTMLDivElement>(null);
   const [quick, setQuick] = useState<GenerateData>(blankGenerator),
     [quickRefs, setQuickRefs] = useState<Asset[]>([]);
   useEffect(() => {
@@ -122,6 +155,7 @@ export default function LiveCanvasEditor({
     const raw = search.get('draft');
     if (!raw) return;
     try {
+      setCreatorOpen(true);
       if (raw.length > 16000) throw new Error();
       const data = JSON.parse(raw) as Record<string, unknown>;
       if (typeof data.prompt !== 'string' || data.prompt.length > 4000)
@@ -230,6 +264,7 @@ export default function LiveCanvasEditor({
     if (!saver?.dirty()) return;
     setStatus((s) => (s === 'conflict' || s === 'error' ? s : 'dirty'));
     const timer = setTimeout(() => {
+      if (store.getState().checkpoint) return;
       if (status !== 'conflict' && status !== 'error')
         void saver.flush().catch(() => {});
     }, 800);
@@ -375,6 +410,15 @@ export default function LiveCanvasEditor({
     },
     [mergeAssets, errorText],
   );
+  useEffect(() => {
+    if (!menu) return;
+    const close = (event: PointerEvent) => {
+      if (!(event.target as HTMLElement).closest('[role=menu]'))
+        setMenu(undefined);
+    };
+    window.addEventListener('pointerdown', close);
+    return () => window.removeEventListener('pointerdown', close);
+  }, [menu]);
   const selectedNode = graph.nodes.find((n) => n.id === selected[0]);
   const generator =
     selectedNode?.type === 'generate' ? selectedNode : undefined;
@@ -388,34 +432,44 @@ export default function LiveCanvasEditor({
     .flatMap((n) => (n?.type === 'text' ? [n.data.text] : []))
     .join('\n');
   const linkedRefs = generator
-    ? incoming
-        .filter((e) => ['reference', 'first', 'last'].includes(e.role))
-        .map((e) => graph.nodes.find((n) => n.id === e.source))
-        .flatMap((n) =>
-          n?.type === 'image' ? [assets.get(n.data.assetId)] : [],
-        )
-        .filter((a): a is Asset => !!a)
+    ? Array.from(
+        new Map(
+          incoming
+            .filter((e) => ['reference', 'first', 'last'].includes(e.role))
+            .map((e) => graph.nodes.find((n) => n.id === e.source))
+            .flatMap((n) =>
+              n?.type === 'image' ? [assets.get(n.data.assetId)] : [],
+            )
+            .filter((a): a is Asset => !!a)
+            .map((a) => [a.id, a]),
+        ).values(),
+      )
     : quickRefs;
   const center = () => {
-    const bounds = root.current?.getBoundingClientRect();
+    const bounds = canvasSurface.current?.getBoundingClientRect();
     const point = flow.screenToFlowPosition({
       x: (bounds?.left || 0) + (bounds?.width || 900) / 2,
       y: (bounds?.top || 0) + (bounds?.height || 700) / 2,
     });
+    point.x -= 150;
+    point.y -= 110;
     const nodes = store.getState().graph.nodes;
-    for (
-      let i = 0;
-      i < 500 &&
-      nodes.some(
+    const clear = (p: { x: number; y: number }) =>
+      !nodes.some(
         (n) =>
-          point.x < n.position.x + n.size.width + 30 &&
-          point.x + 300 > n.position.x &&
-          point.y < n.position.y + n.size.height + 30 &&
-          point.y + 240 > n.position.y,
+          p.x < n.position.x + n.size.width + 24 &&
+          p.x + 300 > n.position.x &&
+          p.y < n.position.y + n.size.height + 24 &&
+          p.y + 240 > n.position.y,
       );
-      i++
-    )
-      point.x += 340;
+    for (let ring = 0; ring < 24; ring++) {
+      for (let dy = -ring; dy <= ring; dy++)
+        for (let dx = -ring; dx <= ring; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== ring) continue;
+          const candidate = { x: point.x + dx * 340, y: point.y + dy * 280 };
+          if (clear(candidate)) return candidate;
+        }
+    }
     return point;
   };
   const addMediaToGraph = (
@@ -480,6 +534,8 @@ export default function LiveCanvasEditor({
     for (const node of media.nodes) g = connect(g, node.id, id);
     safeChange(() => g);
     store.getState().select([id]);
+    setCreatorOpen(true);
+    setMenu(undefined);
     return id;
   };
   const changeGenerator = (value: GenerateData) => {
@@ -530,10 +586,73 @@ export default function LiveCanvasEditor({
       return next;
     });
   };
+  const derive = (
+    ids: string[],
+    position?: { x: number; y: number },
+    kind?: 'image' | 'video',
+  ) => {
+    const g = store.getState().graph;
+    const inputs = g.nodes.filter(
+      (n) => ids.includes(n.id) && (n.type === 'text' || n.type === 'image'),
+    );
+    if (!inputs.length) {
+      setNotice('选择文字或图片，再创建关联的生成节点。');
+      return;
+    }
+    const catalog = queries.getQueryData<Schema['Catalog']>(['canvas-catalog']);
+    const model = kind
+      ? catalog?.models.find((m) => m.kind === kind)
+      : undefined;
+    const defaults = kind
+      ? { ...blankGenerator(), seconds: kind === 'video' ? 4 : null }
+      : quick;
+    const data: GenerateData = model
+      ? {
+          ...defaults,
+          modelId: model.id,
+          quality: model.capabilities.qualities?.[0] || 'low',
+          ratio: model.capabilities.ratios?.[0] || '1:1',
+          resolution: model.capabilities.resolutions?.[0] || '1K',
+          seconds:
+            kind === 'video' ? model.capabilities.seconds?.[0] || 4 : null,
+        }
+      : defaults;
+    const id = crypto.randomUUID();
+    const right =
+      Math.max(...inputs.map((n) => n.position.x + n.size.width)) + 160;
+    const top = Math.min(...inputs.map((n) => n.position.y));
+    const node: GraphNode = {
+      id,
+      type: 'generate',
+      position: position || { x: Math.min(1e6, right), y: top },
+      size: { width: 300, height: 300 },
+      locked: false,
+      data: { ...data, prompt: '', jobId: null, status: 'IDLE', error: null },
+    };
+    let next = { ...g, nodes: [...g.nodes, node] };
+    for (const input of inputs) next = connect(next, input.id, id);
+    safeChange(() => next);
+    store.getState().select([id]);
+    setCreatorOpen(true);
+    setMenu(undefined);
+    setNotice(
+      kind && !model
+        ? `已连接节点；请先在模型管理中配置${kind === 'video' ? '视频' : '图片'}模型。`
+        : '已连接所选提示词与参考图。核对参数和积分后点击生成。',
+    );
+    void flow.fitView({
+      nodes: inputs.map((n) => ({ id: n.id })).concat({ id }),
+      padding: 0.22,
+      maxZoom: viewport.zoom,
+      duration: 240,
+    });
+  };
   const run = (nodeId?: string) =>
     void action(async () => {
       if (readonly) return;
       const id = nodeId || addGenerator();
+      store.getState().select([id]);
+      setCreatorOpen(true);
       const g = store.getState().graph;
       const node = g.nodes.find((n) => n.id === id);
       if (!node || node.type !== 'generate')
@@ -546,17 +665,18 @@ export default function LiveCanvasEditor({
       const linked = g.edges.filter((e) => e.target === id);
       if (linked.some((e) => e.role === 'last'))
         throw new Error('当前模型尚不支持尾帧输入，请移除尾帧连线。');
+      const referenceIds = new Set<string>();
       const refs = linked.flatMap((e) => {
         const n = g.nodes.find((n) => n.id === e.source);
-        return n?.type === 'image'
-          ? [{ asset_id: n.data.assetId, role: 'reference' }]
-          : [];
+        if (n?.type !== 'image' || referenceIds.has(n.data.assetId)) return [];
+        referenceIds.add(n.data.assetId);
+        return [{ asset_id: n.data.assetId, role: 'reference' }];
       });
       const text = linked.flatMap((e) => {
         const n = g.nodes.find((n) => n.id === e.source);
         return n?.type === 'text' ? [n.data.text] : [];
       });
-      const body: Draft = {
+      const body: Draft = pending.current.get(id)?.body || {
         model_id: node.data.modelId,
         prompt: [...text, node.data.prompt || ''].filter(Boolean).join('\n'),
         quality: node.data.quality,
@@ -568,6 +688,46 @@ export default function LiveCanvasEditor({
         project_id: info.id,
         node_id: id,
       };
+      if (!pending.current.has(id)) {
+        const catalog = queries.getQueryData<
+          Awaited<ReturnType<typeof generationApi.catalog>>
+        >(['canvas-catalog']);
+        const model = catalog?.models.find((m) => m.id === body.model_id);
+        if (!model)
+          throw new Error('先在创作参数里选择当前可用的图片或视频模型。');
+        if (
+          model.kind === 'image' &&
+          (body.references || []).length &&
+          !model.capabilities.supports_edit
+        )
+          throw new Error(
+            `「${model.display_name}」尚未开启图片编辑。请更换支持参考图的模型，或由管理员在模型与定价中开启“支持图片编辑”。`,
+          );
+        const maximum = Math.min(
+          model.capabilities.max_refs || 0,
+          model.kind === 'video' ? 1 : 4,
+        );
+        if ((body.references || []).length > maximum)
+          throw new Error(
+            `「${model.display_name}」最多支持 ${maximum} 张参考图，当前连接了 ${(body.references || []).length} 张。请移除多余参考图或切换模型。`,
+          );
+        if (!body.prompt.trim())
+          throw new Error('请连接文字提示词，或在创作参数里填写创意描述。');
+        if (body.prompt.length > 4000)
+          throw new Error('合并后的提示词超过 4000 字，请精简后再生成。');
+        await generationApi.quote(
+          {
+            model_id: body.model_id,
+            quality: body.quality,
+            ratio: body.ratio,
+            resolution: body.resolution,
+            n: body.n,
+            seconds: body.seconds,
+            ref_count: (body.references || []).length,
+          },
+          me.csrf_token,
+        );
+      }
       await saverRef.current?.flush();
       let submission = pending.current.get(id);
       if (!submission) {
@@ -586,6 +746,7 @@ export default function LiveCanvasEditor({
         void queries.invalidateQueries({
           queryKey: ['canvas-jobs', me.user.id, info.id],
         });
+        setCreatorOpen(false);
         setNotice('生成任务已提交，结果会自动连回画布。');
       } catch (e) {
         if (e instanceof SessionError && e.status < 500)
@@ -634,11 +795,14 @@ export default function LiveCanvasEditor({
           ...g,
           nodes: g.nodes.filter((n) => !ids.has(n.id)),
           edges: g.edges.filter(
-            (e) => !ids.has(e.source) && !ids.has(e.target),
+            (e) =>
+              !ids.has(e.source) &&
+              !ids.has(e.target) &&
+              !edgeSelection.includes(e.id),
           ),
         };
       }),
-    [safeChange, store],
+    [safeChange, store, edgeSelection],
   );
   const copy = useCallback(
     (cut = false) => {
@@ -661,9 +825,89 @@ export default function LiveCanvasEditor({
     copy();
     paste();
   };
+  const add = (
+    type: 'text' | 'generate' | 'upload' | 'library',
+    position?: { x: number; y: number },
+  ) => {
+    setMenu(undefined);
+    if (readonly) return;
+    if (type === 'upload') {
+      replacement.current = undefined;
+      file.current?.click();
+      return;
+    }
+    if (type === 'library') {
+      setPicker(true);
+      return;
+    }
+    if (type === 'generate') {
+      addGenerator();
+      return;
+    }
+    const node: GraphNode = {
+      id: crypto.randomUUID(),
+      type: 'text',
+      position: position || center(),
+      size: { width: 300, height: 210 },
+      locked: false,
+      data: { text: '' },
+    };
+    safeChange((g) => ({ ...g, nodes: [...g.nodes, node] }));
+    store.getState().select([node.id]);
+    setEditingNode(node.id);
+  };
   useEffect(() => {
     const keydown = (e: KeyboardEvent) => {
       if (editableTarget(e.target)) return;
+      if (
+        e.target instanceof HTMLElement &&
+        e.target !== document.body &&
+        !root.current?.contains(e.target)
+      )
+        return;
+      if (e.key === 'Escape') {
+        setMenu(undefined);
+        setHelpOpen(false);
+        setCreatorOpen(false);
+        setInspector(false);
+        setEditingNode(undefined);
+        setEdgeSelection([]);
+        store.getState().select([]);
+        return;
+      }
+      const current = store.getState();
+      const focusSelected = () =>
+        void flow.fitView({
+          nodes: current.selected.map((id) => ({ id })),
+          padding: 0.3,
+          maxZoom: 1.2,
+          duration: 200,
+        });
+      if (!e.ctrlKey && !e.metaKey && e.shiftKey && e.key === '!') {
+        e.preventDefault();
+        setCreatorOpen(false);
+        void flow.fitView({ padding: 0.2, duration: 200 });
+        return;
+      }
+      if (e.shiftKey && (e.code === 'Digit1' || e.code === 'Digit0')) {
+        e.preventDefault();
+        if (e.code === 'Digit1') {
+          setCreatorOpen(false);
+          void flow.fitView({ padding: 0.2, duration: 200 });
+        } else void flow.zoomTo(1, { duration: 160 });
+        return;
+      }
+      if (!e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        focusSelected();
+        return;
+      }
+      if (['+', '=', '-'].includes(e.key)) {
+        e.preventDefault();
+        if (e.key === '-') void flow.zoomOut({ duration: 100 });
+        else void flow.zoomIn({ duration: 100 });
+        return;
+      }
       const mod = e.ctrlKey || e.metaKey;
       if (e.code === 'Space') {
         e.preventDefault();
@@ -672,6 +916,27 @@ export default function LiveCanvasEditor({
       if (e.key.toLowerCase() === 'h' && !mod) setPan(true);
       if (e.key.toLowerCase() === 'v' && !mod) setPan(false);
       if (readonly) return;
+      if (!mod && !e.repeat && !e.altKey) {
+        if (e.key.toLowerCase() === 't') {
+          e.preventDefault();
+          add('text');
+        }
+        if (e.key.toLowerCase() === 'g') {
+          e.preventDefault();
+          add('generate');
+        }
+        if (e.key.toLowerCase() === 'i') {
+          e.preventDefault();
+          add('upload');
+        }
+      }
+      if (mod && e.key === 'Enter' && current.selected.length === 1) {
+        e.preventDefault();
+        const node = current.graph.nodes.find(
+          (n) => n.id === current.selected[0],
+        );
+        if (node?.type === 'generate') run(node.id);
+      }
       if (
         mod &&
         ['a', 'c', 'x', 'v', 'd', 'z', 'y', 's'].includes(e.key.toLowerCase())
@@ -710,47 +975,34 @@ export default function LiveCanvasEditor({
       window.removeEventListener('keyup', keyup);
       window.removeEventListener('blur', blur);
     };
-  }, [store, readonly, copy, paste, remove]);
-  const add = (type: 'text' | 'generate' | 'upload' | 'library') => {
-    if (readonly) return;
-    if (type === 'upload') {
-      replacement.current = undefined;
-      file.current?.click();
-      return;
-    }
-    if (type === 'library') {
-      setPicker(true);
-      return;
-    }
-    if (type === 'generate') {
-      addGenerator();
-      return;
-    }
-    const node: GraphNode = {
-      id: crypto.randomUUID(),
-      type: 'text',
-      position: center(),
-      size: { width: 260, height: 210 },
-      locked: false,
-      data: { text: '' },
-    };
-    safeChange((g) => ({ ...g, nodes: [...g.nodes, node] }));
-    store.getState().select([node.id]);
-  };
+  }, [store, readonly, copy, paste, remove, flow, quick, quickRefs]);
+  const nodeCache = useRef(new Map<string, FlowNode>());
   const nodes = useMemo(
     (): FlowNode[] =>
-      graph.nodes.map((node) => ({
-        id: node.id,
-        type: 'canvas',
-        position: node.position,
-        data: { node },
-        width: node.size.width,
-        height: node.size.height,
-        style: { width: node.size.width, height: node.size.height },
-        selected: selected.includes(node.id),
-        draggable: !readonly && !node.locked,
-        connectable: !readonly && !node.locked,
-      })),
+      graph.nodes.map((node) => {
+        const cached = nodeCache.current.get(node.id);
+        const isSelected = selected.includes(node.id);
+        if (
+          cached?.data.node === node &&
+          cached.selected === isSelected &&
+          cached.draggable === (!readonly && !node.locked)
+        )
+          return cached;
+        const next: FlowNode = {
+          id: node.id,
+          type: 'canvas',
+          position: node.position,
+          data: { node },
+          width: node.size.width,
+          height: node.size.height,
+          style: { width: node.size.width, height: node.size.height },
+          selected: isSelected,
+          draggable: !readonly && !node.locked,
+          connectable: !readonly && !node.locked,
+        };
+        nodeCache.current.set(node.id, next);
+        return next;
+      }),
     [graph.nodes, selected, readonly],
   );
   const edges = useMemo(
@@ -764,11 +1016,28 @@ export default function LiveCanvasEditor({
           last: '尾帧',
           result: '结果',
         }[e.role],
-        type: 'smoothstep',
+        type: 'default',
+        selected: edgeSelection.includes(e.id),
+        interactionWidth: 24,
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          width: 16,
+          height: 16,
+          color: e.role === 'result' ? '#8c9b95' : '#759c8e',
+        },
+        style: {
+          stroke: e.role === 'result' ? '#9ca9a2' : '#759c8e',
+          strokeWidth: edgeSelection.includes(e.id) ? 3 : 1.8,
+        },
         selectable: !readonly,
       })),
-    [graph.edges, readonly],
+    [graph.edges, readonly, edgeSelection],
   );
+  useEffect(() => {
+    const ids = new Set(graph.nodes.map((n) => n.id));
+    for (const id of nodeCache.current.keys())
+      if (!ids.has(id)) nodeCache.current.delete(id);
+  }, [graph.nodes]);
   const onNodesChange = (changes: NodeChange<FlowNode>[]) => {
     const selectedChanges = changes.filter((c) => c.type === 'select');
     if (selectedChanges.length) {
@@ -784,31 +1053,37 @@ export default function LiveCanvasEditor({
     const changed = changes.filter(
       (c) => c.type === 'position' || (c.type === 'dimensions' && c.resizing),
     );
-    if (changed.length)
-      safeChange(
-        (g) => ({
-          ...g,
-          nodes: g.nodes.map((n) => {
-            if (n.locked) return n;
-            let next = n;
-            for (const c of changed) {
-              if (!('id' in c) || c.id !== n.id) continue;
-              if (c.type === 'position' && c.position)
-                next = { ...next, position: c.position };
-              if (c.type === 'dimensions' && c.dimensions)
-                next = {
-                  ...next,
-                  size: {
-                    width: c.dimensions.width,
-                    height: c.dimensions.height,
-                  },
-                };
-            }
-            return next;
-          }),
+    if (changed.length) {
+      const update = (g: Graph) => ({
+        ...g,
+        nodes: g.nodes.map((n) => {
+          if (n.locked) return n;
+          let next = n;
+          for (const c of changed) {
+            if (!('id' in c) || c.id !== n.id) continue;
+            if (c.type === 'position' && c.position)
+              next = {
+                ...next,
+                position: {
+                  x: Math.max(-1e6, Math.min(1e6, c.position.x)),
+                  y: Math.max(-1e6, Math.min(1e6, c.position.y)),
+                },
+              };
+            if (c.type === 'dimensions' && c.dimensions)
+              next = {
+                ...next,
+                size: {
+                  width: c.dimensions.width,
+                  height: c.dimensions.height,
+                },
+              };
+          }
+          return next;
         }),
-        false,
-      );
+      });
+      if (store.getState().checkpoint) store.getState().preview(update);
+      else safeChange(update, false);
+    }
   };
   const onConnect = (c: Connection) =>
     safeChange((g) => connect(g, c.source, c.target));
@@ -823,6 +1098,29 @@ export default function LiveCanvasEditor({
       assets,
       jobs: jobMap,
       readonly,
+      busy,
+      editing: editingNode,
+      selectedCount: selected.length,
+      edit: setEditingNode,
+      derive: (id: string) => derive([id]),
+      info: (id: string) => {
+        setCreatorOpen(false);
+        store.getState().select([id]);
+        setTab('properties');
+        setInspector(true);
+      },
+      configure: (id: string) => {
+        store.getState().select([id]);
+        setCreatorOpen(true);
+      },
+      duplicate: (id: string) => {
+        store.getState().select([id]);
+        duplicate();
+      },
+      remove: (id: string) => {
+        store.getState().select([id]);
+        remove();
+      },
       text: (id: string, text: string) =>
         safeChange((g) => ({
           ...g,
@@ -841,7 +1139,23 @@ export default function LiveCanvasEditor({
       begin: () => store.getState().begin(),
       end: () => store.getState().end(),
     }),
-    [assets, jobMap, readonly, safeChange, action, me.csrf_token, refreshAsset],
+    [
+      assets,
+      jobMap,
+      readonly,
+      safeChange,
+      action,
+      me.csrf_token,
+      refreshAsset,
+      editingNode,
+      busy,
+      selected,
+      quick,
+      quickRefs,
+      remove,
+      copy,
+      paste,
+    ],
   );
   const viewportChanged = useRef(false);
   const reloadLatest = () =>
@@ -873,9 +1187,21 @@ export default function LiveCanvasEditor({
       saverRef.current?.initialize(saverRef.current.revision);
       navigate(`/canvas/${copy.project.id}`);
     });
+  const nodeLeft = generator
+    ? viewport.x + generator.position.x * viewport.zoom
+    : 0;
+  const panelRight = generator
+    ? nodeLeft + generator.size.width * viewport.zoom + 24
+    : 0;
+  const panelLeft =
+    panelRight + 330 <= surfaceSize.width - 12
+      ? panelRight
+      : nodeLeft >= 366
+        ? nodeLeft - 354
+        : Math.max(12, surfaceSize.width - 342);
   return (
     <div
-      className={`canvas-shell live-canvas ${readonly ? 'readonly' : ''}`}
+      className={`canvas-shell live-canvas ${creatorOpen ? 'creator-open' : 'creator-closed'} ${generator ? 'creator-local' : ''} ${inspector ? 'inspector-open' : 'inspector-closed'} ${pan || space ? 'is-panning' : ''} ${readonly ? 'readonly' : ''}`}
       ref={root}
       tabIndex={-1}
       onPaste={(e) => {
@@ -890,6 +1216,27 @@ export default function LiveCanvasEditor({
       }}
     >
       <CanvasCreator
+        onClose={() => {
+          setCreatorOpen(false);
+          root.current?.focus({ preventScroll: true });
+        }}
+        floating={!!generator}
+        style={
+          generator
+            ? {
+                left: panelLeft,
+                top: Math.max(
+                  70,
+                  Math.min(
+                    viewport.y + generator.position.y * viewport.zoom + 54,
+                    surfaceSize.height +
+                      38 -
+                      Math.min(620, surfaceSize.height - 32),
+                  ),
+                ),
+              }
+            : undefined
+        }
         value={generatorData}
         onChange={changeGenerator}
         references={linkedRefs}
@@ -912,6 +1259,19 @@ export default function LiveCanvasEditor({
       />
       <div className="canvas-main">
         <div className="canvas-head">
+          <button
+            className={`tool-button canvas-creator-toggle ${creatorOpen ? 'active' : ''}`}
+            aria-label="切换创作参数"
+            aria-expanded={creatorOpen}
+            onClick={() => setCreatorOpen((v) => !v)}
+          >
+            {creatorOpen ? (
+              <PanelLeftClose size={16} />
+            ) : (
+              <PanelLeftOpen size={16} />
+            )}
+            <span>创作参数</span>
+          </button>
           <div className="canvas-breadcrumb">
             <Link to="/canvas" className="crumb-muted">
               无限画布
@@ -975,6 +1335,7 @@ export default function LiveCanvasEditor({
             <button
               className="tool-button"
               aria-label="打开属性面板"
+              aria-expanded={inspector}
               onClick={() => setInspector(!inspector)}
             >
               <Settings2 size={14} />
@@ -998,7 +1359,7 @@ export default function LiveCanvasEditor({
             </button>
           </div>
         )}
-        {notice && (
+        {notice && !error && (
           <div className="live-canvas-notice" role="status">
             {notice}
             <button
@@ -1011,6 +1372,7 @@ export default function LiveCanvasEditor({
           </div>
         )}
         <div
+          ref={canvasSurface}
           className="react-canvas-wrap"
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => {
@@ -1040,17 +1402,29 @@ export default function LiveCanvasEditor({
               minZoom={0.1}
               maxZoom={4}
               onlyRenderVisibleElements
-              nodesDraggable={!readonly && !pan && !space}
+              nodesDraggable={!readonly && !space}
               nodesConnectable={!readonly}
-              elementsSelectable={!pan && !space}
+              elementsSelectable={!space}
               selectionOnDrag={!pan && !space}
-              panOnDrag={pan || space ? true : [1, 2]}
+              selectionMode={SelectionMode.Partial}
+              nodeDragThreshold={4}
+              connectionRadius={36}
+              connectOnClick
+              zoomOnDoubleClick={false}
+              panOnDrag={space ? true : pan ? [0, 1] : [1]}
               panActivationKeyCode="Space"
-              multiSelectionKeyCode="Shift"
+              multiSelectionKeyCode={['Shift', 'Control', 'Meta']}
               selectionKeyCode="Shift"
               deleteKeyCode={null}
               onNodesChange={onNodesChange}
               onEdgesChange={(changes) => {
+                for (const c of changes)
+                  if (c.type === 'select')
+                    setEdgeSelection((old) =>
+                      c.selected
+                        ? Array.from(new Set([...old, c.id]))
+                        : old.filter((id) => id !== c.id),
+                    );
                 if (readonly) return;
                 const remove = changes
                   .filter((c) => c.type === 'remove')
@@ -1064,6 +1438,119 @@ export default function LiveCanvasEditor({
               onNodeDragStart={() => store.getState().begin()}
               onNodeDragStop={() => store.getState().end()}
               onConnect={onConnect}
+              onEdgeClick={() => store.getState().select([])}
+              onClickConnectStart={() => setCreatorOpen(false)}
+              onConnectStart={(event) => {
+                setCreatorOpen(false);
+                const p = 'touches' in event ? event.touches[0] : event;
+                if (p) connectStart.current = { x: p.clientX, y: p.clientY };
+              }}
+              onConnectEnd={(event, state) => {
+                if (readonly || state.isValid || !state.fromNode) return;
+                if (state.toNode) {
+                  const source =
+                    state.fromHandle?.type === 'target'
+                      ? state.toNode.id
+                      : state.fromNode.id;
+                  const target =
+                    state.fromHandle?.type === 'target'
+                      ? state.fromNode.id
+                      : state.toNode.id;
+                  setNotice(
+                    connectionIssue(store.getState().graph, source, target) ||
+                      '请连接对应的输入和输出端口。',
+                  );
+                  return;
+                }
+                const origin = store
+                  .getState()
+                  .graph.nodes.find((n) => n.id === state.fromNode!.id);
+                if (
+                  state.fromHandle?.type !== 'source' ||
+                  !origin ||
+                  !['text', 'image'].includes(origin.type)
+                )
+                  return;
+                const point =
+                  'changedTouches' in event ? event.changedTouches[0] : event;
+                if (
+                  !point ||
+                  !connectStart.current ||
+                  Math.hypot(
+                    point.clientX - connectStart.current.x,
+                    point.clientY - connectStart.current.y,
+                  ) < 8
+                )
+                  return;
+                const bounds = canvasSurface.current?.getBoundingClientRect();
+                setMenu({
+                  x: point.clientX - (bounds?.left || 0),
+                  y: point.clientY - (bounds?.top || 0),
+                  point: flow.screenToFlowPosition({
+                    x: point.clientX,
+                    y: point.clientY,
+                  }),
+                  source: origin.id,
+                });
+              }}
+              onPaneContextMenu={(event) => {
+                event.preventDefault();
+                if (readonly) return;
+                const b = canvasSurface.current?.getBoundingClientRect();
+                setMenu({
+                  x: event.clientX - (b?.left || 0),
+                  y: event.clientY - (b?.top || 0),
+                  point: flow.screenToFlowPosition({
+                    x: event.clientX,
+                    y: event.clientY,
+                  }),
+                });
+              }}
+              onDoubleClick={(event) => {
+                if (
+                  (event.target as HTMLElement).closest(
+                    '.react-flow__node,.react-flow__edge,.react-flow__panel',
+                  ) ||
+                  readonly
+                )
+                  return;
+                const b = canvasSurface.current?.getBoundingClientRect();
+                setMenu({
+                  x: event.clientX - (b?.left || 0),
+                  y: event.clientY - (b?.top || 0),
+                  point: flow.screenToFlowPosition({
+                    x: event.clientX,
+                    y: event.clientY,
+                  }),
+                });
+              }}
+              onNodeContextMenu={(event, node) => {
+                event.preventDefault();
+                if (readonly) return;
+                store.getState().select([node.id]);
+                const b = canvasSurface.current?.getBoundingClientRect();
+                setMenu({
+                  x: event.clientX - (b?.left || 0),
+                  y: event.clientY - (b?.top || 0),
+                  point: node.position,
+                  node: node.id,
+                });
+              }}
+              onEdgeContextMenu={(event, edge) => {
+                event.preventDefault();
+                if (readonly) return;
+                setEdgeSelection([edge.id]);
+                const b = canvasSurface.current?.getBoundingClientRect();
+                setMenu({
+                  x: event.clientX - (b?.left || 0),
+                  y: event.clientY - (b?.top || 0),
+                  point: flow.screenToFlowPosition({
+                    x: event.clientX,
+                    y: event.clientY,
+                  }),
+                  edge: edge.id,
+                });
+              }}
               onMoveStart={() => {
                 viewportChanged.current = true;
               }}
@@ -1072,8 +1559,34 @@ export default function LiveCanvasEditor({
                   safeChange((g) => ({ ...g, viewport }), false);
                 viewportChanged.current = false;
               }}
-              onPaneClick={() => store.getState().select([])}
+              onNodeClick={(event, node) => {
+                if (
+                  (event.target as HTMLElement).closest('.react-flow__handle')
+                )
+                  return;
+                setCreatorOpen(node.data.node.type === 'generate');
+              }}
+              onPaneClick={() => {
+                setCreatorOpen(false);
+                store.getState().select([]);
+                setEdgeSelection([]);
+                setMenu(undefined);
+                setEditingNode(undefined);
+              }}
+              isValidConnection={(c) =>
+                !connectionIssue(store.getState().graph, c.source, c.target)
+              }
               onNodeDoubleClick={(_, n) => {
+                if (
+                  n.data.node.type === 'text' &&
+                  !readonly &&
+                  !n.data.node.locked
+                )
+                  setEditingNode(n.id);
+                if (n.data.node.type === 'generate') {
+                  store.getState().select([n.id]);
+                  setCreatorOpen(true);
+                }
                 if (
                   n.data.node.type === 'image' ||
                   n.data.node.type === 'video'
@@ -1093,88 +1606,144 @@ export default function LiveCanvasEditor({
                   size={1}
                 />
               )}
-              <Panel position="top-left" className="floating-tools">
-                <button
+              <Panel position="bottom-center" className="floating-tools">
+                <CanvasToolButton
+                  hint="选择 · V / Shift 框选"
                   className={`tool-button ${!pan ? 'active' : ''}`}
                   aria-label="选择工具"
                   onClick={() => setPan(false)}
                 >
                   <MousePointer2 size={15} />
-                </button>
-                <button
+                </CanvasToolButton>
+                <CanvasToolButton
+                  hint="平移 · H / 按住空格"
                   className={`tool-button ${pan ? 'active' : ''}`}
                   aria-label="平移工具"
                   onClick={() => setPan(true)}
                 >
                   <Hand size={15} />
-                </button>
+                </CanvasToolButton>
                 <span className="separator" />
-                <button
+                <CanvasToolButton
+                  hint="文字 · T"
                   className="tool-button"
                   aria-label="添加文字节点"
                   disabled={readonly}
                   onClick={() => add('text')}
                 >
                   <Type size={15} />
-                </button>
-                <button
+                </CanvasToolButton>
+                <CanvasToolButton
+                  hint="图片 / 视频 · I"
                   className="tool-button"
                   aria-label="上传素材到画布"
                   disabled={readonly || busy}
                   onClick={() => add('upload')}
                 >
                   <ImageIcon size={15} />
-                </button>
-                <button
+                </CanvasToolButton>
+                <CanvasToolButton
+                  hint="生成节点 · G"
                   className="tool-button"
                   aria-label="添加生成节点"
                   disabled={readonly}
                   onClick={() => add('generate')}
                 >
                   <Sparkles size={15} />
-                </button>
+                </CanvasToolButton>
                 <span className="separator" />
-                <button
+                <CanvasToolButton
+                  hint="撤销 · Ctrl Z"
                   className="tool-button"
                   aria-label="撤销"
                   disabled={!past || readonly}
                   onClick={() => store.getState().undo()}
                 >
                   <Undo2 size={15} />
-                </button>
-                <button
+                </CanvasToolButton>
+                <CanvasToolButton
+                  hint="重做 · Ctrl Shift Z"
                   className="tool-button"
                   aria-label="重做"
                   disabled={!future || readonly}
                   onClick={() => store.getState().redo()}
                 >
                   <Redo2 size={15} />
-                </button>
+                </CanvasToolButton>
               </Panel>
-              <Controls position="bottom-left" showInteractive={false} />
-              <MiniMap
-                position="bottom-right"
-                pannable
-                zoomable
-                nodeColor={(n) =>
-                  n.type === 'generate' ? '#acc6bd' : '#d8dfdf'
-                }
-              />
-              <Panel position="bottom-center" className="canvas-bottom-hint">
+
+              {miniMapOpen && (
+                <MiniMap
+                  position="bottom-right"
+                  pannable
+                  zoomable
+                  nodeColor={(n) =>
+                    n.type === 'generate' ? '#acc6bd' : '#d8dfdf'
+                  }
+                />
+              )}
+              <Panel position="bottom-left" className="canvas-bottom-hint">
                 <button
                   className="icon-btn"
                   aria-label="适应画布"
-                  onClick={() => void flow.fitView({ padding: 0.2 })}
+                  onClick={() => {
+                    setCreatorOpen(false);
+                    void flow.fitView({ padding: 0.2 });
+                  }}
                 >
                   <Maximize2 size={14} />
                 </button>
                 <button
-                  className="text-action"
+                  className="icon-btn"
+                  aria-label="100%"
+                  title="回到 100%（Shift+0）"
                   onClick={() => void flow.zoomTo(1)}
                 >
-                  100%
+                  <RotateCcw size={14} />
                 </button>
-                <span>Space 拖动画布 · 滚轮缩放 · Shift 多选</span>
+                <button
+                  className="icon-btn"
+                  aria-label="缩小画布"
+                  onClick={() => void flow.zoomOut({ duration: 120 })}
+                >
+                  <Minus size={14} />
+                </button>
+                <input
+                  aria-label="画布缩放"
+                  type="range"
+                  min="10"
+                  max="400"
+                  step="5"
+                  value={Math.round(viewport.zoom * 100)}
+                  onChange={(e) =>
+                    void flow.zoomTo(Number(e.target.value) / 100)
+                  }
+                />
+                <output aria-label="当前缩放">
+                  {Math.round(viewport.zoom * 100)}%
+                </output>
+                <button
+                  className="icon-btn"
+                  aria-label="放大画布"
+                  onClick={() => void flow.zoomIn({ duration: 120 })}
+                >
+                  <Plus size={14} />
+                </button>
+                <button
+                  className="icon-btn"
+                  aria-label="切换小地图"
+                  aria-pressed={miniMapOpen}
+                  onClick={() => setMiniMapOpen((v) => !v)}
+                >
+                  <Layers size={14} />
+                </button>
+                <button
+                  className="icon-btn"
+                  aria-label="画布快捷键"
+                  onClick={() => setHelpOpen(true)}
+                >
+                  <HelpCircle size={14} />
+                </button>
               </Panel>
               {!graph.nodes.length && (
                 <Panel position="top-center" className="live-canvas-empty">
@@ -1189,8 +1758,100 @@ export default function LiveCanvasEditor({
                   )}
                 </Panel>
               )}
+              {selected.length > 1 && !readonly && (
+                <Panel position="top-right" className="live-selection-actions">
+                  <strong>已选 {selected.length} 项</strong>
+                  <button
+                    className="btn"
+                    onClick={() => derive(store.getState().selected)}
+                  >
+                    <Sparkles size={14} />
+                    用所选继续创作
+                  </button>
+                  <button
+                    className="icon-btn"
+                    aria-label="聚焦选中节点"
+                    onClick={() =>
+                      void flow.fitView({
+                        nodes: store.getState().selected.map((id) => ({ id })),
+                        padding: 0.3,
+                        maxZoom: 1.2,
+                        duration: 200,
+                      })
+                    }
+                  >
+                    <Maximize2 size={14} />
+                  </button>
+                </Panel>
+              )}
+              {edgeSelection.length > 0 && !readonly && (
+                <Panel position="top-right" className="live-selection-actions">
+                  <span>已选 {edgeSelection.length} 条连线</span>
+                  <button
+                    className="btn"
+                    onClick={() => {
+                      safeChange((g) => ({
+                        ...g,
+                        edges: g.edges.filter(
+                          (e) => !edgeSelection.includes(e.id),
+                        ),
+                      }));
+                      setEdgeSelection([]);
+                    }}
+                  >
+                    断开连线
+                  </button>
+                </Panel>
+              )}
             </ReactFlow>
           </CanvasActions.Provider>
+          {menu && (
+            <CanvasContextMenu
+              menu={menu}
+              width={surfaceSize.width}
+              height={surfaceSize.height}
+              source={graph.nodes.find((n) => n.id === menu.source)}
+              node={graph.nodes.find((n) => n.id === menu.node)}
+              viewport={viewport}
+              onClose={() => {
+                setMenu(undefined);
+                root.current?.focus({ preventScroll: true });
+              }}
+              onDerive={(id, point, kind) => derive([id], point, kind)}
+              onAdd={(type, point) => {
+                if (type !== 'generate') {
+                  add(type, point);
+                  return;
+                }
+                const id = addGenerator();
+                safeChange(
+                  (g) => ({
+                    ...g,
+                    nodes: g.nodes.map((n) =>
+                      n.id === id ? { ...n, position: point } : n,
+                    ),
+                  }),
+                  false,
+                );
+              }}
+              onDuplicate={() => {
+                duplicate();
+                setMenu(undefined);
+              }}
+              onRemove={() => {
+                remove();
+                setMenu(undefined);
+              }}
+              onDisconnect={(id) => {
+                safeChange((g) => ({
+                  ...g,
+                  edges: g.edges.filter((e) => e.id !== id),
+                }));
+                setEdgeSelection([]);
+                setMenu(undefined);
+              }}
+            />
+          )}
         </div>
       </div>
       <aside
@@ -1219,24 +1880,60 @@ export default function LiveCanvasEditor({
         <div className="panel-scroll">
           {tab === 'layers' ? (
             <div className="layer-list">
-              {graph.nodes.map((n) => (
-                <button
-                  key={n.id}
-                  className={selected.includes(n.id) ? 'selected' : ''}
-                  onClick={() => {
-                    store.getState().select([n.id]);
-                    void flow.setCenter(
-                      n.position.x + n.size.width / 2,
-                      n.position.y + n.size.height / 2,
-                      { zoom: 1, duration: 200 },
-                    );
-                  }}
-                >
-                  <Layers size={14} />
-                  <span>{nodeLabel(n)}</span>
-                  {n.locked && <Lock size={12} />}
-                </button>
-              ))}
+              <input
+                className="input"
+                aria-label="搜索画布节点"
+                placeholder="搜索节点名称或文字…"
+                value={layerSearch}
+                onChange={(e) => setLayerSearch(e.target.value)}
+              />
+              <p className="canvas-layer-count">
+                共 {graph.nodes.length} 个节点
+              </p>
+              {layerSearch &&
+                !graph.nodes.some((n) =>
+                  `${nodeLabel(n)} ${n.type === 'text' ? n.data.text : ''}`
+                    .toLocaleLowerCase()
+                    .includes(layerSearch.toLocaleLowerCase()),
+                ) && (
+                  <p className="subtle-hint">
+                    没有匹配的节点，试试其他关键词。
+                  </p>
+                )}
+              {graph.nodes
+                .filter((n) =>
+                  `${nodeLabel(n)} ${n.type === 'text' ? n.data.text : ''}`
+                    .toLocaleLowerCase()
+                    .includes(layerSearch.toLocaleLowerCase()),
+                )
+                .map((n) => (
+                  <button
+                    key={n.id}
+                    className={selected.includes(n.id) ? 'selected' : ''}
+                    onClick={(event) => {
+                      const current = store.getState().selected;
+                      store
+                        .getState()
+                        .select(
+                          event.shiftKey
+                            ? current.includes(n.id)
+                              ? current.filter((id) => id !== n.id)
+                              : [...current, n.id]
+                            : [n.id],
+                        );
+                      setCreatorOpen(n.type === 'generate');
+                      void flow.setCenter(
+                        n.position.x + n.size.width / 2,
+                        n.position.y + n.size.height / 2,
+                        { zoom: 1, duration: 200 },
+                      );
+                    }}
+                  >
+                    <Layers size={14} />
+                    <span>{nodeLabel(n)}</span>
+                    {n.locked && <Lock size={12} />}
+                  </button>
+                ))}
             </div>
           ) : tab === 'tasks' ? (
             <>
@@ -1574,6 +2271,40 @@ export default function LiveCanvasEditor({
                 下载原文件
               </a>
             )}
+          </div>
+        </AssetDialog>
+      )}
+      {helpOpen && (
+        <AssetDialog
+          title="画布操作与快捷键"
+          onClose={() => setHelpOpen(false)}
+        >
+          <div className="canvas-shortcuts">
+            <p>
+              拖空白处平移，拖节点移动；按住 Shift
+              框选，或切换选择工具框选。空格临时平移，滚轮围绕鼠标缩放。
+            </p>
+            {[
+              ['V / H', '选择 / 平移'],
+              ['T / G / I', '文字 / 生成节点 / 上传'],
+              ['双击文字', '进入编辑，Esc 结束'],
+              ['双击空白 / 右键', '就地添加节点'],
+              ['F / Shift+1 / Shift+0', '聚焦所选 / 全部适应 / 100%'],
+              ['Shift+点击', '追加选择'],
+              ['Ctrl+C / V / D', '复制 / 粘贴 / 重复'],
+              ['Delete', '删除选中节点或连线'],
+              ['Ctrl+Z / Shift+Z', '撤销 / 重做'],
+              ['Ctrl+Enter', '运行所选生成节点'],
+              ['Ctrl+S', '立即保存'],
+            ].map(([key, text]) => (
+              <div key={key}>
+                <span>{text}</span>
+                <kbd>{key}</kbd>
+              </div>
+            ))}
+            <p>
+              文字和图片的右侧为输出；生成节点左侧为输入。可拖动端口连线，或点“继续创作”自动连接；生成仍需确认参数和积分。
+            </p>
           </div>
         </AssetDialog>
       )}
