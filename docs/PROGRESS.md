@@ -265,3 +265,8 @@ M1 历史交付未打包、未部署。条款仍是开发占位，正式法律�
 - `generation/events.rs` 使用 PostgreSQL 只追加事件重放，LISTEN/NOTIFY 在提交后经 Redis Pub/Sub 跨实例唤醒；数据库仍为事实来源，丢失唤醒时每秒补查。每用户最多三个连接、实例最多 128 个，槽位租约随连接续期/关闭释放。
 - `/events` 支持 Last-Event-ID 和 after 游标、只查询本人事件；流持续复核会话/账号/MFA，失效立即关闭。事件输出链接重新按本人素材授权签名，不公开上游信息。`/generation/limits` 提供当前等级/分辨率/活跃上限/视频能力。
 - SSE HTTP 隔离回归（归属、重放、连接上限、未来游标、撤销会话断流）与真实 PG→Redis→实例唤醒回归均通过。fmt/clippy/workspace test/check（59 项普通测试）、前端 typecheck/build、OpenAPI/TS 契约通过。原型生成页面仍在下一切片，不标 M5 完成。
+
+
+### CI 视频工具安装等待优化
+
+负责人发现旧的无条件 apt-get update/install 等待超过 11 分钟。工作流改为先检查 ffmpeg、ffprobe、timeout、prlimit，已有工具直接运行真实测试；缺失才安装。软件源连接设 20 秒超时、一次重试，更新和安装各限三分钟，步骤限六分钟；工具缺失仍失败，不跳过视频回归。旧运行仍等待其实际结果，新工作流由后续推送验收。
