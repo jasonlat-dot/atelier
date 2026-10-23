@@ -266,7 +266,7 @@ impl GenerationService {
         if !(1..=100).contains(&limit) || status.as_deref().is_some_and(|s| !is_status(s)) {
             return Err(GenerationError::Validation);
         }
-        let mut ids:Vec<Uuid>=sqlx::query_scalar("SELECT id FROM generation_jobs WHERE owner_id=$1 AND ($2::text IS NULL OR status=$2) AND ($3::uuid IS NULL OR (created_at,id)<(SELECT created_at,id FROM generation_jobs WHERE id=$3 AND owner_id=$1)) AND ($5::uuid IS NULL OR project_id=$5) ORDER BY created_at DESC,id DESC LIMIT $4")
+        let mut ids:Vec<Uuid>=sqlx::query_scalar("SELECT id FROM generation_jobs j WHERE owner_id=$1 AND ($2::text IS NULL OR status=$2) AND ($3::uuid IS NULL OR (created_at,id)<(SELECT created_at,id FROM generation_jobs WHERE id=$3 AND owner_id=$1)) AND ($5::uuid IS NULL OR project_id=$5) AND ($5::uuid IS NOT NULL OR NOT EXISTS(SELECT 1 FROM generation_history_deleted d WHERE d.job_id=j.id)) ORDER BY created_at DESC,id DESC LIMIT $4")
    .bind(owner).bind(status).bind(before).bind(limit+1).bind(project).fetch_all(&self.db).await?;
         let more = ids.len() > limit as usize;
         ids.truncate(limit as usize);
@@ -276,6 +276,32 @@ impl GenerationService {
             items.push(self.get(owner, id).await?);
         }
         Ok(JobPage { items, next_cursor })
+    }
+    pub async fn delete_history(&self, owner: Uuid, id: Uuid) -> Result<(), GenerationError> {
+        let mut tx = self.owner_tx(owner).await?;
+        let finished: bool = sqlx::query_scalar(
+            "SELECT finished_at IS NOT NULL FROM generation_jobs WHERE id=$1 AND owner_id=$2 FOR UPDATE",
+        )
+        .bind(id)
+        .bind(owner)
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or(GenerationError::NotFound)?;
+        if !finished {
+            return Err(GenerationError::State);
+        }
+        let changed = sqlx::query(
+            "INSERT INTO generation_history_deleted(job_id) VALUES($1) ON CONFLICT DO NOTHING",
+        )
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
+        if changed.rows_affected() > 0 {
+            sqlx::query("INSERT INTO audit_logs(actor_id,action,target_type,target_id,after) VALUES($1,'GENERATION_HISTORY_DELETE','generation_job',$2,'{\"hidden\":true}'::jsonb)")
+                .bind(owner).bind(id.to_string()).execute(&mut *tx).await?;
+        }
+        tx.commit().await?;
+        Ok(())
     }
     pub async fn cancel(&self, owner: Uuid, id: Uuid) -> Result<JobReceipt, GenerationError> {
         let mut tx = self.owner_tx(owner).await?;

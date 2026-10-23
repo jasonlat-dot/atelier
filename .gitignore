@@ -14,3 +14,4 @@ playwright-report/
 test-results/
 *.tsbuildinfo
 services/api/data/
+/apps/web/public/ui-register/

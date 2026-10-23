@@ -16,10 +16,12 @@ import {
   Image as ImageIcon,
   Layers,
   LoaderCircle,
+  MoreHorizontal,
   Plus,
   RefreshCw,
   Sparkles,
   Upload,
+  Trash2,
   X,
 } from 'lucide-react';
 import { SessionError, type Me } from '../auth/sessionApi';
@@ -28,6 +30,9 @@ import { useWalletSummaryUpdate } from '../workspace/WorkspaceShell';
 import AssetDialog from '../assets/AssetDialog';
 import { assetsApi, type Asset } from '../assets/assetsApi';
 import ReferencePicker from './ReferencePicker';
+import GenerationHistoryMenu, {
+  type HistoryMenu,
+} from './GenerationHistoryMenu';
 import {
   active,
   failures,
@@ -145,6 +150,11 @@ export default function GenerationPage(props: Props) {
   const [uploading, setUploading] = useState(false);
   const uploadRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<Asset>();
+  const [historyMenu, setHistoryMenu] = useState<HistoryMenu>();
+  const [historyDelete, setHistoryDelete] = useState<Job>();
+  const [historyDeleteError, setHistoryDeleteError] = useState('');
+  const [deletingHistory, setDeletingHistory] = useState(false);
+  const historyDeleteLock = useRef(false);
   const [connection, setConnection] = useState('正在连接');
   const cursor = useRef('');
   const loadVersion = useRef(0);
@@ -503,6 +513,35 @@ export default function GenerationPage(props: Props) {
   };
   const ready = quote && pricedKey === quoteKey && !quoteBusy && !quoteError;
   const disabled = submitBusy || uncertain;
+  const deleteHistory = async () => {
+    if (!historyDelete || historyDeleteLock.current) return;
+    historyDeleteLock.current = true;
+    setDeletingHistory(true);
+    setHistoryDeleteError('');
+    try {
+      await generationApi.deleteHistory(historyDelete.id, me.csrf_token);
+      if (!mounted.current) return;
+      ++loadVersion.current;
+      if (selectedId.current === historyDelete.id) {
+        selectedId.current = undefined;
+        setSelected(undefined);
+      }
+      setJobs((items) => items.filter((job) => job.id !== historyDelete.id));
+      setHistoryDelete(undefined);
+      setFeedback('已删除生成记录，素材与积分流水仍会保留。');
+      await refresh();
+    } catch (error) {
+      if (mounted.current)
+        setHistoryDeleteError(
+          error instanceof SessionError && error.code === 'JOB_STATE_CONFLICT'
+            ? '任务仍在进行中，请等待完成或取消任务后再删除记录。'
+            : errorText(error),
+        );
+    } finally {
+      historyDeleteLock.current = false;
+      if (mounted.current) setDeletingHistory(false);
+    }
+  };
   return (
     <main className="generation-page">
       <header className="gen-heading">
@@ -1057,42 +1096,94 @@ export default function GenerationPage(props: Props) {
           )}
           <div className="gen-task-list">
             {jobs.map((job) => (
-              <button
+              <div
                 key={job.id}
-                className={`gen-task ${selected?.id === job.id ? 'selected' : ''}`}
-                data-status={job.status}
-                aria-pressed={selected?.id === job.id}
-                title={job.prompt}
-                onClick={() => selectJob(job)}
+                className="gen-task-row"
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  const trigger =
+                    event.currentTarget.querySelector<HTMLButtonElement>(
+                      '.gen-task',
+                    )!;
+                  trigger.focus({ preventScroll: true });
+                  setHistoryMenu({
+                    job,
+                    x: event.clientX,
+                    y: event.clientY,
+                    trigger,
+                  });
+                }}
               >
-                <div className="gen-task-icon">
-                  {job.outputs[0]?.asset.thumbnail_url ? (
-                    <img src={job.outputs[0].asset.thumbnail_url} alt="" />
-                  ) : job.kind === 'video' ? (
-                    <Clapperboard size={18} />
-                  ) : (
-                    <ImageIcon size={18} />
-                  )}
-                </div>
-                <div>
-                  <strong>{job.prompt}</strong>
-                  <span>
-                    {job.status === 'SUCCEEDED' && (
-                      <Check size={12} aria-hidden="true" />
+                <button
+                  className={`gen-task ${selected?.id === job.id ? 'selected' : ''}`}
+                  data-status={job.status}
+                  aria-pressed={selected?.id === job.id}
+                  title={job.prompt}
+                  onKeyDown={(event) => {
+                    if (
+                      event.key === 'ContextMenu' ||
+                      (event.shiftKey && event.key === 'F10')
+                    ) {
+                      event.preventDefault();
+                      const bounds =
+                        event.currentTarget.getBoundingClientRect();
+                      setHistoryMenu({
+                        job,
+                        x: bounds.left + 20,
+                        y: bounds.top + 20,
+                        trigger: event.currentTarget,
+                      });
+                    }
+                  }}
+                  onClick={() => selectJob(job)}
+                >
+                  <div className="gen-task-icon">
+                    {job.outputs[0]?.asset.thumbnail_url ? (
+                      <img src={job.outputs[0].asset.thumbnail_url} alt="" />
+                    ) : job.kind === 'video' ? (
+                      <Clapperboard size={18} />
+                    ) : (
+                      <ImageIcon size={18} />
                     )}
-                    {job.cancel_requested && active(job)
-                      ? '正在取消'
-                      : statuses[job.status]}
-                  </span>
-                  <small>
-                    {job.display_name} ·{' '}
-                    {new Date(job.created_at).toLocaleTimeString('zh-CN', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </small>
-                </div>
-              </button>
+                  </div>
+                  <div>
+                    <strong>{job.prompt}</strong>
+                    <span>
+                      {job.status === 'SUCCEEDED' && (
+                        <Check size={12} aria-hidden="true" />
+                      )}
+                      {job.cancel_requested && active(job)
+                        ? '正在取消'
+                        : statuses[job.status]}
+                    </span>
+                    <small>
+                      {job.display_name} ·{' '}
+                      {new Date(job.created_at).toLocaleTimeString('zh-CN', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </small>
+                  </div>
+                </button>
+                <button
+                  className="gen-task-more"
+                  aria-label={`记录操作 ${job.prompt}`}
+                  title="记录操作"
+                  aria-haspopup="menu"
+                  aria-expanded={historyMenu?.job.id === job.id}
+                  onClick={(event) => {
+                    const bounds = event.currentTarget.getBoundingClientRect();
+                    setHistoryMenu({
+                      job,
+                      x: bounds.right - 224,
+                      y: bounds.bottom + 4,
+                      trigger: event.currentTarget,
+                    });
+                  }}
+                >
+                  <MoreHorizontal size={16} />
+                </button>
+              </div>
             ))}
           </div>
           <div className="gen-pagination">
@@ -1122,6 +1213,68 @@ export default function GenerationPage(props: Props) {
           </div>
         </aside>
       </div>
+      {historyMenu && (
+        <GenerationHistoryMenu
+          menu={historyMenu}
+          onClose={() => setHistoryMenu(undefined)}
+          reuseDisabled={disabled || uploading}
+          onView={() => {
+            selectJob(historyMenu.job);
+            setHistoryMenu(undefined);
+            historyMenu.trigger.focus({ preventScroll: true });
+          }}
+          onReuse={() => {
+            void reuse(historyMenu.job);
+            setHistoryMenu(undefined);
+          }}
+          onDelete={() => {
+            setHistoryDelete(historyMenu.job);
+            setHistoryDeleteError('');
+            setHistoryMenu(undefined);
+          }}
+        />
+      )}
+      {historyDelete && (
+        <AssetDialog
+          title="删除这条生成记录？"
+          busy={deletingHistory}
+          onClose={() => setHistoryDelete(undefined)}
+        >
+          <div className="gen-delete-record">
+            <div className="gen-delete-record-icon">
+              <Trash2 size={21} />
+            </div>
+            <p>这条记录将从生成记录列表中移除。</p>
+            <blockquote>{historyDelete.prompt}</blockquote>
+            <p className="gen-delete-record-note">
+              生成的图片或视频仍保留在素材库，画布引用与积分流水不受影响。
+            </p>
+            {historyDeleteError && <p role="alert">{historyDeleteError}</p>}
+            <div className="gen-delete-record-actions">
+              <button
+                className="btn"
+                disabled={deletingHistory}
+                data-initial-focus
+                onClick={() => setHistoryDelete(undefined)}
+              >
+                保留记录
+              </button>
+              <button
+                className="btn gen-delete-record-confirm"
+                disabled={deletingHistory}
+                onClick={() => void deleteHistory()}
+              >
+                {deletingHistory ? (
+                  <LoaderCircle size={15} className="spin" />
+                ) : (
+                  <Trash2 size={15} />
+                )}
+                {deletingHistory ? '正在删除…' : '确认删除记录'}
+              </button>
+            </div>
+          </div>
+        </AssetDialog>
+      )}
       {picker && (
         <ReferencePicker
           selected={form.references}

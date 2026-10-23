@@ -334,11 +334,20 @@ test('no configured chat model gives an honest empty state and mobile controls f
   await expect(
     page.getByText('还没有可用对话模型', { exact: false }),
   ).toBeVisible();
-  await page.getByRole('button', { name: '智能上下文', exact: true }).click();
+  const contextToggle = page.getByRole('button', {
+    name: '展开智能上下文',
+    exact: true,
+  });
+  await expect(contextToggle).toHaveAttribute('aria-expanded', 'false');
+  await contextToggle.click();
+  await expect(
+    page.getByRole('button', { name: '收起智能上下文', exact: true }),
+  ).toHaveAttribute('aria-expanded', 'true');
   await expect(
     page.getByRole('complementary', { name: '智能上下文' }),
   ).toBeVisible();
   await page.getByRole('button', { name: '关闭智能上下文' }).click();
+  await expect(contextToggle).toHaveAttribute('aria-expanded', 'false');
   await page.getByRole('button', { name: '展开对话列表' }).click();
   await expect(
     page.getByRole('complementary', { name: '历史对话' }),

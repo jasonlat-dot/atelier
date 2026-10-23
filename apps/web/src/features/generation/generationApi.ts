@@ -47,6 +47,12 @@ export const generationApi = {
       'POST',
       csrf,
     ),
+  deleteHistory: (id: string, csrf: string) =>
+    request<void>(
+      `/generation/jobs/${encodeURIComponent(id)}/history`,
+      'DELETE',
+      csrf,
+    ),
 };
 export const active = (job: Job) =>
   ['QUEUED', 'ROUTING', 'RUNNING', 'STORING'].includes(job.status);

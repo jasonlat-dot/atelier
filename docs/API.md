@@ -103,6 +103,7 @@ M4 不开放用户生成/任务/quote/SSE 接口，不修改钱包余额；这�
 | GET /generation/jobs?before=UUID&status=…&limit=25 | 本人的任务游标列表，limit 1–100，返回 JobPage |
 | GET /generation/jobs/{id} | 本人任务详情和新签名输出链接；跨用户/不存在 404 |
 | POST /generation/jobs/{id}/cancel | 排队/路由中直接原子取消与全额释放；运行/存储中写取消标记，由 worker 停止并释放；终态重复调用只返回当前结果，不重复扣款/释放 |
+| DELETE /generation/jobs/{id}/history | 仅删除本人的终态任务历史展示，需会话/CSRF，重复调用幂等 204；进行中 409、跨用户/不存在 404。生成任务、素材、画布引用及积分账本保留；不退款。项目范围列表仍返回关联任务 |
 
 任务视图不返回账号 ID、租约令牌、真实模型名、上游任务 ID 或地址。价格和参数快照不可修改，终态不可再更新；同请求键异参 422 IDEMPOTENCY_CONFLICT，余额不足 402，活跃任务超限 429 TOO_MANY_ACTIVE_JOBS，免费层越级 403 RESOLUTION_NOT_ALLOWED，黑名单 422 CONTENT_POLICY。
 

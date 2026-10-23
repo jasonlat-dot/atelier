@@ -390,6 +390,36 @@
   padding: 10px;
   border-radius: 12px;
   min-width: 0;
+  padding-right: 30px;
+}
+.gen-task-row {
+  position: relative;
+  min-width: 0;
+}
+.gen-task-more {
+  display: grid;
+  place-items: center;
+  position: absolute;
+  top: 9px;
+  right: 5px;
+  width: 26px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #7a7872;
+  opacity: 0;
+}
+.gen-task-row:hover .gen-task-more,
+.gen-task-row:focus-within .gen-task-more,
+.gen-task-more[aria-expanded='true'] {
+  opacity: 1;
+}
+.gen-task-more:hover,
+.gen-task-more[aria-expanded='true'] {
+  background: #eceae4;
+  color: #16181d;
 }
 .gen-task.selected {
   border-color: #c2410c;
@@ -901,4 +931,133 @@
 }
 .gen-suggestions button:disabled {
   cursor: default;
+}
+.gen-history-menu {
+  position: fixed;
+  z-index: 100;
+  width: min(224px, calc(100vw - 16px));
+  padding: 6px;
+  border: 1px solid #e6e3db;
+  border-radius: 12px;
+  background: #fffefa;
+  color: #16181d;
+  box-shadow:
+    0 8px 32px #352b201f,
+    0 2px 6px #352b200a;
+  font-family: Inter, 'Noto Sans SC', 'Microsoft YaHei', system-ui, sans-serif;
+}
+.gen-history-menu-heading {
+  padding: 8px 10px;
+  color: #7a7872;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gen-history-menu > button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 36px;
+  border: 0;
+  border-radius: 7px;
+  padding: 8px 10px;
+  background: transparent;
+  color: #3f434a;
+  text-align: left;
+  font-size: 13px;
+}
+.gen-history-menu > button:is(:hover, :focus-visible):not(:disabled) {
+  background: #f0eee8;
+  outline: none;
+}
+.gen-history-menu-divider {
+  height: 1px;
+  margin: 5px 6px;
+  background: #e6e3db;
+}
+.gen-history-menu > .gen-history-menu-delete {
+  color: #b42318;
+}
+.gen-history-menu
+  > .gen-history-menu-delete:is(:hover, :focus-visible):not(:disabled) {
+  background: #fbede8;
+}
+.gen-history-menu > button:disabled {
+  color: #aba89f;
+  cursor: not-allowed;
+}
+.gen-history-menu > p {
+  margin: 5px 10px 7px;
+  color: #838078;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.gen-delete-record {
+  color: #3f434a;
+  font-size: 14px;
+  line-height: 1.8;
+}
+.gen-delete-record-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 16px;
+  border-radius: 12px;
+  background: #fbede8;
+  color: #b42318;
+}
+.gen-delete-record blockquote {
+  max-height: 100px;
+  overflow-y: auto;
+  margin: 14px 0;
+  padding: 10px 14px;
+  border-left: 2px solid #d9d6cc;
+  border-radius: 0 8px 8px 0;
+  background: #f6f5f1;
+  color: #5b6068;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.gen-delete-record .gen-delete-record-note {
+  color: #6b6f76;
+  font-size: 13px;
+}
+.gen-delete-record [role='alert'] {
+  color: #b42318;
+}
+.gen-delete-record-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 24px;
+}
+.gen-delete-record-actions .btn {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid #d9d6cc;
+  border-radius: 10px;
+  background: #fff;
+  color: #3f434a;
+  font-size: 13px;
+}
+.gen-delete-record-actions .gen-delete-record-confirm {
+  background: #b42318;
+  border-color: #b42318;
+  color: #fff;
+}
+.gen-delete-record-actions .gen-delete-record-confirm:hover:not(:disabled) {
+  background: #952116;
+}
+.gen-delete-record-actions button:focus-visible {
+  outline: 2px solid #c2410c;
+  outline-offset: 2px;
+}
+@media (hover: none) {
+  .gen-task-more {
+    opacity: 1;
+  }
 }

@@ -57,7 +57,14 @@ async fn call(
     assert_eq!(result.headers()["cache-control"], "no-store");
     let status = result.status();
     let bytes = to_bytes(result.into_body(), 1024 * 1024).await.unwrap();
-    (status, serde_json::from_slice(&bytes).unwrap())
+    (
+        status,
+        if bytes.is_empty() {
+            serde_json::Value::Null
+        } else {
+            serde_json::from_slice(&bytes).unwrap()
+        },
+    )
 }
 
 #[test]
@@ -209,6 +216,25 @@ async fn generation_http_reprices_is_idempotent_and_enforces_csrf_ownership_and_
         StatusCode::NOT_FOUND
     );
     let cancel = format!("{path}/cancel");
+    let history = format!("{path}/history");
+    assert_eq!(
+        call(&state, &other, "DELETE", &history, true, None, "")
+            .await
+            .0,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        call(&state, &user, "DELETE", &history, false, None, "")
+            .await
+            .0,
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        call(&state, &user, "DELETE", &history, true, None, "")
+            .await
+            .0,
+        StatusCode::CONFLICT
+    );
     assert_eq!(
         call(&state, &other, "POST", &cancel, true, None, "")
             .await
@@ -235,6 +261,32 @@ async fn generation_http_reprices_is_idempotent_and_enforces_csrf_ownership_and_
         .unwrap();
     assert_eq!(wallet.held, 0);
     assert_eq!(wallet.balance, 20);
+    for _ in 0..2 {
+        assert_eq!(
+            call(&state, &user, "DELETE", &history, true, None, "")
+                .await
+                .0,
+            StatusCode::NO_CONTENT
+        );
+    }
+    assert_eq!(
+        call(
+            &state,
+            &user,
+            "GET",
+            "/api/v1/generation/jobs",
+            false,
+            None,
+            ""
+        )
+        .await
+        .1["items"],
+        serde_json::json!([])
+    );
+    assert_eq!(
+        call(&state, &user, "GET", &path, false, None, "").await.1["job"]["status"],
+        "CANCELLED"
+    );
     assert!(!first.to_string().contains("private-model"));
     sqlx::query("UPDATE sessions SET mfa_verified_at=clock_timestamp()-interval '13 hours' WHERE user_id=$1").bind(admin_id).execute(&db).await.unwrap();
     assert_eq!(

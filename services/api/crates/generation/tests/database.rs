@@ -37,6 +37,87 @@ fn input() -> JobInput {
 }
 #[sqlx::test(migrations = "../../migrations")]
 #[ignore = "Requires isolated PostgreSQL"]
+async fn history_deletion_is_owned_idempotent_and_audited_without_mutating_jobs_or_money(
+    db: PgPool,
+) {
+    model(&db).await;
+    let user = owner(&db).await;
+    let other = owner(&db).await;
+    let s = service(&db);
+    let first = s
+        .create(user, Uuid::new_v4(), input())
+        .await
+        .unwrap()
+        .job
+        .id;
+    assert!(matches!(
+        s.delete_history(user, first).await,
+        Err(GenerationError::State)
+    ));
+    s.cancel(user, first).await.unwrap();
+    assert!(matches!(
+        s.delete_history(other, first).await,
+        Err(GenerationError::NotFound)
+    ));
+    let job_before: serde_json::Value =
+        sqlx::query_scalar("SELECT to_jsonb(j) FROM generation_jobs j WHERE id=$1")
+            .bind(first)
+            .fetch_one(&db)
+            .await
+            .unwrap();
+    let ledger_before: serde_json::Value = sqlx::query_scalar(
+        "SELECT jsonb_agg(to_jsonb(l) ORDER BY id) FROM credit_ledger l WHERE user_id=$1",
+    )
+    .bind(user)
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    s.delete_history(user, first).await.unwrap();
+    s.delete_history(user, first).await.unwrap();
+    assert!(s.list(user, None, None, 25).await.unwrap().items.is_empty());
+    assert_eq!(s.get(user, first).await.unwrap().status, "CANCELLED");
+    let job_after: serde_json::Value =
+        sqlx::query_scalar("SELECT to_jsonb(j) FROM generation_jobs j WHERE id=$1")
+            .bind(first)
+            .fetch_one(&db)
+            .await
+            .unwrap();
+    let ledger_after: serde_json::Value = sqlx::query_scalar(
+        "SELECT jsonb_agg(to_jsonb(l) ORDER BY id) FROM credit_ledger l WHERE user_id=$1",
+    )
+    .bind(user)
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(job_before, job_after);
+    assert_eq!(ledger_before, ledger_after);
+    assert_eq!(sqlx::query_scalar::<_, i64>("SELECT count(*) FROM audit_logs WHERE action='GENERATION_HISTORY_DELETE' AND actor_id=$1").bind(user).fetch_one(&db).await.unwrap(), 1);
+    let second = s
+        .create(user, Uuid::new_v4(), input())
+        .await
+        .unwrap()
+        .job
+        .id;
+    s.cancel(user, second).await.unwrap();
+    sqlx::query("ALTER TABLE audit_logs ADD CONSTRAINT reject_history_audit CHECK(action<>'GENERATION_HISTORY_DELETE') NOT VALID").execute(&db).await.unwrap();
+    assert!(matches!(
+        s.delete_history(user, second).await,
+        Err(GenerationError::Store)
+    ));
+    assert_eq!(
+        s.list(user, None, None, 25).await.unwrap().items[0].id,
+        second
+    );
+    assert!(!sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM generation_history_deleted WHERE job_id=$1)"
+    )
+    .bind(second)
+    .fetch_one(&db)
+    .await
+    .unwrap());
+}
+#[sqlx::test(migrations = "../../migrations")]
+#[ignore = "Requires isolated PostgreSQL"]
 async fn canvas_generation_link_is_checked_before_hold_and_persisted(db: PgPool) {
     model(&db).await;
     let user = owner(&db).await;
@@ -108,7 +189,10 @@ async fn canvas_generation_link_is_checked_before_hold_and_persisted(db: PgPool)
         .items
         .is_empty());
     canvas.delete(user, project.project.id, 0).await.unwrap();
-    assert_eq!(s.create(user, key, draft).await.unwrap().job.id, job.id);
+    assert_eq!(
+        s.create(user, key, draft.clone()).await.unwrap().job.id,
+        job.id
+    );
     assert!(
         sqlx::query("UPDATE generation_jobs SET node_id='other' WHERE id=$1")
             .bind(job.id)
@@ -117,6 +201,17 @@ async fn canvas_generation_link_is_checked_before_hold_and_persisted(db: PgPool)
             .is_err()
     );
     s.cancel(user, job.id).await.unwrap();
+    s.delete_history(user, job.id).await.unwrap();
+    assert!(s.list(user, None, None, 25).await.unwrap().items.is_empty());
+    assert_eq!(
+        s.list_project(user, None, None, 25, Some(project.project.id))
+            .await
+            .unwrap()
+            .items[0]
+            .id,
+        job.id
+    );
+    assert_eq!(s.create(user, key, draft).await.unwrap().job.id, job.id);
     assert_eq!(WalletService::new(db).summary(user).await.unwrap().held, 0);
 }
 #[sqlx::test(migrations = "../../migrations")]

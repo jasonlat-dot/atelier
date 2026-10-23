@@ -96,6 +96,8 @@ async function fixture(
     expired: false,
     quotes: 0,
     cancelled: 0,
+    historyDeleted: [] as string[],
+    historyDeleteFail: false,
   };
   await page.addInitScript(() => {
     class Stream {
@@ -216,8 +218,36 @@ async function fixture(
       state.held = 0;
       return route.fulfill({ json: { job: state.jobs[0] } });
     }
+    if (method === 'DELETE' && path.endsWith('/history')) {
+      const id = path.split('/').at(-2)!;
+      const job = state.jobs.find((item) => item.id === id);
+      if (!job)
+        return route.fulfill({
+          status: 404,
+          json: { error: { code: 'NOT_FOUND' } },
+        });
+      if (['QUEUED', 'ROUTING', 'RUNNING', 'STORING'].includes(job.status))
+        return route.fulfill({
+          status: 409,
+          json: { error: { code: 'JOB_STATE_CONFLICT' } },
+        });
+      if (state.historyDeleteFail)
+        return route.fulfill({
+          status: 503,
+          json: { error: { code: 'SERVICE_UNAVAILABLE' } },
+        });
+      state.historyDeleted.push(id);
+      return route.fulfill({ status: 204 });
+    }
     if (path === '/api/v1/generation/jobs')
-      return route.fulfill({ json: { items: state.jobs, next_cursor: null } });
+      return route.fulfill({
+        json: {
+          items: state.jobs.filter(
+            (job) => !state.historyDeleted.includes(job.id),
+          ),
+          next_cursor: null,
+        },
+      });
     if (path.startsWith('/api/v1/generation/jobs/'))
       return route.fulfill({ json: state.jobs[0] });
     if (path === '/api/v1/assets')
@@ -232,6 +262,100 @@ async function fixture(
   await expect(page.getByRole('heading', { name: '生成工作台' })).toBeVisible();
   return { writes, state };
 }
+test('history context menu deletes only the confirmed record, preserves media, survives reload and handles errors', async ({
+  page,
+}, info) => {
+  const completed = {
+    ...jobBase,
+    status: 'SUCCEEDED',
+    settled: 7,
+    outputs: [{ idx: 0, asset: image }],
+  };
+  const cancelled = {
+    ...jobBase,
+    id: '33333333-3333-4333-8333-333333333333',
+    prompt: '已取消的测试创作',
+    status: 'CANCELLED',
+    released: 7,
+  };
+  const f = await fixture(page, { jobs: [completed, cancelled] });
+  const other = page.locator('.gen-task').filter({ hasText: cancelled.prompt });
+  await other.click({ button: 'right' });
+  const menu = page.getByRole('menu', { name: '生成记录操作' });
+  await expect(menu).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: '预览结果 1', exact: true }),
+  ).toBeVisible();
+  const bounds = await menu.boundingBox();
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(1440);
+  await page.screenshot({
+    path: info.outputPath('history-context-menu.png'),
+    fullPage: false,
+  });
+  await page.keyboard.press('Escape');
+  await expect(menu).toHaveCount(0);
+  expect(f.state.historyDeleted).toHaveLength(0);
+  await page
+    .getByRole('button', { name: `记录操作 ${cancelled.prompt}`, exact: true })
+    .click();
+  await menu.getByRole('menuitem', { name: '删除记录', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '删除这条生成记录？' });
+  await expect(dialog).toContainText('素材库');
+  await dialog.getByRole('button', { name: '保留记录', exact: true }).click();
+  expect(f.state.historyDeleted).toHaveLength(0);
+  await other.focus();
+  await page.keyboard.press('Shift+F10');
+  await menu.getByRole('menuitem', { name: '删除记录', exact: true }).click();
+  await dialog
+    .getByRole('button', { name: '确认删除记录', exact: true })
+    .click();
+  await expect(other).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: '预览结果 1', exact: true }),
+  ).toBeVisible();
+  expect(f.state.historyDeleted).toEqual([cancelled.id]);
+  await page.reload();
+  await expect(other).toHaveCount(0);
+  await page
+    .getByRole('button', { name: `记录操作 ${completed.prompt}`, exact: true })
+    .click();
+  await menu.getByRole('menuitem', { name: '删除记录', exact: true }).click();
+  f.state.historyDeleteFail = true;
+  await dialog
+    .getByRole('button', { name: '确认删除记录', exact: true })
+    .click();
+  await expect(dialog.getByRole('alert')).toBeVisible();
+  await expect(page.locator('.gen-task')).toHaveCount(1);
+  f.state.historyDeleteFail = false;
+  await dialog
+    .getByRole('button', { name: '确认删除记录', exact: true })
+    .click();
+  await expect(dialog).toHaveCount(0);
+  await page.reload();
+  await expect(page.locator('.gen-task')).toHaveCount(0);
+  await expect(
+    page.getByRole('heading', { name: '下一幅作品，从这里开始' }),
+  ).toBeVisible();
+  expect(f.state.jobs[0].outputs[0].asset).toEqual(image);
+  expect(f.state.available).toBe(100);
+  expect(f.writes).toHaveLength(0);
+});
+test('running history keeps deletion disabled and context menu dismisses on outside click', async ({
+  page,
+}) => {
+  const f = await fixture(page, { jobs: [jobBase] });
+  await page
+    .getByRole('button', { name: `记录操作 ${jobBase.prompt}`, exact: true })
+    .click();
+  const menu = page.getByRole('menu', { name: '生成记录操作' });
+  await expect(
+    menu.getByRole('menuitem', { name: '删除记录', exact: true }),
+  ).toBeDisabled();
+  await expect(menu).toContainText('任务进行中');
+  await page.getByRole('heading', { name: '生成工作台' }).click();
+  await expect(menu).toHaveCount(0);
+  expect(f.state.historyDeleted).toHaveLength(0);
+});
 test('result preview stays within the workspace and viewport for wide screens and portrait media', async ({
   page,
 }, info) => {

@@ -125,6 +125,17 @@ pub async fn cancel(
     Ok(Json(service(&s)?.cancel(actor.user().id, id).await?))
 }
 
+#[utoipa::path(delete,path="/api/v1/generation/jobs/{id}/history",params(("id"=Uuid,Path)),security(("session"=[],"csrf"=[])),responses((status=204,description="Remove a terminal job from personal history; retain assets, project references and financial records"),(status=401,body=ErrorResponse),(status=403,body=ErrorResponse),(status=404,body=ErrorResponse),(status=409,body=ErrorResponse),(status=422,body=ErrorResponse),(status=503,body=ErrorResponse)))]
+pub async fn delete_history(
+    State(s): State<AppState>,
+    AuthUser(actor): AuthUser,
+    path: Result<Path<Uuid>, PathRejection>,
+) -> Result<StatusCode, ApiError> {
+    let Path(id) = path.map_err(|_| invalid())?;
+    service(&s)?.delete_history(actor.user().id, id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 #[utoipa::path(get,path="/api/v1/generation/limits",security(("session"=[])),responses((status=200,body=GenerationLimits),(status=401,body=ErrorResponse),(status=403,body=ErrorResponse),(status=503,body=ErrorResponse)))]
 pub async fn limits(
     State(s): State<AppState>,
