@@ -34,3 +34,8 @@
 最终功能提交 `00ccdf7b1f897252add6b8b2ad45cca001d63bb8` 的 [Actions #39888171556](https://github.com/jasonlat-dot/atelier/actions/runs/39888171556) 已核对 completed/success：baseline、identity-schema 均通过。它包含前述所有切片、CI 换源及完整原型生成界面；以此完整代码验收为准。
 
 M5 已完成，本轮停止，不进入 M6；收尾提交仅更新完成/交接文档。S3 仍待定。
+
+
+### 收尾工作流修正
+
+文档提交 70833b0 的 Actions #39889215774 在安装依赖时失败（baseline 成功）。日志证明 runner 通过 /etc/apt/apt-mirrors.txt 继续选中 Azure，先前换源遗漏该文件。本次统一处理全部当前 apt 源格式及 GitHub 镜像列表、检查残留、缓存校验后的 .deb，固定 Ubuntu 24.04；保留签名验证和全部媒体测试。M5 业务功能仍为已通过最终验收的 00ccdf7，新的 CI 修正继续以最新提交验证。

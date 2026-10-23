@@ -291,3 +291,11 @@ M1 历史交付未打包、未部署。条款仍是开发占位，正式法律�
 - 旧运行按负责人指示取消，仅跟进最新代码，不重跑或把旧取消状态记为成功。最终提交包含此前基础、worker、SSE、CI 换源及原型生成页全部变更，因此以最终完整验收为准。
 - M5 标记完成；当前真实入口 `/generate`，支持图片/参考图/视频生成、后台任务、事件/轮询、取消、按结果结算/释放、素材预览下载。重启根目录 npm run dev 应用迁移；供应商账号/模型配置顺序、限额与验收见 README 和 PR_M5.md。
 - 收尾仅更新文档，不再变更功能；本轮停在 M5，不自动进入 M6。S3 仍待定，没有真实付费供应商/公网上线验收声明。下次先读 AGENTS、PROGRESS、DECISIONS 与 Git，再根据新的阶段授权继续。
+
+
+## M5 收尾 · CI 镜像列表修复（2026-10-23）
+
+- 文档提交 70833b0 的 Actions #39889215774：baseline 成功，identity-schema 在视频工具安装时退出 124。下载日志明确显示 `Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist`，随后仍从 azure.archive.ubuntu.com 下载；前一次只改 sources.list/ubuntu.sources，漏掉 GitHub runner 的镜像列表入口，单次通过未证明换源完整。该失败发生在业务测试之前，未回滚已通过验收的 M5 功能。
+- `scripts/ci/prepare_apt_sources.py` 统一覆盖 sources.list、sources.list.d 的有效 list/sources 和 apt-mirrors*.txt，保留 Signed-By/包签名验证；残留未知 Azure 地址即失败。新增三项回归覆盖 mirror+file 入口、传统/其他源、幂等及未知地址失败。
+- identity-schema 固定 Ubuntu 24.04，缓存下载的 .deb（不缓存 apt 索引和运行中 partial 目录），安装仍通过 apt 校验、运行完整视频/数据库回归。准备步骤检查所有实际镜像列表后才下载；不靠延长超时或跳过测试处理问题。
+- 本切片仅 CI、准备脚本和相关测试/文档，M6 仍未开始。三项本地回归通过；最终以推送后最新 Actions 的完整结果为准。

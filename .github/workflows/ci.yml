@@ -17,6 +17,7 @@ jobs:
           components: rustfmt, clippy
       - run: npm ci
         working-directory: apps/web
+      - run: python -m unittest discover -s tests -p "test_ci_apt_sources.py"
       - run: node --check scripts/dev.mjs
       - run: node --test tests/dev-proxy.test.mjs
       - run: cargo fmt --all --check
@@ -46,7 +47,7 @@ jobs:
         working-directory: apps/web
 
   identity-schema:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: postgres:16-alpine
@@ -72,6 +73,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - name: Cache video apt packages
+        uses: actions/cache@v4
+        with:
+          path: .tools/ci-apt-archives/*.deb
+          key: ${{ runner.os }}-${{ runner.arch }}-apt-noble-video-v1-${{ hashFiles('scripts/ci/prepare_apt_sources.py') }}
       - name: Verify video test tools
         timeout-minutes: 8
         shell: bash
@@ -85,15 +91,10 @@ jobs:
             fi
           done
           if [ "$missing" = 1 ]; then
-            # The Azure package mirror has stalled downloads on this runner.
-            # Keep Ubuntu's signed repository metadata; only change its official mirror.
-            for source in /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources; do
-              if [ -f "$source" ]; then
-                sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g; s|https://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' "$source"
-              fi
-            done
+            sudo python3 scripts/ci/prepare_apt_sources.py --root /etc/apt
+            mkdir -p "$GITHUB_WORKSPACE/.tools/ci-apt-archives/partial"
             sudo timeout 120s apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update
-            sudo timeout 300s apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y --no-install-recommends ffmpeg util-linux coreutils
+            sudo timeout 300s apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Dir::Cache::archives="$GITHUB_WORKSPACE/.tools/ci-apt-archives" install -y --no-install-recommends ffmpeg util-linux coreutils
           fi
           for tool in ffmpeg ffprobe timeout prlimit; do command -v "$tool"; done
           ffmpeg -version
