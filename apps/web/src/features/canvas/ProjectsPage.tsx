@@ -1,3 +1,4 @@
+import Feedback from '../../components/Feedback';
 import { useCallback, useState, useRef } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
@@ -230,14 +231,18 @@ export function ProjectGrid({
           </div>
         </>
       )}
-      {error && <p role="alert">{error}</p>}
+      {error && (
+        <Feedback onDismiss={() => setError('')} variant="error">
+          {error}
+        </Feedback>
+      )}
       {query.isError && (
-        <p role="alert">
+        <Feedback variant="error">
           画布列表暂不可用。
           <button className="text-action" onClick={() => void query.refetch()}>
             重新加载列表
           </button>
-        </p>
+        </Feedback>
       )}
       <div
         className={`workspace-projects live-projects ${home ? '' : 'canvas-library-grid'}`}
@@ -413,7 +418,11 @@ export function ProjectGrid({
               」后将无法从项目列表打开。已有素材和已提交的生成任务仍会保留。
             </p>
           )}
-          {error && <p role="alert">{error}</p>}
+          {error && (
+            <Feedback onDismiss={() => setError('')} variant="error">
+              {error}
+            </Feedback>
+          )}
           <div className="gen-actions">
             <button
               className="btn"

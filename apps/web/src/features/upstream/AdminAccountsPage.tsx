@@ -1,3 +1,4 @@
+import Feedback from '../../components/Feedback';
 import {
   useCallback,
   useEffect,
@@ -202,17 +203,25 @@ function Accounts(props: AdminProps) {
         </p>
       )}
       {message && (
-        <div className="up-message" role={messageFailed ? 'alert' : 'status'}>
+        <Feedback
+          onDismiss={() => setMessage('')}
+          className="up-message"
+          variant={messageFailed ? 'error' : 'success'}
+        >
           {message}
-        </div>
+        </Feedback>
       )}
       {error && !panel && (
-        <div className="up-message" role="alert">
+        <Feedback
+          onDismiss={() => setError('')}
+          className="up-message"
+          variant="error"
+        >
           {error}{' '}
           <button className="btn btn-ghost" onClick={() => void load()}>
             重试加载
           </button>
-        </div>
+        </Feedback>
       )}
       {items.some((a) => a.status === 'INVALID') && (
         <p className="up-note">部分账号凭据失效，请编辑密钥后执行连接测试。</p>
@@ -430,9 +439,13 @@ function Accounts(props: AdminProps) {
           onClose={close}
         >
           {error && (
-            <div className="up-message" role="alert">
+            <Feedback
+              onDismiss={() => setError('')}
+              className="up-message"
+              variant="error"
+            >
               {error}
-            </div>
+            </Feedback>
           )}
           {panel.kind === 'edit' && (
             <AccountForm
@@ -786,7 +799,11 @@ function QuotaForm({
         {a.name} ·
         请先在上游核对余额。此操作手动维护路由额度，不会查询或改变上游余额，也不修改用户积分。
       </p>
-      {error && <p role="alert">{error}</p>}
+      {error && (
+        <Feedback onDismiss={() => setError('')} variant="error">
+          {error}
+        </Feedback>
+      )}
       <QuotaFields account={a} />
       <label>
         额度重置时间（可选）
@@ -856,7 +873,11 @@ function ImportForm({
           }
         />
       </label>
-      {error && <p role="alert">{error}</p>}
+      {error && (
+        <Feedback onDismiss={() => setError('')} variant="error">
+          {error}
+        </Feedback>
+      )}
       <Footer busy={busy} onCancel={onCancel} label="校验并导入" />
     </form>
   );
@@ -881,7 +902,7 @@ function Stats({ account, props }: { account: Account; props: AdminProps }) {
     <>
       <p className="up-note">{account.name} · 最近 24 小时，包含连接测试</p>
       {error ? (
-        <div role="alert">
+        <Feedback onDismiss={() => setError('')} variant="error">
           {error}
           <button
             className="btn btn-ghost"
@@ -892,7 +913,7 @@ function Stats({ account, props }: { account: Account; props: AdminProps }) {
           >
             重试加载
           </button>
-        </div>
+        </Feedback>
       ) : !data ? (
         <p role="status">正在加载统计…</p>
       ) : (

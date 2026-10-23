@@ -1,3 +1,4 @@
+import { showNotice } from '../../components/Feedback';
 import * as api from '../../lib/api';
 import { useState } from 'react';
 import {
@@ -180,7 +181,7 @@ export default function AdminPage({
                               try {
                                 mock.addCredits(u.id, Number(v));
                               } catch (e) {
-                                alert(String(e));
+                                showNotice(String(e));
                               }
                             }
                           }}
@@ -193,7 +194,7 @@ export default function AdminPage({
                             try {
                               mock.toggleUser(u.id);
                             } catch (e) {
-                              alert(String(e));
+                              showNotice(String(e));
                             }
                           }}
                         >

@@ -1,21 +1,22 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import Feedback from '../../components/Feedback';
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import { useWalletSummaryUpdate } from '../workspace/WorkspaceShell';
 import { Link } from 'react-router-dom';
-import BillingPanel from '../billing/BillingPanel';
+import { Check } from 'lucide-react';
+import './WalletPage.css';
 import { type Me, SessionError } from '../auth/sessionApi';
 import { walletApi, type Summary, type Entry } from './walletApi';
 
-const labels: Record<string, string> = {
-  SIGNUP_BONUS: '注册赠送',
-  CHECKIN: '每日签到',
-  PURCHASE: '积分入账',
-  REDEEM: '兑换码',
-  ADMIN_ADJUST: '人工调整',
-  HOLD: '任务预占',
-  RELEASE: '解除预占',
-  SETTLE: '任务结算',
-  REFUND: '任务补偿',
-};
+const WalletLedger = lazy(() => import('./WalletLedger'));
+const BillingPanel = lazy(() => import('../billing/BillingPanel'));
+
 export default function WalletPage({
   me,
   onExpired,
@@ -42,7 +43,6 @@ export default function WalletPage({
     </nav>
   );
   const updateSummary = useWalletSummaryUpdate();
-  const Container = home ? 'section' : 'main';
   const [summary, setSummary] = useState<Summary>();
   const [entries, setEntries] = useState<Entry[]>([]);
   const [cursor, setCursor] = useState<number | null>();
@@ -160,191 +160,263 @@ export default function WalletPage({
       setBusy(false);
     }
   };
-  if (!home && tab !== 'ledger')
-    return (
-      <main className="account-shell wallet-page">
-        <header>
-          <div className="eyebrow">ATELIER / MEMBERSHIP</div>
-          <h1>积分与订阅</h1>
-          <p>为每一次创作，准备恰好的额度。</p>
-        </header>
-        {tabs}
-        <BillingPanel
-          me={me}
-          onExpired={onExpired}
-          onReload={onReload}
-          mode={tab}
-          onOrders={() => setTab('orders')}
-          onWalletChanged={() => void load()}
-        />
-      </main>
-    );
-  return (
-    <Container
-      className={home ? 'dashboard-wallet' : 'account-shell wallet-page'}
+  const balanceCard = summary && (
+    <section
+      className={home ? 'wallet-hero' : 'wallet-card wallet-balance'}
+      aria-label="钱包余额"
     >
-      {!home && (
-        <header>
-          <div className="eyebrow">ATELIER / CREDITS</div>
-          <h1>我的积分</h1>
-          <p>每一笔获得与使用，都有记录。</p>
-        </header>
+      <span>可用积分</span>
+      <strong aria-label="可用积分">
+        {summary.available.toLocaleString('zh-CN')}
+      </strong>
+      {home ? (
+        <p>
+          总额 {summary.balance.toLocaleString('zh-CN')} · 预占{' '}
+          {summary.held.toLocaleString('zh-CN')}
+        </p>
+      ) : (
+        <p>
+          预占 <b>{summary.held.toLocaleString('zh-CN')}</b>
+          <span className="wallet-balance-divider"> · </span>总额{' '}
+          <b>{summary.balance.toLocaleString('zh-CN')}</b>
+        </p>
       )}
-      {!home && tabs}
-      {loading && !summary && <p role="status">正在读取积分…</p>}
-      {summary && (
-        <>
-          <section className="wallet-hero" aria-label="钱包余额">
-            <span>可用积分</span>
-            <strong>{summary.available.toLocaleString('zh-CN')}</strong>
-            <p>
-              总额 {summary.balance.toLocaleString('zh-CN')} · 预占{' '}
-              {summary.held.toLocaleString('zh-CN')}
-            </p>
-            {summary.available < 10 && (
-              <p>可用积分较少，可以签到或使用兑换码补充。</p>
-            )}
-          </section>
-          <section className="surface-block account-section checkin-row">
-            <div className="checkin-heading">
-              <div>
-                <h2>每日签到</h2>
-                <p>
-                  连续 {summary.streak} 天 ·{' '}
-                  {summary.checked_in_today ? '明日' : '本次'}可得{' '}
-                  {summary.next_reward} 积分
-                </p>
-                <small>
-                  {summary.local_date} · {summary.timezone} 日界
-                </small>
-              </div>
-              <button
-                className="btn btn-dark"
-                disabled={busy || loading || summary.checked_in_today}
-                onClick={() => void mutate('checkin')}
-              >
-                {summary.checked_in_today ? '今日已签到' : '领取今日积分'}
-              </button>
-            </div>
-            {home && (
-              <div
-                className="home-checkin-progress"
-                role="img"
-                aria-label={`已连续签到 ${summary.streak} 天`}
-              >
-                {Array.from({ length: 7 }, (_, i) => (
-                  <span
-                    key={i}
-                    className={
-                      i < Math.min(summary.streak, 7) ? 'is-complete' : ''
-                    }
-                  />
-                ))}
-              </div>
-            )}
-          </section>
-          {!home && (
-            <>
-              <section className="surface-block account-section">
-                <h2>兑换积分</h2>
-                <form
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void mutate('redeem');
-                  }}
-                >
-                  <label htmlFor="redeem-code">兑换码</label>
-                  <input
-                    className="input"
-                    id="redeem-code"
-                    autoComplete="off"
-                    maxLength={128}
-                    value={code}
-                    disabled={busy}
-                    onChange={(event) => setCode(event.target.value)}
-                  />
-                  <button
-                    className="btn btn-dark"
-                    disabled={busy || loading || !code.trim()}
-                  >
-                    兑换
-                  </button>
-                </form>
-              </section>
-              <section className="surface-block account-section">
-                <h2>积分流水</h2>
-                {entries.length === 0 ? (
-                  <p>暂无积分记录</p>
-                ) : (
-                  <div className="ledger-scroll">
-                    <table className="ledger-table">
-                      <thead>
-                        <tr>
-                          <th>来源</th>
-                          <th>余额变动</th>
-                          <th>预占变动</th>
-                          <th>时间</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {entries.map((entry) => (
-                          <tr key={entry.id}>
-                            <td>
-                              {labels[entry.type] || entry.type}
-                              {entry.reason && <small>{entry.reason}</small>}
-                            </td>
-                            <td>
-                              {entry.balance_delta > 0 ? '+' : ''}
-                              {entry.balance_delta}
-                            </td>
-                            <td>
-                              {entry.held_delta > 0 ? '+' : ''}
-                              {entry.held_delta}
-                            </td>
-                            <td>
-                              {new Date(entry.created_at).toLocaleString(
-                                'zh-CN',
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-                {cursor && (
-                  <button
-                    className="btn btn-light"
-                    disabled={busy}
-                    onClick={() => void more()}
-                  >
-                    加载更多
-                  </button>
-                )}
-              </section>
-            </>
+      {summary.available < 10 && (
+        <p>可用积分较少，可以签到或使用兑换码补充。</p>
+      )}
+      {!home && (
+        <button className="btn btn-light" onClick={() => setTab('plans')}>
+          获取更多积分
+        </button>
+      )}
+    </section>
+  );
+  const checkinCard = summary && (
+    <section
+      className={
+        home
+          ? 'surface-block account-section checkin-row'
+          : 'wallet-card wallet-checkin'
+      }
+    >
+      <div className="checkin-heading">
+        <div>
+          <h2>每日签到</h2>
+          <p>
+            连续 {summary.streak} 天 ·{' '}
+            {summary.checked_in_today ? '明日' : '本次'}可得{' '}
+            {summary.next_reward} 积分
+          </p>
+          {home && (
+            <small>
+              {summary.local_date} · {summary.timezone} 日界
+            </small>
           )}
+        </div>
+        {home && (
+          <button
+            className="btn btn-dark"
+            disabled={busy || loading || summary.checked_in_today}
+            onClick={() => void mutate('checkin')}
+          >
+            {summary.checked_in_today ? '今日已签到' : '领取今日积分'}
+          </button>
+        )}
+      </div>
+      {home ? (
+        <div
+          className="home-checkin-progress"
+          role="img"
+          aria-label={`已连续签到 ${summary.streak} 天`}
+        >
+          {Array.from({ length: 7 }, (_, i) => (
+            <span
+              key={i}
+              className={i < Math.min(summary.streak, 7) ? 'is-complete' : ''}
+            />
+          ))}
+        </div>
+      ) : (
+        <>
+          <div
+            className="wallet-checkin-days"
+            role="img"
+            aria-label={`已连续签到 ${summary.streak} 天，进度最多显示 7 天`}
+          >
+            {Array.from({ length: 7 }, (_, i) => (
+              <span
+                key={i}
+                className={
+                  i < Math.min(summary.streak, 7)
+                    ? 'is-complete'
+                    : !summary.checked_in_today && i === summary.streak
+                      ? 'is-next'
+                      : ''
+                }
+              >
+                {i < Math.min(summary.streak, 7) ? <Check size={16} /> : i + 1}
+              </span>
+            ))}
+          </div>
+          <button
+            className="btn btn-dark"
+            disabled={busy || loading || summary.checked_in_today}
+            onClick={() => void mutate('checkin')}
+          >
+            {summary.checked_in_today ? '今日已签到' : '领取今日积分'}
+          </button>
+          <small className="wallet-timezone" title={summary.local_date}>
+            每天 0 点刷新 · {summary.timezone}
+          </small>
         </>
       )}
-      {message && <p role="status">{message}</p>}
-      {error && <p role="alert">{error}</p>}
-      <div className={home ? 'home-wallet-actions' : undefined}>
-        {home && summary && (
-          <Link className="text-action" to="/wallet">
-            查看完整积分账本 →
-          </Link>
-        )}
-        <button
-          className="text-action"
-          disabled={busy || loading}
-          onClick={() => {
-            setError('');
-            void load();
-          }}
+    </section>
+  );
+  const feedback = (
+    <>
+      {message && (
+        <Feedback
+          onDismiss={() => setMessage('')}
+          className={home ? undefined : 'wallet-feedback wallet-success'}
+          variant="success"
         >
-          刷新积分
-        </button>
-      </div>
-    </Container>
+          {message}
+        </Feedback>
+      )}
+      {error && (
+        <Feedback
+          onDismiss={() => setError('')}
+          className={home ? undefined : 'wallet-feedback wallet-error'}
+          variant="error"
+        >
+          {error}
+        </Feedback>
+      )}
+    </>
+  );
+  const refresh = (
+    <button
+      className="text-action"
+      disabled={busy || loading}
+      onClick={() => {
+        setError('');
+        void load();
+      }}
+    >
+      刷新积分
+    </button>
+  );
+  if (home)
+    return (
+      <section className="dashboard-wallet">
+        {loading && !summary && <p role="status">正在读取积分…</p>}
+        {balanceCard}
+        {checkinCard}
+        {feedback}
+        <div className="home-wallet-actions">
+          {summary && (
+            <Link className="text-action" to="/wallet">
+              查看完整积分账本 →
+            </Link>
+          )}
+          {refresh}
+        </div>
+      </section>
+    );
+  return (
+    <main className="account-shell wallet-page">
+      <header className="wallet-page-heading">
+        <h1>我的积分</h1>
+        <p>每一笔获得与使用，都有记录。</p>
+      </header>
+      {tabs}
+      {tab === 'ledger' ? (
+        <>
+          {feedback}
+          {loading && !summary && <p role="status">正在读取积分…</p>}
+          {!summary && !loading && (
+            <div className="wallet-retry">{refresh}</div>
+          )}
+          <div className="wallet-layout">
+            <Suspense
+              fallback={
+                <section className="wallet-card" role="status">
+                  正在读取积分流水…
+                </section>
+              }
+            >
+              <WalletLedger
+                entries={entries}
+                summary={summary}
+                cursor={cursor}
+                busy={busy}
+                loading={loading}
+                onFailure={failed}
+                onMore={() => void more()}
+                onRefresh={() => {
+                  setError('');
+                  void load();
+                }}
+              />
+            </Suspense>
+            <aside className="wallet-sidebar" aria-label="积分管理">
+              {balanceCard}
+              {checkinCard}
+              {summary && (
+                <section className="wallet-card wallet-redeem">
+                  <h2>兑换积分</h2>
+                  <form
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void mutate('redeem');
+                    }}
+                  >
+                    <label
+                      className="wallet-visually-hidden"
+                      htmlFor="redeem-code"
+                    >
+                      兑换码
+                    </label>
+                    <input
+                      className="input"
+                      id="redeem-code"
+                      placeholder="输入兑换码"
+                      autoComplete="off"
+                      maxLength={128}
+                      value={code}
+                      disabled={busy}
+                      onChange={(event) => setCode(event.target.value)}
+                    />
+                    <button
+                      className="btn btn-dark"
+                      disabled={busy || loading || !code.trim()}
+                    >
+                      兑换
+                    </button>
+                  </form>
+                </section>
+              )}
+            </aside>
+          </div>
+        </>
+      ) : (
+        <Suspense
+          fallback={
+            <section className="wallet-card" role="status">
+              正在读取套餐和订单…
+            </section>
+          }
+        >
+          <BillingPanel
+            me={me}
+            onExpired={onExpired}
+            onReload={onReload}
+            mode={tab}
+            onOrders={() => setTab('orders')}
+            onWalletChanged={() => void load()}
+          />
+        </Suspense>
+      )}
+    </main>
   );
 }

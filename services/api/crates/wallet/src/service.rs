@@ -21,7 +21,14 @@ pub enum WalletError {
     Store,
 }
 impl From<sqlx::Error> for WalletError {
-    fn from(_: sqlx::Error) -> Self {
+    fn from(error: sqlx::Error) -> Self {
+        // Log only the SQLSTATE, never SQL parameters, DSNs or database messages
+        // that can contain redeem codes or other private values.
+        let code = error.as_database_error().and_then(|db| db.code());
+        tracing::error!(
+            sqlstate = code.as_deref().unwrap_or("unknown"),
+            "Wallet database operation failed"
+        );
         Self::Store
     }
 }
@@ -39,7 +46,9 @@ impl WalletService {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
-    /// Run after migrations using the owning deployment role; no ledger mutation rights at runtime.
+    /// Run after migrations using the owning deployment role. FK row locks work;
+    /// financial-column updates, deletes and truncation remain denied, and the
+    /// immutable trigger also rejects updates to the lock-privileged id column.
     pub async fn restrict_ledger(&self) -> Result<(), WalletError> {
         repo::restrict_ledger(&mut *self.pool.acquire().await?).await
     }

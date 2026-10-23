@@ -1,3 +1,4 @@
+import { dismissFeedback } from './feedbackTestHelpers';
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 const png = readFileSync(
@@ -51,6 +52,8 @@ async function fixture(page: Page, failLimits = false) {
           mfa_required: false,
         },
       });
+    if (path === '/api/v1/projects')
+      return route.fulfill({ json: { items: [], next_cursor: null } });
     if (path === '/api/v1/wallet')
       return route.fulfill({
         json: {
@@ -184,7 +187,11 @@ test('video processing stays unplayable until server completion and failures sta
   await expect(page.getByRole('button', { name: '预览 Film.mp4' })).toBeEnabled(
     { timeout: 10000 },
   );
-  await expect(page.getByText('16 × 8 · 1 KB · 2.0 秒')).toBeVisible();
+  const film = page.getByRole('article').filter({
+    has: page.getByRole('button', { name: '预览 Film.mp4' }),
+  });
+  await expect(film.getByText('16 × 8 · 1 KB', { exact: true })).toBeVisible();
+  await expect(film.getByText('2.0 秒', { exact: true })).toBeVisible();
   await expect(
     page.getByRole('button', { name: '删除 Broken.mp4' }),
   ).toBeEnabled();
@@ -229,6 +236,7 @@ test('prototype library uploads multipart, previews fresh media, filters and con
   await expect(
     page.getByText('已上传 1 个素材', { exact: true }),
   ).toBeVisible();
+  await dismissFeedback(page);
   await expect(page.getByText('共 4 个素材', { exact: true })).toBeVisible();
   await page.getByLabel('选择 Uploaded.png', { exact: true }).check();
   await page.getByRole('button', { name: '删除已选（1）' }).click();
@@ -243,6 +251,7 @@ test('prototype library uploads multipart, previews fresh media, filters and con
   await expect(
     page.getByText('已删除 1 个素材', { exact: true }),
   ).toBeVisible();
+  await dismissFeedback(page);
   await expect(
     page.getByRole('button', { name: '预览 Uploaded.png' }),
   ).toHaveCount(0);
@@ -263,9 +272,7 @@ test('failed limits can be retried and invalid local uploads do not write reques
   const { writes, recoverLimits } = await fixture(page, true);
   await page.goto('/assets');
   await expect(page.getByRole('alert')).toContainText('素材服务暂不可用');
-  await expect(
-    page.getByRole('button', { name: '上传素材', exact: true }),
-  ).toBeDisabled();
+  await expect(page.locator('.assets-head-actions button')).toBeDisabled();
   recoverLimits();
   await page.getByRole('button', { name: '重试读取' }).click();
   await expect(

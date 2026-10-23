@@ -1,3 +1,4 @@
+import Feedback, { useConfirmNotice } from '../../components/Feedback';
 import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { type Me, SessionError } from '../auth/sessionApi';
@@ -19,6 +20,7 @@ export default function AdminCreditsPage({
   const [message, setMessage] = useState('');
   const pending = useRef<{ fingerprint: string; key: string }>();
   const lock = useRef(false);
+  const confirm = useConfirmNotice();
   if (me.user.role === 'USER')
     return (
       <main className="account-shell">
@@ -40,13 +42,15 @@ export default function AdminCreditsPage({
       setError('请填写有效的用户 UUID、非零整数和调整原因');
       return;
     }
-    if (
-      !window.confirm(
-        `为用户 ${owner.trim()} ${value > 0 ? '增加' : '扣减'} ${Math.abs(value)} 积分？\n原因：${reason.trim()}`,
-      )
-    )
-      return;
     lock.current = true;
+    const accepted = await confirm(
+      `为用户 ${owner.trim()} ${value > 0 ? '增加' : '扣减'} ${Math.abs(value)} 积分？\n原因：${reason.trim()}`,
+      { title: '确认调整积分？', confirmLabel: '确认调整并入账' },
+    );
+    if (!accepted) {
+      lock.current = false;
+      return;
+    }
     setBusy(true);
     setError('');
     setMessage('');
@@ -139,8 +143,16 @@ export default function AdminCreditsPage({
           </button>
         </form>
       </section>
-      {message && <p role="status">{message}</p>}
-      {error && <p role="alert">{error}</p>}
+      {message && (
+        <Feedback onDismiss={() => setMessage('')} variant="success">
+          {message}
+        </Feedback>
+      )}
+      {error && (
+        <Feedback onDismiss={() => setError('')} variant="error">
+          {error}
+        </Feedback>
+      )}
     </main>
   );
 }

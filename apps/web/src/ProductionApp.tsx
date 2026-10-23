@@ -1,3 +1,4 @@
+import Feedback from './components/Feedback';
 import {
   useCallback,
   useEffect,
@@ -100,7 +101,9 @@ export default function ProductionApp() {
       <main className="signin-screen">
         <section className="signin-card">
           <h1>服务暂不可用</h1>
-          <p role="alert">暂时无法验证登录状态，请稍后重试。</p>
+          <Feedback variant="error">
+            暂时无法验证登录状态，请稍后重试。
+          </Feedback>
           <button className="btn btn-dark" onClick={reload}>
             重试连接
           </button>

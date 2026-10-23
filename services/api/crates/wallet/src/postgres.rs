@@ -1,13 +1,22 @@
 use crate::{LedgerEntry, WalletError};
 use chrono::{DateTime, NaiveDate, Utc};
 use serde_json::Value;
-use sqlx::{PgConnection, Row};
+use sqlx::{Connection, PgConnection, Row};
 use uuid::Uuid;
 
 pub(crate) async fn restrict_ledger(db: &mut PgConnection) -> Result<(), WalletError> {
+    let mut tx = db.begin().await?;
     sqlx::query("REVOKE UPDATE, DELETE, TRUNCATE ON credit_ledger FROM CURRENT_USER")
-        .execute(db)
+        .execute(&mut *tx)
         .await?;
+    // PostgreSQL's FK checks SELECT ... FOR KEY SHARE as the referenced table's
+    // owner. Row locks require UPDATE on at least one column, even though no row
+    // is changed. Keep only id's column privilege; the immutable trigger still
+    // rejects every UPDATE, including SET id=id. Monetary columns stay denied.
+    sqlx::query("GRANT UPDATE(id) ON credit_ledger TO CURRENT_USER")
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
     Ok(())
 }
 

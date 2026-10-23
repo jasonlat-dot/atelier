@@ -62,6 +62,10 @@ async fn call(
 #[sqlx::test(migrations = "../../migrations")]
 #[ignore = "Requires isolated PostgreSQL and TEST_REDIS_URL"]
 async fn real_wallet_http_authorization_csrf_rate_limit_and_receipts(pool: PgPool) {
+    atelier_wallet::WalletService::new(pool.clone())
+        .restrict_ledger()
+        .await
+        .unwrap();
     let (owner, user) = session(&pool, false).await;
     let (_, admin) = session(&pool, true).await;
     let mut state = AppState::test();

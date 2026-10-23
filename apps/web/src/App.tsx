@@ -1,3 +1,4 @@
+import { showNotice } from './components/Feedback';
 import { useState, useCallback } from 'react';
 import {
   Link,
@@ -521,7 +522,7 @@ function WalletPage() {
             <button
               className="btn btn-light"
               onClick={() =>
-                alert(
+                showNotice(
                   '这是演示套餐。正式版需由支付回调确认后在 Rust 账本中入账。',
                 )
               }

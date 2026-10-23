@@ -1,3 +1,4 @@
+import { dismissFeedback } from './feedbackTestHelpers';
 import { test, expect, type Page } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 import type { components } from '../src/lib/generated/api';
@@ -144,7 +145,8 @@ async function fixture(
           video_enabled: true,
         },
       });
-    if (path === '/api/v1/generation/quote')
+    if (path === '/api/v1/generation/quote') {
+      expect(req.postDataJSON().model_id).toBeTruthy();
       return route.fulfill({
         json: {
           kind: 'image',
@@ -160,6 +162,7 @@ async function fixture(
           timeout_seconds: 60,
         },
       });
+    }
     if (path === '/api/v1/assets/uploads')
       return route.fulfill({ status: 201, json: asset });
     if (path === '/api/v1/assets')
@@ -299,6 +302,10 @@ test('canvas upload and linked generation return result nodes once and retain th
     buffer: Buffer.from('fixture'),
   });
   await expect.poll(() => api.saved().nodes.length).toBe(2);
+  await expect(page.getByRole('alertdialog')).toContainText(
+    '素材已上传并加入画布',
+  );
+  await dismissFeedback(page);
   await page
     .locator('.react-flow__node[data-id="generator"]')
     .click({ position: { x: 100, y: 15 } });
@@ -572,6 +579,10 @@ test('right click creation, zoom controls and quick-reference action stay usable
     .poll(() => api.saved().edges.some((e) => e.role === 'reference'))
     .toBe(true);
   expect(api.writes.includes('/api/v1/generation/jobs')).toBe(false);
+  await expect(page.getByRole('alertdialog')).toContainText(
+    '已连接所选提示词与参考图',
+  );
+  await dismissFeedback(page);
   await page.getByRole('button', { name: '切换创作参数' }).click();
   await expect(page.getByLabel('画布创作参数')).not.toBeVisible();
   const pane = page.locator('.react-flow__pane'),
@@ -622,6 +633,8 @@ test('node generation explains missing edit support before any job submission', 
   const api = await fixture(page, initial, false);
   await page.goto(`/canvas/${projectId}`);
   await page.locator('[data-id="generator"] .graph-head').click();
+  await expect(page.getByRole('alertdialog')).toContainText('尚未开启图片编辑');
+  await dismissFeedback(page);
   await expect(
     page
       .getByRole('group', { name: '生成质量' })
@@ -632,9 +645,7 @@ test('node generation explains missing edit support before any job submission', 
     .locator('[data-id="generator"]')
     .getByRole('button', { name: '生成', exact: true })
     .click();
-  await expect(page.locator('.live-canvas-alert')).toContainText(
-    '尚未开启图片编辑',
-  );
+  await expect(page.getByRole('alertdialog')).toContainText('尚未开启图片编辑');
   expect(api.writes.includes('/api/v1/generation/jobs')).toBe(false);
 });
 
@@ -661,6 +672,10 @@ test('dragging an output to blank space preserves its preview and creates the ch
   await draw();
   await menu.getByRole('menuitem', { name: /图片生成/ }).click();
   await expect.poll(() => api.saved().nodes.length).toBe(2);
+  await expect(page.getByRole('alertdialog')).toContainText(
+    '已连接所选提示词与参考图',
+  );
+  await dismissFeedback(page);
   expect(api.saved().edges).toHaveLength(1);
   expect(api.saved().edges[0].role).toBe('prompt');
   const panel = page.getByLabel('画布创作参数');

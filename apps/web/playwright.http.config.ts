@@ -2,6 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './tests',
   testMatch: [
+    'feedback.spec.ts',
     'session-settings.spec.ts',
     'wallet.spec.ts',
     'billing.spec.ts',

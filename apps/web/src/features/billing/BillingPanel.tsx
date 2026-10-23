@@ -1,3 +1,4 @@
+import Feedback from '../../components/Feedback';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowRight, Check, Package, RefreshCw } from 'lucide-react';
 import AdminDialog from '../upstream/AdminDialog';
@@ -129,19 +130,27 @@ export default function BillingPanel(
       )}
       {loading && !tier && <p role="status">正在读取套餐和订单…</p>}
       {message && (
-        <p className="billing-success" role="status">
+        <Feedback
+          onDismiss={() => setMessage('')}
+          className="billing-success"
+          variant="success"
+        >
           {message}
           {mode === 'plans' && message.startsWith('订单已创建') && (
             <button className="text-action" onClick={props.onOrders}>
               查看新订单 →
             </button>
           )}
-        </p>
+        </Feedback>
       )}
       {error && !buy && !cancel && (
-        <p className="up-alert" role="alert">
+        <Feedback
+          onDismiss={() => setError('')}
+          className="up-alert"
+          variant="error"
+        >
           {error}
-        </p>
+        </Feedback>
       )}
       {mode === 'plans' ? (
         <>
@@ -331,9 +340,13 @@ export default function BillingPanel(
               创建订单后，请联系管理员确认收款方式并完成线下付款。此按钮只创建订单，不会扣款。
             </p>
             {error && (
-              <p className="up-alert" role="alert">
+              <Feedback
+                onDismiss={() => setError('')}
+                className="up-alert"
+                variant="error"
+              >
                 {error}
-              </p>
+              </Feedback>
             )}
             <div className="billing-actions">
               <button
@@ -370,9 +383,13 @@ export default function BillingPanel(
               取消后将无法确认到账。如果已经付款，请先联系管理员核对。
             </p>
             {error && (
-              <p role="alert" className="up-alert">
+              <Feedback
+                onDismiss={() => setError('')}
+                variant="error"
+                className="up-alert"
+              >
                 {error}
-              </p>
+              </Feedback>
             )}
             <div className="billing-actions">
               <button

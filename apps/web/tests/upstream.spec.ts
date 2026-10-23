@@ -1,3 +1,4 @@
+import { dismissFeedback } from './feedbackTestHelpers';
 import { test, expect, type Page } from '@playwright/test';
 const sampleAccount = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -214,6 +215,8 @@ test('account management writes once, hides saved credentials and uses accessibl
   await d.getByLabel('API 密钥').fill('synthetic-secret-9876');
   await d.getByRole('button', { name: '保存配置' }).dblclick();
   await expect(d).toHaveCount(0);
+  await expect(page.getByRole('alertdialog')).toContainText('账号配置已保存');
+  await dismissFeedback(page);
   expect(
     f.writes.find((w) => w.path === '/api/v1/admin/upstream-accounts')?.body
       ?.base_url,
@@ -233,16 +236,22 @@ test('account management writes once, hides saved credentials and uses accessibl
     page.getByRole('status').filter({ hasText: '图片主池 连接正常' }),
   ).toBeVisible();
   expect(f.writes.filter((w) => w.path.endsWith('/test'))).toHaveLength(1);
+  await dismissFeedback(page);
   await page.getByRole('button', { name: '查看统计 图片主池' }).click();
   await expect(d).toContainText('90%');
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: '更新额度 图片主池' }).click();
   await d.getByLabel('剩余额度').fill('101');
   await d.getByRole('button', { name: '更新额度', exact: true }).click();
-  await expect(d.getByRole('alert')).toContainText('不能超过');
+  await expect(page.getByRole('alertdialog').getByRole('alert')).toContainText(
+    '不能超过',
+  );
+  await dismissFeedback(page);
   await d.getByLabel('剩余额度').fill('90');
   await d.getByRole('button', { name: '更新额度', exact: true }).click();
   await expect(d).toHaveCount(0);
+  await expect(page.getByRole('alertdialog')).toContainText('额度已更新');
+  await dismissFeedback(page);
   await expect(
     page.getByRole('progressbar', { name: '图片主池 剩余额度' }),
   ).toHaveAttribute('value', '90');
@@ -252,6 +261,8 @@ test('account management writes once, hides saved credentials and uses accessibl
   expect(f.writes.filter((w) => w.body?.enabled === false)).toHaveLength(0);
   await page.getByRole('button', { name: '停用 图片主池' }).click();
   await d.getByRole('button', { name: '停用账号', exact: true }).click();
+  await expect(page.getByRole('alertdialog')).toContainText('已停用');
+  await dismissFeedback(page);
   await expect(page.getByText('已停用', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '删除 新账号' }).click();
   await d.getByRole('button', { name: '删除账号', exact: true }).click();
@@ -269,7 +280,10 @@ test('JSON import validates before sending and clears materials on close; search
   const d = page.getByRole('dialog');
   await d.getByLabel('账号 JSON').fill('{}');
   await d.getByRole('button', { name: '校验并导入' }).click();
-  await expect(d.getByRole('alert')).toContainText('有效 JSON');
+  await expect(page.getByRole('alertdialog').getByRole('alert')).toContainText(
+    '有效 JSON',
+  );
+  await dismissFeedback(page);
   expect(f.writes).toHaveLength(0);
   await d
     .getByLabel('账号 JSON')
@@ -283,6 +297,8 @@ test('JSON import validates before sending and clears materials on close; search
   await d.getByRole('button', { name: '校验并导入' }).click();
   await expect(d).toHaveCount(0);
   expect(f.writes[0].path).toMatch(/\/import$/);
+  await expect(page.getByRole('alertdialog')).toContainText('已导入');
+  await dismissFeedback(page);
   await page.getByLabel('搜索账号名称或分组').fill('missing');
   await expect(page.getByText('没有匹配的账号', { exact: true })).toBeVisible();
 });
@@ -295,6 +311,7 @@ test('models need bindings and pricing; price drafts survive tabs and native ide
     .getByRole('button', { name: '启用 Atelier Image', exact: true })
     .click();
   await expect(page.getByRole('alert')).toContainText('账号绑定及价格');
+  await dismissFeedback(page);
   await page.getByRole('button', { name: '绑定账号 Atelier Image' }).click();
   const d = page.getByRole('dialog');
   await d.getByLabel('动态分组').fill('images');
@@ -302,6 +319,8 @@ test('models need bindings and pricing; price drafts survive tabs and native ide
   await d.getByRole('button', { name: '保存绑定' }).click();
   await expect(d).toHaveCount(0);
   expect(f.models[0].group_tags).toEqual(['images']);
+  await expect(page.getByRole('alertdialog')).toContainText('路由绑定已保存');
+  await dismissFeedback(page);
   await page.getByRole('tab', { name: '积分定价' }).click();
   await page.getByLabel('Atelier Image low 基础积分').fill('10');
   await page.getByLabel('Atelier Image medium 基础积分').fill('20');
@@ -312,6 +331,7 @@ test('models need bindings and pricing; price drafts survive tabs and native ide
   await expect(page.getByLabel('Atelier Image low 基础积分')).toHaveValue('10');
   await page.getByRole('button', { name: '保存全部价格' }).click();
   await expect(page.getByRole('status')).toContainText('价格已保存');
+  await dismissFeedback(page);
   expect(
     f.writes.find((w) => w.path.endsWith('/pricing'))?.body?.revision,
   ).toBe(1);
@@ -319,6 +339,8 @@ test('models need bindings and pricing; price drafts survive tabs and native ide
   await page
     .getByRole('button', { name: '启用 Atelier Image', exact: true })
     .click();
+  await expect(page.getByRole('alertdialog')).toContainText('模型已启用');
+  await dismissFeedback(page);
   await expect(page.getByText('已启用', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '编辑 Atelier Image' }).click();
   await expect(d.getByLabel('上游模型标识')).toHaveValue('');
@@ -388,6 +410,7 @@ test('temporary failures retry, cursor paging restores the first page and failed
   );
   await page.getByRole('button', { name: '测试连接 图片主池' }).click();
   await expect(page.getByRole('alert')).toContainText('凭据无效');
+  await dismissFeedback(page);
   await page.route('**/api/v1/admin/upstream-accounts/*', async (route) => {
     if (route.request().method() !== 'PATCH') return route.fallback();
     return route.fulfill({
@@ -398,7 +421,10 @@ test('temporary failures retry, cursor paging restores the first page and failed
   await page.getByRole('button', { name: '编辑 图片主池' }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByRole('button', { name: '保存配置' }).click();
-  await expect(dialog.getByRole('alert')).toContainText('配置已变更');
+  await expect(page.getByRole('alertdialog').getByRole('alert')).toContainText(
+    '配置已变更',
+  );
+  await dismissFeedback(page);
   await page.keyboard.press('Escape');
   await expect(
     page.getByRole('button', { name: '编辑 图片主池' }),

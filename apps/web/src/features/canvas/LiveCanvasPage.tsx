@@ -1,3 +1,4 @@
+import Feedback from '../../components/Feedback';
 import { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -67,11 +68,11 @@ export default function LiveCanvasPage(props: CanvasProps) {
     return (
       <main className="page-padding">
         <h1>暂时无法打开画布</h1>
-        <p role="alert">
+        <Feedback eventKey={query.error} variant="error">
           {query.error instanceof SessionError && query.error.status === 404
             ? '画布已删除或你没有访问权限。'
             : '连接暂时异常，请重试。'}
-        </p>
+        </Feedback>
         <button className="btn" onClick={() => void query.refetch()}>
           重新加载
         </button>

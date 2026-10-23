@@ -1,3 +1,4 @@
+import Feedback from '../../components/Feedback';
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams, useNavigate, useBlocker } from 'react-router-dom';
@@ -392,7 +393,7 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
             </div>
           )}
           {list.isError && (
-            <p role="alert">
+            <Feedback variant="error">
               列表加载失败。
               <button
                 className="text-action"
@@ -400,7 +401,7 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
               >
                 重新加载对话
               </button>
-            </p>
+            </Feedback>
           )}
           {list.data?.items.map((c, index, items) => (
             <Fragment key={c.id}>
@@ -524,7 +525,7 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
             </div>
           )}
           {view.isError && (
-            <p role="alert">
+            <Feedback eventKey={view.error} variant="error">
               {failed(view.error)}
               <button
                 className="text-action"
@@ -532,7 +533,7 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
               >
                 重新加载消息
               </button>
-            </p>
+            </Feedback>
           )}
           {showWelcome && (
             <div className="live-chat-empty">
@@ -694,18 +695,22 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
           )}
           <div className="chat-composer-card">
             {error && (
-              <p role="alert">
+              <Feedback onDismiss={() => setError('')} variant="error">
                 {error}
                 {error.includes('积分') && (
                   <Link className="text-action" to="/wallet">
                     查看积分
                   </Link>
                 )}
-              </p>
+              </Feedback>
             )}
-            {notice && <p role="status">{notice}</p>}
+            {notice && (
+              <Feedback onDismiss={() => setNotice('')} variant="success">
+                {notice}
+              </Feedback>
+            )}
             {config.isError && (
-              <p role="alert">
+              <Feedback variant="error">
                 模型配置加载失败。
                 <button
                   className="text-action"
@@ -713,7 +718,7 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
                 >
                   重试模型
                 </button>
-              </p>
+              </Feedback>
             )}
             {config.data?.models.length === 0 && (
               <p role="status">

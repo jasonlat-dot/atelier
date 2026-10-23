@@ -1,3 +1,4 @@
+import { dismissFeedback } from './feedbackTestHelpers';
 import { test, expect, type Page } from '@playwright/test';
 const png =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=';
@@ -259,7 +260,9 @@ async function fixture(
     throw new Error(`Unexpected ${method} ${path}`);
   });
   await page.goto('/generate');
-  await expect(page.getByRole('heading', { name: '生成工作台' })).toBeVisible();
+  await expect(
+    page.getByRole('main', { name: '图片与视频生成' }),
+  ).toBeVisible();
   return { writes, state };
 }
 test('history context menu deletes only the confirmed record, preserves media, survives reload and handles errors', async ({
@@ -310,6 +313,8 @@ test('history context menu deletes only the confirmed record, preserves media, s
     .getByRole('button', { name: '确认删除记录', exact: true })
     .click();
   await expect(other).toHaveCount(0);
+  await expect(page.getByRole('alertdialog')).toContainText('已删除生成记录');
+  await dismissFeedback(page);
   await expect(
     page.getByRole('button', { name: '预览结果 1', exact: true }),
   ).toBeVisible();
@@ -324,7 +329,8 @@ test('history context menu deletes only the confirmed record, preserves media, s
   await dialog
     .getByRole('button', { name: '确认删除记录', exact: true })
     .click();
-  await expect(dialog.getByRole('alert')).toBeVisible();
+  await expect(page.getByRole('alertdialog').getByRole('alert')).toBeVisible();
+  await dismissFeedback(page);
   await expect(page.locator('.gen-task')).toHaveCount(1);
   f.state.historyDeleteFail = false;
   await dialog
@@ -352,7 +358,9 @@ test('running history keeps deletion disabled and context menu dismisses on outs
     menu.getByRole('menuitem', { name: '删除记录', exact: true }),
   ).toBeDisabled();
   await expect(menu).toContainText('任务进行中');
-  await page.getByRole('heading', { name: '生成工作台' }).click();
+  await page
+    .getByText('让一个想法，成为看得见的作品。', { exact: true })
+    .click();
   await expect(menu).toHaveCount(0);
   expect(f.state.historyDeleted).toHaveLength(0);
 });
@@ -497,6 +505,7 @@ test('an ambiguous submission freezes the draft and retries exactly the same key
   await page.getByLabel('画面描述').fill('雨后街角');
   await page.getByRole('button', { name: '生成图片', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('提交结果尚未确认');
+  await dismissFeedback(page);
   await expect(page.getByLabel('画面描述')).toBeDisabled();
   await page.getByRole('button', { name: '重试确认提交' }).click();
   await expect(page.getByRole('button', { name: '取消任务' })).toBeVisible();
@@ -566,6 +575,8 @@ test('SSE refreshes partial results and wallet, preview downloads use stored med
   );
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: '复用参数' }).click();
+  await expect(page.getByRole('alertdialog')).toContainText('参数已填入');
+  await dismissFeedback(page);
   expect(f.writes).toHaveLength(1);
   await page.setViewportSize({ width: 1440, height: 950 });
   await page.locator('.app-content').evaluate((el) => {
@@ -621,4 +632,43 @@ test('no enabled model gives an actionable empty state without a fake generation
   await expect(
     page.getByRole('button', { name: '生成图片', exact: true }),
   ).toHaveCount(0);
+});
+
+test('quote failures use an overlay and retry only refreshes the price', async ({
+  page,
+}) => {
+  const f = await fixture(page);
+  await page.getByLabel('画面描述').fill('Quote retry');
+  await expect(
+    page.getByRole('button', { name: '生成图片', exact: true }),
+  ).toBeEnabled();
+  let failed = true;
+  let requests = 0;
+  await page.route('**/api/v1/generation/quote', async (route) => {
+    requests++;
+    if (failed)
+      return route.fulfill({
+        status: 503,
+        json: { error: { code: 'SERVICE_UNAVAILABLE' } },
+      });
+    return route.fallback();
+  });
+  await page.getByLabel('生成数量').selectOption('2');
+  const feedback = page.getByRole('alertdialog');
+  await expect(feedback).toContainText('暂时无法获取报价');
+  await expect(
+    page.getByRole('button', { name: '生成图片', exact: true }),
+  ).toBeDisabled();
+  await dismissFeedback(page);
+  await expect(
+    page.getByRole('button', { name: '生成图片', exact: true }),
+  ).toBeDisabled();
+  await page.getByRole('button', { name: '重试报价', exact: true }).click();
+  await expect(feedback).toBeVisible();
+  failed = false;
+  await feedback.getByRole('button', { name: '重试报价', exact: true }).click();
+  await expect(feedback).toHaveCount(0);
+  await expect(page.locator('.gen-price')).toContainText('每张 7 积分');
+  expect(requests).toBe(3);
+  expect(f.writes).toHaveLength(0);
 });

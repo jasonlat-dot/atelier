@@ -1,3 +1,4 @@
+import Feedback from '../../components/Feedback';
 import {
   useCallback,
   useEffect,
@@ -543,11 +544,10 @@ export default function GenerationPage(props: Props) {
     }
   };
   return (
-    <main className="generation-page">
+    <main className="generation-page" aria-label="图片与视频生成">
       <header className="gen-heading">
         <div>
           <div className="eyebrow">GENERATE</div>
-          <h1>生成工作台</h1>
           <p className="muted">让一个想法，成为看得见的作品。</p>
         </div>
         <span
@@ -559,12 +559,16 @@ export default function GenerationPage(props: Props) {
         </span>
       </header>
       {loadError && (
-        <div className="gen-notice" role="alert">
+        <Feedback
+          onDismiss={() => setLoadError('')}
+          className="gen-notice"
+          variant="error"
+        >
           {loadError}
           <button className="btn" onClick={() => void loadConfig()}>
             重新连接
           </button>
-        </div>
+        </Feedback>
       )}
       <div className="gen-layout">
         <section className="gen-controls" aria-label="生成参数">
@@ -813,32 +817,59 @@ export default function GenerationPage(props: Props) {
                   </strong>
                 </div>
                 <p>
-                  {quoteBusy || pricedKey !== quoteKey
+                  {quoteBusy
                     ? '正在获取报价…'
-                    : quoteError ||
-                      (quote
-                        ? `${quote.size} · 每${form.kind === 'image' ? '张' : '段'} ${quote.cost_per_output} 积分`
-                        : '请选择生成参数')}
+                    : quoteError
+                      ? '暂未获取报价'
+                      : pricedKey !== quoteKey
+                        ? '正在获取报价…'
+                        : quote
+                          ? `${quote.size} · 每${form.kind === 'image' ? '张' : '段'} ${quote.cost_per_output} 积分`
+                          : '请选择生成参数'}
                 </p>
                 {quoteError && (
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={() => setQuoteRetry((v) => v + 1)}
-                  >
-                    重试报价
-                  </button>
+                  <>
+                    <Feedback
+                      variant="error"
+                      title="暂时无法获取报价"
+                      eventKey={quoteRetry}
+                    >
+                      {quoteError}
+                      <button
+                        type="button"
+                        className="btn"
+                        onClick={() => setQuoteRetry((v) => v + 1)}
+                      >
+                        重试报价
+                      </button>
+                    </Feedback>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => setQuoteRetry((v) => v + 1)}
+                    >
+                      重试报价
+                    </button>
+                  </>
                 )}
               </div>
               {feedback && (
-                <p className="gen-feedback" role="status">
+                <Feedback
+                  onDismiss={() => setFeedback('')}
+                  className="gen-feedback"
+                  variant="success"
+                >
                   {feedback}
-                </p>
+                </Feedback>
               )}
               {actionError && (
-                <p className="gen-form-message" role="alert">
+                <Feedback
+                  onDismiss={() => setActionError('')}
+                  className="gen-form-message"
+                  variant="error"
+                >
                   {actionError}
-                </p>
+                </Feedback>
               )}
               <button
                 className="btn btn-dark gen-submit"
@@ -1249,7 +1280,14 @@ export default function GenerationPage(props: Props) {
             <p className="gen-delete-record-note">
               生成的图片或视频仍保留在素材库，画布引用与积分流水不受影响。
             </p>
-            {historyDeleteError && <p role="alert">{historyDeleteError}</p>}
+            {historyDeleteError && (
+              <Feedback
+                onDismiss={() => setHistoryDeleteError('')}
+                variant="error"
+              >
+                {historyDeleteError}
+              </Feedback>
+            )}
             <div className="gen-delete-record-actions">
               <button
                 className="btn"

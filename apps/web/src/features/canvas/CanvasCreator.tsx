@@ -1,3 +1,4 @@
+import Feedback from '../../components/Feedback';
 import { useEffect, useState, type CSSProperties } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Image as ImageIcon, Film, Sparkles, Plus, X } from 'lucide-react';
@@ -129,14 +130,15 @@ export default function CanvasCreator({
     );
     return () => clearTimeout(timer);
   }, [serialized]);
+  const stale = JSON.stringify(debounced) !== serialized;
   const quote = useQuery({
     queryKey: ['canvas-quote', debounced],
     queryFn: ({ signal }) => generationApi.quote(debounced, csrf, signal),
-    enabled: !!model && !readonly && !tail && references.length <= maxRefs,
+    enabled:
+      !!model && !readonly && !tail && references.length <= maxRefs && !stale,
     staleTime: 10000,
     retry: false,
   });
-  const stale = JSON.stringify(debounced) !== serialized;
   const blocked =
     readonly ||
     busy ||
@@ -159,8 +161,8 @@ export default function CanvasCreator({
           <small>积分</small>
         </strong>
       </div>
-      {quote.isError && (
-        <p role="alert">
+      {quote.isError && !stale && (
+        <Feedback eventKey={quote.error} variant="error">
           {errorText(quote.error)}
           <button
             className="text-action"
@@ -169,7 +171,7 @@ export default function CanvasCreator({
           >
             重试报价
           </button>
-        </p>
+        </Feedback>
       )}
       <button className="btn btn-dark full" disabled={blocked} onClick={onRun}>
         <Sparkles size={15} />
@@ -266,7 +268,7 @@ export default function CanvasCreator({
               </p>
             )}
           {catalog.isError && (
-            <p role="alert">
+            <Feedback eventKey={catalog.error} variant="error">
               {errorText(catalog.error)}
               <button
                 className="text-action"
@@ -274,7 +276,7 @@ export default function CanvasCreator({
               >
                 重新加载模型
               </button>
-            </p>
+            </Feedback>
           )}
           <div className="field-label" id="canvas-quality-label">
             生成质量
@@ -488,14 +490,16 @@ export default function CanvasCreator({
                 : `最多使用 ${maxRefs} 张参考图。拖动节点端口可连接提示词与参考。`}
           </p>
           {tail && (
-            <p role="alert">当前模型不支持尾帧输入，请移除尾帧连线后继续。</p>
+            <Feedback variant="error">
+              当前模型不支持尾帧输入，请移除尾帧连线后继续。
+            </Feedback>
           )}
           {references.length > maxRefs && (
-            <p role="alert">
+            <Feedback variant="error">
               {actualKind === 'image' && !model?.capabilities.supports_edit
                 ? '当前模型尚未开启图片编辑。请更换支持参考图的模型，或请管理员核对模型能力。'
                 : `当前模型最多支持 ${maxRefs} 张参考图，已连接 ${references.length} 张，请移除多余参考。`}
-            </p>
+            </Feedback>
           )}
           {!floating && submission}
           {!floating && (

@@ -233,7 +233,12 @@ function UserDrawer(props: AdminProps & { id: string; onClose: () => void }) {
   }
   return (
     <AdminDialog title="用户详情" drawer onClose={props.onClose}>
-      <AdminFeedback props={props} error={query.error} message={message} />
+      <AdminFeedback
+        props={props}
+        error={query.error}
+        message={message}
+        onDismissMessage={() => setMessage('')}
+      />
       {query.isPending && (
         <div
           className="admin-skeleton"

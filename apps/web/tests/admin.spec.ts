@@ -1,3 +1,4 @@
+import { dismissFeedback } from './feedbackTestHelpers';
 import { test, expect, type Page } from '@playwright/test';
 import type { components } from '../src/lib/generated/api';
 type S = components['schemas'];
@@ -345,6 +346,8 @@ test('user pagination search and credit confirmation preserve financial retry', 
   await modal
     .getByRole('button', { name: '确认调整积分', exact: true })
     .click();
+  await expect(page.getByRole('alertdialog')).toContainText('操作未完成');
+  await dismissFeedback(page);
   await expect(
     modal.getByRole('button', { name: '按原内容重试' }),
   ).toBeVisible();
@@ -353,6 +356,8 @@ test('user pagination search and credit confirmation preserve financial retry', 
   expect(state.keys[0]).toBe(state.keys[1]);
   expect(state.bodies[0]).toEqual(state.bodies[1]);
   expect(state.user.balance).toBe(47);
+  await expect(page.getByRole('alertdialog')).toContainText('调整积分已完成');
+  await dismissFeedback(page);
   await page.getByRole('button', { name: '禁用账号', exact: true }).click();
   const disable = page.getByRole('dialog', { name: '禁用账号', exact: true });
   await expect(disable).toContainText('立即撤销全部会话');
@@ -360,6 +365,8 @@ test('user pagination search and credit confirmation preserve financial retry', 
   await disable
     .getByRole('button', { name: '确认禁用账号', exact: true })
     .click();
+  await expect(page.getByRole('alertdialog')).toContainText('禁用账号已完成');
+  await dismissFeedback(page);
   await expect(
     page.getByRole('button', { name: '恢复账号', exact: true }),
   ).toBeVisible();
@@ -395,6 +402,8 @@ test('rules and one-time invite creation use custom dialogs and can be revoked',
   await dialog.getByLabel('匹配内容').fill('fixture-blocked');
   await dialog.getByLabel('处理说明').fill('测试内容拦截');
   await dialog.getByRole('button', { name: '保存规则', exact: true }).click();
+  await expect(page.getByRole('alertdialog')).toContainText('规则已保存');
+  await dismissFeedback(page);
   await expect(
     page.getByText('fixture-blocked', { exact: true }),
   ).toBeVisible();
@@ -402,6 +411,8 @@ test('rules and one-time invite creation use custom dialogs and can be revoked',
   dialog = page.getByRole('dialog');
   await dialog.getByLabel('处理说明').fill('移除测试规则');
   await dialog.getByRole('button', { name: '确认删除规则' }).click();
+  await expect(page.getByRole('alertdialog')).toContainText('规则已删除');
+  await dismissFeedback(page);
   await expect(page.getByText('暂无匹配的内容规则。')).toBeVisible();
   await page.getByRole('tab', { name: '邀请码', exact: true }).click();
   await page.getByRole('button', { name: '创建邀请码', exact: true }).click();
@@ -409,6 +420,8 @@ test('rules and one-time invite creation use custom dialogs and can be revoked',
   await dialog.getByLabel('邀请备注').fill('验收邀请');
   await dialog.getByLabel('处理说明').fill('测试注册');
   await dialog.getByRole('button', { name: '确认创建邀请' }).click();
+  await expect(page.getByRole('alertdialog')).toContainText('邀请码记录已更新');
+  await dismissFeedback(page);
   await expect(page.getByLabel('完整邀请码', { exact: true })).toHaveValue(
     'ati_fixture_onetime_abcd',
   );
@@ -421,6 +434,8 @@ test('rules and one-time invite creation use custom dialogs and can be revoked',
   dialog = page.getByRole('dialog');
   await dialog.getByLabel('处理说明').fill('验收结束');
   await dialog.getByRole('button', { name: '确认撤销邀请' }).click();
+  await expect(page.getByRole('alertdialog')).toContainText('邀请码记录已更新');
+  await dismissFeedback(page);
   await expect(page.getByText('已撤销', { exact: true })).toBeVisible();
   expect(state.invites[0].revoked_at).toBeTruthy();
 });
@@ -436,10 +451,14 @@ test('ambiguous invite creation prevents duplicate creation', async ({
   await modal.getByLabel('邀请备注').fill('不确定邀请');
   await modal.getByLabel('处理说明').fill('故障验收');
   await modal.getByRole('button', { name: '确认创建邀请' }).click();
+  await expect(page.getByRole('alertdialog')).toContainText('未完成');
+  await expect(page.getByRole('alertdialog')).toContainText(
+    '先撤销该记录再创建',
+  );
+  await dismissFeedback(page);
   await expect(
     modal.getByRole('button', { name: '确认创建邀请' }),
   ).toBeDisabled();
-  await expect(modal).toContainText('先撤销该记录再创建');
   expect(
     state.requests.filter((r) => r === 'POST /admin/invite-codes'),
   ).toHaveLength(1);
@@ -456,10 +475,14 @@ test('job compensation retries keep the same request and disable a second compen
   await dialog
     .getByRole('button', { name: '确认补偿积分', exact: true })
     .click();
+  await expect(page.getByRole('alertdialog')).toContainText('未完成');
+  await dismissFeedback(page);
   await dialog.getByRole('button', { name: '按原请求重试' }).click();
   await expect(dialog).toHaveCount(0);
   expect(state.keys[0]).toBe(state.keys[1]);
   expect(state.bodies[0]).toEqual(state.bodies[1]);
+  await expect(page.getByRole('alertdialog')).toContainText('积分补偿已入账');
+  await dismissFeedback(page);
   await expect(
     page.getByRole('button', { name: '补偿积分', exact: true }),
   ).toBeDisabled();

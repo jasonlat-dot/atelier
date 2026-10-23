@@ -2,6 +2,7 @@ import React, { lazy, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import './styles/global.css';
+import { FeedbackHost } from './components/Feedback';
 
 // Replaced with a literal by Vite: the unused entry is eliminated at build time.
 const App = __MOCK__
@@ -12,9 +13,12 @@ const router = createBrowserRouter([
   {
     path: '*',
     element: (
-      <Suspense fallback={<p>加载中…</p>}>
-        <App />
-      </Suspense>
+      <>
+        <Suspense fallback={<p>加载中…</p>}>
+          <App />
+        </Suspense>
+        <FeedbackHost />
+      </>
     ),
   },
 ]);

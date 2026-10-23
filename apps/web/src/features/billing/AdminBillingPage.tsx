@@ -1,3 +1,4 @@
+import Feedback from '../../components/Feedback';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, RefreshCw } from 'lucide-react';
@@ -101,14 +102,22 @@ function BillingAdmin(props: AdminProps) {
         <Link to="/admin/credits">兑换码与积分调整</Link>
       </nav>
       {error && (
-        <p className="up-alert" role="alert">
+        <Feedback
+          onDismiss={() => setError('')}
+          className="up-alert"
+          variant="error"
+        >
           {error}
-        </p>
+        </Feedback>
       )}
       {message && (
-        <p className="billing-success" role="status">
+        <Feedback
+          onDismiss={() => setMessage('')}
+          className="billing-success"
+          variant="success"
+        >
           {message}
-        </p>
+        </Feedback>
       )}
       {loading && <p role="status">正在读取账务记录…</p>}
       {tab === 'plans' ? (
@@ -476,9 +485,13 @@ function PlanEditor(
           </label>
         </fieldset>
         {error && (
-          <p role="alert" className="up-alert">
+          <Feedback
+            onDismiss={() => setError('')}
+            variant="error"
+            className="up-alert"
+          >
             {error}
-          </p>
+          </Feedback>
         )}
         <div className="billing-actions">
           <button
@@ -650,9 +663,9 @@ function PaymentDialog(
               </div>
             )}
             {quote && quote.held_credits > 0 && (
-              <p role="alert" className="up-alert">
+              <Feedback variant="error" className="up-alert">
                 请等待该用户的生成任务结束或取消任务，解除预占后再退款。
-              </p>
+              </Feedback>
             )}
             <button
               className="text-action"
@@ -691,9 +704,13 @@ function PaymentDialog(
             : `我已完成上方金额的线下退款，同意回收未用积分并结束对应周期权益`}
         </label>
         {error && (
-          <p role="alert" className="up-alert">
+          <Feedback
+            onDismiss={() => setError('')}
+            variant="error"
+            className="up-alert"
+          >
             {error}
-          </p>
+          </Feedback>
         )}
         <div className="billing-actions">
           <button

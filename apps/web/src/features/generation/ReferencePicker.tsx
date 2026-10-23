@@ -1,3 +1,4 @@
+import Feedback from '../../components/Feedback';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import AssetDialog from '../assets/AssetDialog';
@@ -58,7 +59,7 @@ export default function ReferencePicker({
         {picked.length} 个。
       </p>
       {error && (
-        <p role="alert">
+        <Feedback onDismiss={() => setError('')} variant="error">
           {error}{' '}
           <button
             className="btn"
@@ -69,7 +70,7 @@ export default function ReferencePicker({
           >
             重试加载
           </button>
-        </p>
+        </Feedback>
       )}
       {busy ? (
         <p role="status">正在加载图片…</p>

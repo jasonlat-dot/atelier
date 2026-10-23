@@ -1,3 +1,4 @@
+import { dismissFeedback } from './feedbackTestHelpers';
 import { test, expect, type Page } from '@playwright/test';
 import { createHmac } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -64,14 +65,17 @@ test('real database and Redis login reaches workspace, survives reload and revok
   await page.getByLabel('显示名').fill('Live account');
   await page.getByRole('button', { name: '保存显示名' }).click();
   await expect(page.getByText('显示名已更新')).toBeVisible();
+  await dismissFeedback(page);
   await page.reload();
   await expect(page.getByLabel('显示名')).toHaveValue('Live account');
   await page.getByRole('link', { name: '积分与订阅', exact: true }).click();
   await expect(page.getByRole('heading', { name: '我的积分' })).toBeVisible();
-  await expect(page.getByRole('cell', { name: '注册赠送' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /注册赠送/ })).toBeVisible();
   const initial = await (await page.request.get('/api/v1/wallet')).json();
   expect(initial.balance).toBe(20);
   await page.getByRole('button', { name: '领取今日积分' }).click();
+  await expect(page.getByRole('alertdialog')).toContainText('签到成功');
+  await dismissFeedback(page);
   await expect(page.getByRole('button', { name: '今日已签到' })).toBeDisabled();
   await page.reload();
   await expect(page.getByRole('button', { name: '今日已签到' })).toBeDisabled();
@@ -93,6 +97,7 @@ test('real database and Redis login reaches workspace, survives reload and revok
   await expect(
     page.getByText('已上传 1 个素材', { exact: true }),
   ).toBeVisible();
+  await dismissFeedback(page);
   await page.reload();
   await page.getByRole('button', { name: '预览 Live reference.png' }).click();
   const preview = page.getByRole('dialog', { name: 'Live reference.png' });
@@ -109,6 +114,7 @@ test('real database and Redis login reaches workspace, survives reload and revok
   await expect(
     page.getByText('已删除 1 个素材', { exact: true }),
   ).toBeVisible();
+  await dismissFeedback(page);
   await expect(page.getByLabel('选择上传素材', { exact: true })).toBeEnabled();
   const video = readFileSync(
     new URL(
@@ -121,6 +127,8 @@ test('real database and Redis login reaches workspace, survives reload and revok
     mimeType: 'video/mp4',
     buffer: video,
   });
+  await expect(page.getByRole('alertdialog')).toContainText('已上传 1 个素材');
+  await dismissFeedback(page);
   const film = page.getByRole('button', { name: '预览 Live film.mp4' });
   await expect(film).toBeEnabled({ timeout: 20000 });
   await page.reload();
@@ -146,9 +154,14 @@ test('real database and Redis login reaches workspace, survives reload and revok
   await page.getByRole('button', { name: '删除 Live film.mp4' }).click();
   await page.getByRole('button', { name: '确认删除素材' }).click();
   await expect(film).toHaveCount(0);
+  await expect(page.getByRole('alertdialog')).toContainText('已删除 1 个素材');
+  await dismissFeedback(page);
   await page.getByRole('link', { name: '账号设置', exact: true }).click();
-  page.once('dialog', (d) => d.accept());
   await page.getByRole('button', { name: '退出所有设备' }).click();
+  await page
+    .getByRole('dialog', { name: '退出所有设备？' })
+    .getByRole('button', { name: '退出所有设备并返回登录' })
+    .click();
   await expect(page).toHaveURL(/\/login$/);
   const revoked = await page.request.get('/api/v1/me', {
     headers: { cookie: `__Host-sid=${cookie?.value}` },
@@ -203,6 +216,8 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   await dialog.getByLabel('API 密钥').fill('synthetic-browser-secret');
   await dialog.getByRole('button', { name: '保存配置' }).click();
   await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole('alertdialog')).toContainText('账号配置已保存');
+  await dismissFeedback(page);
   await page.getByRole('button', { name: '测试连接 Live upstream' }).click();
   await expect(
     page.getByRole('status').filter({ hasText: 'Live upstream 连接正常' }),
@@ -225,19 +240,26 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   await dialog.getByLabel('上游模型标识').fill('fixture-private-model');
   await dialog.getByRole('button', { name: '保存模型' }).click();
   await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole('alertdialog')).toContainText('模型已创建');
+  await dismissFeedback(page);
   await page.getByRole('button', { name: '绑定账号 Live Image' }).click();
   await dialog.getByLabel('动态分组').fill('default');
   await dialog.getByRole('button', { name: '保存绑定' }).click();
   await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole('alertdialog')).toContainText('路由绑定已保存');
+  await dismissFeedback(page);
   await page.getByRole('tab', { name: '积分定价' }).click();
   for (const quality of ['low', 'medium', 'high'])
     await page.getByLabel(`Live Image ${quality} 基础积分`).fill('10');
   await page.getByRole('button', { name: '保存全部价格' }).click();
   await expect(page.getByRole('status')).toContainText('价格已保存');
+  await dismissFeedback(page);
   await page.getByRole('tab', { name: '模型目录' }).click();
   await page
     .getByRole('button', { name: '启用 Live Image', exact: true })
     .click();
+  await expect(page.getByRole('alertdialog')).toContainText('模型已启用');
+  await dismissFeedback(page);
   await expect(page.getByText('已启用', { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByText('已启用', { exact: true })).toBeVisible();
@@ -416,6 +438,7 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   await expect(page).toHaveURL(/\/canvas\/[0-9a-f-]{36}$/);
   const canvasId = new URL(page.url()).pathname.split('/').pop()!;
   await page.getByRole('button', { name: '添加文字节点', exact: true }).click();
+  await page.getByRole('button', { name: '编辑文字', exact: true }).click();
   await page.getByLabel('节点文字').fill('A calm canvas ocean');
   await page.getByLabel('画布上传文件').setInputFiles({
     name: 'Canvas reference.png',
@@ -430,6 +453,7 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   await expect(
     page.getByText('素材已上传并加入画布。', { exact: true }),
   ).toBeVisible();
+  await dismissFeedback(page);
   await page.getByRole('button', { name: '添加生成节点', exact: true }).click();
   const graphState = async () =>
     await (await page.request.get(`/api/v1/projects/${canvasId}`)).json();
@@ -486,6 +510,8 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   await page
     .getByRole('button', { name: '生成并加入画布', exact: true })
     .click();
+  await expect(page.getByRole('alertdialog')).toContainText('生成任务已提交');
+  await dismissFeedback(page);
   await expect
     .poll(
       async () =>
@@ -521,6 +547,8 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
   const archive = Buffer.concat(chunks);
   expect(archive.subarray(0, 2).toString()).toBe('PK');
+  await expect(page.getByRole('alertdialog')).toContainText('项目 ZIP 已导出');
+  await dismissFeedback(page);
   const beforeBalance = (
     await (await page.request.get('/api/v1/wallet')).json()
   ).balance;
@@ -632,6 +660,7 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   await expect(
     page.getByText('回复已保存，本次 1 积分。', { exact: true }),
   ).toBeVisible({ timeout: 20000 });
+  await dismissFeedback(page);
   await expect(
     page.getByRole('heading', { name: '海岸创作建议' }),
   ).toBeVisible();
@@ -648,6 +677,8 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
     await (await page.request.get('/api/v1/generation/jobs?limit=100')).json()
   ).items.length;
   await page.getByRole('link', { name: '在画布中生成', exact: true }).click();
+  await expect(page.getByRole('alertdialog')).toContainText('已填入对话草稿');
+  await dismissFeedback(page);
   await expect(page.getByLabel('创意描述')).toHaveValue('生成一张海岸海报');
   expect(
     (await (await page.request.get('/api/v1/generation/jobs?limit=100')).json())
@@ -683,12 +714,15 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
     (await (await page.request.get('/api/v1/wallet')).json()).balance,
   ).toBe(chatBalance - 1);
   await expect(page.getByLabel('对话内容')).toBeEnabled();
+  await expect(page.getByRole('alertdialog')).toContainText('已停止');
+  await dismissFeedback(page);
   await page.getByLabel('对话内容').fill('fixture fail');
   await page.getByRole('button', { name: '发送', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText(
     '回复未完成，未扣积分，请稍后重试。',
     { timeout: 15000 },
   );
+  await dismissFeedback(page);
   const chatWallet = await (await page.request.get('/api/v1/wallet')).json();
   expect(chatWallet.balance).toBe(chatBalance - 1);
   expect(chatWallet.held).toBe(0);
@@ -707,6 +741,8 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
       { timeout: 15000 },
     )
     .toBe(2);
+  await expect(page.getByRole('alertdialog')).toContainText('回复未完成');
+  await dismissFeedback(page);
   const interruptedWallet = await (
     await page.request.get('/api/v1/wallet')
   ).json();
@@ -723,6 +759,7 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   await page.getByLabel('上架，允许用户创建新订单', { exact: true }).check();
   await page.getByRole('button', { name: '保存套餐', exact: true }).click();
   await expect(page.getByText('套餐已保存', { exact: true })).toBeVisible();
+  await dismissFeedback(page);
   await page.getByRole('link', { name: '积分与订阅', exact: true }).click();
   await page.getByRole('button', { name: '套餐与订阅', exact: true }).click();
   await expect(
@@ -741,6 +778,8 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   const checkout = await (await checkoutResponse).json();
   const billingOrder = checkout.order.id;
   await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('alertdialog')).toContainText('订单已创建');
+  await dismissFeedback(page);
   await page.getByRole('button', { name: '我的订单', exact: true }).click();
   await expect(page.getByText('待付款', { exact: true })).toBeVisible();
   await page.getByRole('link', { name: '套餐与订单', exact: true }).click();
@@ -756,6 +795,8 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   await page
     .getByRole('button', { name: '确认到账并发放权益', exact: true })
     .click();
+  await expect(page.getByRole('alertdialog')).toContainText('到账已确认');
+  await dismissFeedback(page);
   await expect(page.getByText('已发放', { exact: true })).toBeVisible();
   const paidWallet = await (await page.request.get('/api/v1/wallet')).json();
   expect(paidWallet.balance).toBe(beforePurchase + 100);
@@ -803,6 +844,8 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   await page
     .getByRole('button', { name: '登记退款并回收权益', exact: true })
     .click();
+  await expect(page.getByRole('alertdialog')).toContainText('退款已登记');
+  await dismissFeedback(page);
   await expect(page.getByText('已退款', { exact: true })).toBeVisible();
   expect(
     (await (await page.request.get('/api/v1/wallet')).json()).balance,
@@ -833,6 +876,8 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   await manageDialog
     .getByRole('button', { name: '确认调整积分', exact: true })
     .click();
+  await expect(page.getByRole('alertdialog')).toContainText('调整积分已完成');
+  await dismissFeedback(page);
   await expect(manageDialog).toHaveCount(0);
   const adjusted = await (
     await page.request.get(`/api/v1/admin/users/${managed.id}`)
@@ -844,6 +889,8 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   await manageDialog
     .getByRole('button', { name: '确认禁用账号', exact: true })
     .click();
+  await expect(page.getByRole('alertdialog')).toContainText('禁用账号已完成');
+  await dismissFeedback(page);
   await expect(
     page.getByRole('button', { name: '恢复账号', exact: true }),
   ).toBeVisible();
@@ -857,6 +904,8 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   await manageDialog
     .getByRole('button', { name: '确认恢复账号', exact: true })
     .click();
+  await expect(page.getByRole('alertdialog')).toContainText('恢复账号已完成');
+  await dismissFeedback(page);
   await expect(
     page.getByRole('button', { name: '禁用账号', exact: true }),
   ).toBeVisible();
@@ -886,6 +935,8 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   await manageDialog
     .getByRole('button', { name: '保存规则', exact: true })
     .click();
+  await expect(page.getByRole('alertdialog')).toContainText('规则已保存');
+  await dismissFeedback(page);
   await expect(
     page.getByText('m9-browser-blocked', { exact: true }),
   ).toBeVisible();
@@ -895,6 +946,8 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   await manageDialog.getByLabel('邀请备注').fill('M9 browser invite');
   await manageDialog.getByLabel('处理说明').fill('真实管理回归邀请');
   await manageDialog.getByRole('button', { name: '确认创建邀请' }).click();
+  await expect(page.getByRole('alertdialog')).toContainText('邀请码记录已更新');
+  await dismissFeedback(page);
   await expect(page.getByLabel('完整邀请码', { exact: true })).toHaveValue(
     /^ati_/,
   );
@@ -903,6 +956,8 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   manageDialog = page.getByRole('dialog');
   await manageDialog.getByLabel('处理说明').fill('真实管理回归撤销邀请');
   await manageDialog.getByRole('button', { name: '确认撤销邀请' }).click();
+  await expect(page.getByRole('alertdialog')).toContainText('邀请码记录已更新');
+  await dismissFeedback(page);
   await expect(page.getByText('已撤销', { exact: true })).toBeVisible();
   const adminJobs = await (await page.request.get('/api/v1/admin/jobs')).json();
   const compensate = adminJobs.items.find(
@@ -923,6 +978,8 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   await manageDialog
     .getByRole('button', { name: '确认补偿积分', exact: true })
     .click();
+  await expect(page.getByRole('alertdialog')).toContainText('积分补偿已入账');
+  await dismissFeedback(page);
   await expect(manageDialog).toHaveCount(0);
   await expect(
     taskRow.getByRole('button', { name: '补偿积分', exact: true }),

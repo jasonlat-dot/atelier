@@ -1,3 +1,4 @@
+import Feedback from '../../components/Feedback';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Info } from 'lucide-react';
@@ -72,9 +73,9 @@ export default function LoginPage({
           <h1 id="login-title">登录 Atelier</h1>
           <p className="login-description">使用已验证的个人 Gmail 账号登录。</p>
           {disabled && (
-            <p className="login-alert" role="alert">
+            <Feedback className="login-alert" variant="error">
               账号已禁用，请联系管理员或使用其他账号。
-            </p>
+            </Feedback>
           )}
           {(mode === 'CLOSED' || mode === 'INVITE_ONLY') && (
             <div className="login-notice">
@@ -88,9 +89,9 @@ export default function LoginPage({
           )}
           {error ? (
             <div className="login-config-error">
-              <p className="login-alert" role="alert">
+              <Feedback className="login-alert" variant="error">
                 暂时无法读取登录配置，请重试。
-              </p>
+              </Feedback>
               <button
                 className="login-retry"
                 onClick={() => setAttempt((v) => v + 1)}

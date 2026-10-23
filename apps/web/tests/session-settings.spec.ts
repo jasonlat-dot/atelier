@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { dismissFeedback } from './feedbackTestHelpers';
 
 const csrf = 'server-session-bound-csrf-token';
 const id = '1f8848d3-1bd4-4eb3-8c91-a653c27a11a0';
@@ -72,19 +73,31 @@ test('settings uses server session, sends CSRF, confirms revocation and clears l
   await page.getByLabel('显示名').fill('Renamed');
   await page.getByRole('button', { name: '保存显示名' }).click();
   await expect(page.getByText('显示名已更新')).toBeVisible();
+  await dismissFeedback(page);
   await expect(
     page.getByText('Current browser', { exact: true }),
   ).toBeVisible();
-  page.once('dialog', (dialog) => dialog.dismiss());
   await page.getByRole('button', { name: '撤销设备 Other browser' }).click();
+  await page
+    .getByRole('dialog', { name: '撤销设备会话？' })
+    .getByRole('button', { name: '取消', exact: true })
+    .click();
   expect(mutations).not.toContain('DELETE /api/v1/me/sessions/other-device');
-  page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: '撤销设备 Other browser' }).click();
+  await page
+    .getByRole('dialog', { name: '撤销设备会话？' })
+    .getByRole('button', { name: '确认撤销', exact: true })
+    .click();
   await expect
     .poll(() => mutations.includes('DELETE /api/v1/me/sessions/other-device'))
     .toBe(true);
-  page.once('dialog', (dialog) => dialog.accept());
+  await expect(page.getByRole('alertdialog')).toContainText('设备会话已撤销');
+  await dismissFeedback(page);
   await page.getByRole('button', { name: '退出所有设备' }).click();
+  await page
+    .getByRole('dialog', { name: '退出所有设备？' })
+    .getByRole('button', { name: '退出所有设备并返回登录', exact: true })
+    .click();
   await expect(page).toHaveURL(/\/login$/);
   await expect(
     page.getByRole('button', { name: '使用 Google 登录' }),
@@ -118,6 +131,10 @@ test('unauthenticated guards redirect and temporary failures do not impersonate 
     }),
   );
   await page.goto('/settings');
+  await expect(page.getByRole('alertdialog')).toContainText(
+    '暂时无法验证登录状态',
+  );
+  await dismissFeedback(page);
   await expect(page.getByRole('button', { name: '重试连接' })).toBeVisible();
   await expect(page).toHaveURL(/\/settings$/);
 });

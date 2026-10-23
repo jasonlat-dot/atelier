@@ -1,0 +1,120 @@
+:root dialog.app-feedback {
+  width: min(460px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 32px;
+  border: 1px solid #e5e3df;
+  border-radius: 24px;
+  background: #fff;
+  color: #1b1b1a;
+  box-shadow: 0 24px 80px #18181624;
+  text-align: center;
+  overflow: auto;
+  font-family: Inter, 'Noto Sans SC', 'Microsoft YaHei', system-ui, sans-serif;
+}
+:root
+  dialog:is(.app-feedback, .mfa-confirm, .up-dialog, .asset-dialog)::backdrop {
+  background: rgb(0 0 0 / 45%);
+}
+:root dialog:is(.up-dialog:not(.up-drawer), .asset-dialog, .mfa-confirm) {
+  border: 1px solid #e5e3df;
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 24px 80px #18181624;
+}
+.app-feedback-symbol {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 22px;
+  border-radius: 50%;
+  background: #fbd5d5;
+  color: #a72d2d;
+}
+.app-feedback-success .app-feedback-symbol {
+  background: #e0f0e4;
+  color: #2d7550;
+}
+.app-feedback-warning .app-feedback-symbol {
+  background: #fbe0a4;
+  color: #8b5b15;
+}
+.app-feedback-info .app-feedback-symbol {
+  background: #eeece6;
+  color: #5e5a50;
+}
+:root .app-feedback h2 {
+  margin: 0 0 16px;
+  font-size: 23px;
+  line-height: 1.4;
+  font-weight: 650;
+  color: #1b1b1a;
+  letter-spacing: -0.02em;
+}
+.app-feedback-content {
+  color: #615e57;
+  font-size: 15px;
+  line-height: 1.85;
+  overflow-wrap: anywhere;
+}
+.app-feedback-content p {
+  margin: 0;
+}
+.app-feedback-content :is(button, a) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 12px 6px 0;
+  font-size: 13px;
+  color: #4b483f;
+}
+.app-feedback-content .icon-btn[aria-label^='关闭'] {
+  display: none;
+}
+:root:has(dialog.app-feedback[open]) dialog:not(.app-feedback)::backdrop {
+  background: transparent;
+}
+.app-feedback-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 28px;
+}
+.app-feedback-actions button {
+  flex: 1;
+  min-height: 48px;
+  padding: 12px 18px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.app-feedback-actions .app-feedback-primary {
+  background: #1b1b1a;
+  color: #fff;
+}
+.app-feedback-actions .app-feedback-primary:hover {
+  background: #33312c;
+}
+.app-feedback-actions .app-feedback-secondary {
+  background: #fff;
+  border-color: #dedbd4;
+  color: #33312c;
+}
+.app-feedback-actions .app-feedback-secondary:hover {
+  background: #f5f4f0;
+}
+.app-feedback :is(button, a):focus-visible {
+  outline: 2px solid #a64c25;
+  outline-offset: 3px;
+}
+@media (max-width: 520px) {
+  :root dialog.app-feedback {
+    padding: 28px 22px;
+  }
+  :root .app-feedback h2 {
+    font-size: 21px;
+  }
+}

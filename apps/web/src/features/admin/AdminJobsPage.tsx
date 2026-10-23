@@ -105,7 +105,12 @@ function Jobs(props: AdminProps) {
           </button>
         )}
       </form>
-      <AdminFeedback props={props} error={query.error} message={message} />
+      <AdminFeedback
+        props={props}
+        error={query.error}
+        message={message}
+        onDismissMessage={() => setMessage('')}
+      />
       <section className="admin-panel admin-table-panel">
         <div className="admin-table-scroll">
           <table className="admin-table">

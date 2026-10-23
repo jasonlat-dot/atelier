@@ -1,3 +1,4 @@
+import Feedback from '../../components/Feedback';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ReactFlow,
@@ -934,13 +935,14 @@ function CanvasEditor({
           </div>
         </div>
         {message && (
-          <div
-            role="status"
+          <Feedback
+            onDismiss={() => setMessage('')}
+            variant={message.startsWith('任务已提交') ? 'success' : 'info'}
             className="toast-message"
             onClick={() => setMessage('')}
           >
-            {message} <span>×</span>
-          </div>
+            {message}
+          </Feedback>
         )}
       </aside>
     </div>

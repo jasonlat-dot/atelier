@@ -3,6 +3,14 @@ import { request } from '../auth/sessionApi';
 export type Summary = components['schemas']['WalletSummary'];
 export type Entry = components['schemas']['LedgerEntry'];
 export const walletApi = {
+  usage: (signal?: AbortSignal) =>
+    request<components['schemas']['UsageView']>(
+      '/me/usage?days=7',
+      'GET',
+      undefined,
+      undefined,
+      signal,
+    ),
   summary: (signal?: AbortSignal) =>
     request<Summary>('/wallet', 'GET', undefined, undefined, signal),
   ledger: (before?: number, signal?: AbortSignal) =>

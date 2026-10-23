@@ -1,3 +1,4 @@
+import Feedback from '../../components/Feedback';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Download,
@@ -535,12 +536,20 @@ export default function AssetsPage({
         </button>
       </div>
       {message && (
-        <p className="assets-message" role="status">
+        <Feedback
+          onDismiss={() => setMessage('')}
+          className="assets-message"
+          variant="success"
+        >
           {message}
-        </p>
+        </Feedback>
       )}
       {error && (
-        <div className="assets-error" role="alert">
+        <Feedback
+          onDismiss={() => setError('')}
+          className="assets-error"
+          variant="error"
+        >
           <span>{error}</span>
           <button
             className="text-action"
@@ -549,7 +558,7 @@ export default function AssetsPage({
           >
             重试读取
           </button>
-        </div>
+        </Feedback>
       )}
       {uploading && (
         <div className="assets-upload-status" role="status">

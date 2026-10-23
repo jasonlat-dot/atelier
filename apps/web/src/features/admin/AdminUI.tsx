@@ -1,3 +1,4 @@
+import Feedback from '../../components/Feedback';
 import { useEffect, useState, type ReactNode } from 'react';
 import { RefreshCw } from 'lucide-react';
 import type { AdminProps } from '../upstream/upstreamApi';
@@ -28,10 +29,12 @@ export function AdminAccess({
 export function AdminFeedback({
   error,
   message,
+  onDismissMessage,
   props,
 }: {
   error?: unknown;
   message?: string;
+  onDismissMessage?: () => void;
   props: AdminProps;
 }) {
   useEffect(() => {
@@ -44,14 +47,22 @@ export function AdminFeedback({
   return (
     <>
       {!!error && (
-        <p className="admin-feedback admin-error" role="alert">
+        <Feedback
+          className="admin-feedback admin-error"
+          variant="error"
+          eventKey={error}
+        >
           {adminError(error)}
-        </p>
+        </Feedback>
       )}
       {message && (
-        <p className="admin-feedback admin-success" role="status">
+        <Feedback
+          className="admin-feedback admin-success"
+          variant="success"
+          onDismiss={onDismissMessage}
+        >
           {message}
-        </p>
+        </Feedback>
       )}
     </>
   );

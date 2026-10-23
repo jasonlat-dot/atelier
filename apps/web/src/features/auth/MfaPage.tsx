@@ -1,3 +1,4 @@
+import Feedback from '../../components/Feedback';
 import { useEffect, useRef, useState } from 'react';
 import { Check, QrCode } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
@@ -319,7 +320,18 @@ export default function MfaPage({
                         >
                           复制密钥
                         </button>
-                        {copyMessage && <p role="status">{copyMessage}</p>}
+                        {copyMessage && (
+                          <Feedback
+                            onDismiss={() => setCopyMessage('')}
+                            variant={
+                              copyMessage === '密钥已复制。'
+                                ? 'success'
+                                : 'error'
+                            }
+                          >
+                            {copyMessage}
+                          </Feedback>
+                        )}
                       </div>
                     ) : (
                       <figure className="mfa-qr">

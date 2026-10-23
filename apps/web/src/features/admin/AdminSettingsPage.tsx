@@ -1,3 +1,4 @@
+import Feedback from '../../components/Feedback';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AdminProps } from '../upstream/upstreamApi';
@@ -403,7 +404,11 @@ function SettingsForm(props: AdminProps & { settings: Settings }) {
             核对并保存
           </button>
         </div>
-        {message && <p role="status">{message}</p>}
+        {message && (
+          <Feedback onDismiss={() => setMessage('')} variant="success">
+            {message}
+          </Feedback>
+        )}
       </form>
       {open && (
         <AdminDialog

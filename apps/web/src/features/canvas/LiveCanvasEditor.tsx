@@ -1,3 +1,4 @@
+import Feedback from '../../components/Feedback';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from 'zustand';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -1349,8 +1350,12 @@ export default function LiveCanvasEditor({
             当前屏幕仅支持查看画布，请使用电脑（宽度至少 1024 像素）编辑。
           </div>
         )}
-        {error && (
-          <div className="live-canvas-alert" role="alert">
+        {error && status !== 'conflict' && (
+          <Feedback
+            onDismiss={() => setError('')}
+            className="live-canvas-alert"
+            variant="error"
+          >
             {error}
             <button
               className="icon-btn"
@@ -1359,10 +1364,14 @@ export default function LiveCanvasEditor({
             >
               <X size={14} />
             </button>
-          </div>
+          </Feedback>
         )}
         {notice && !error && (
-          <div className="live-canvas-notice" role="status">
+          <Feedback
+            onDismiss={() => setNotice('')}
+            className="live-canvas-notice"
+            variant="success"
+          >
             {notice}
             <button
               className="icon-btn"
@@ -1371,7 +1380,7 @@ export default function LiveCanvasEditor({
             >
               <X size={14} />
             </button>
-          </div>
+          </Feedback>
         )}
         <div
           ref={canvasSurface}
@@ -1940,7 +1949,7 @@ export default function LiveCanvasEditor({
           ) : tab === 'tasks' ? (
             <>
               {jobsQuery.isError && (
-                <p role="alert">
+                <Feedback variant="error">
                   任务列表暂不可用。
                   <button
                     className="text-action"
@@ -1948,7 +1957,7 @@ export default function LiveCanvasEditor({
                   >
                     重试
                   </button>
-                </p>
+                </Feedback>
               )}
               {jobs.length === 0 && (
                 <p className="subtle-hint">

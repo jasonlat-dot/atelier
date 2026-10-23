@@ -1,3 +1,4 @@
+import Feedback from '../../components/Feedback';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Coins,
@@ -138,17 +139,25 @@ function Models(props: AdminProps) {
         </div>
       </div>
       {message && (
-        <div className="up-message" role="status">
+        <Feedback
+          onDismiss={() => setMessage('')}
+          className="up-message"
+          variant="success"
+        >
           {message}
-        </div>
+        </Feedback>
       )}
       {error && !panel && (
-        <div className="up-message" role="alert">
+        <Feedback
+          onDismiss={() => setError('')}
+          className="up-message"
+          variant="error"
+        >
           {error}
           <button className="btn btn-ghost" onClick={() => void load()}>
             重新加载
           </button>
-        </div>
+        </Feedback>
       )}
       <div className="up-tabs" role="tablist" aria-label="模型管理">
         <button
@@ -336,9 +345,13 @@ function Models(props: AdminProps) {
           onClose={close}
         >
           {error && (
-            <div className="up-message" role="alert">
+            <Feedback
+              onDismiss={() => setError('')}
+              className="up-message"
+              variant="error"
+            >
               {error}
-            </div>
+            </Feedback>
           )}
           {panel.kind === 'edit' && (
             <ModelForm
@@ -723,7 +736,11 @@ function ModelForm({
           )}
         </>
       )}
-      {error && <p role="alert">{error}</p>}
+      {error && (
+        <Feedback onDismiss={() => setError('')} variant="error">
+          {error}
+        </Feedback>
+      )}
       <div className="up-form-footer">
         <button
           type="button"
@@ -824,7 +841,7 @@ function BindingForm({
         {loading ? (
           <p role="status">正在加载账号…</p>
         ) : error ? (
-          <p role="alert">
+          <Feedback onDismiss={() => setError('')} variant="error">
             {error}
             <button
               type="button"
@@ -833,7 +850,7 @@ function BindingForm({
             >
               重试加载
             </button>
-          </p>
+          </Feedback>
         ) : !accounts.length ? (
           <p className="up-note">暂无账号，请先在账号池新增。</p>
         ) : (
@@ -1057,9 +1074,13 @@ function PriceEditor({
         <div className="up-empty">添加模型后即可配置积分价格。</div>
       )}
       {error && (
-        <p className="up-message" role="alert">
+        <Feedback
+          onDismiss={() => setError('')}
+          className="up-message"
+          variant="error"
+        >
           {error}
-        </p>
+        </Feedback>
       )}
       <div className="up-actions">
         <button className="btn btn-dark" disabled={busy || !models.length}>

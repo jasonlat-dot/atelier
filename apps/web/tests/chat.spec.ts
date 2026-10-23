@@ -1,3 +1,4 @@
+import { dismissFeedback } from './feedbackTestHelpers';
 import { test, expect, type Page } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 import type { components } from '../src/lib/generated/api';
@@ -222,6 +223,7 @@ test('chat streams, persists, sanitizes Markdown and prepares a canvas draft wit
   await expect(
     page.getByText('回复已保存，本次 1 积分。', { exact: true }),
   ).toBeVisible();
+  await dismissFeedback(page);
   await expect(page.getByRole('heading', { name: '海岸方案' })).toBeVisible();
   expect(state.writes.filter((w) => w.path.endsWith('/messages'))).toHaveLength(
     1,
@@ -266,6 +268,8 @@ test('an ambiguous SSE submission freezes the draft and reuses one request key',
   await page.goto('/chat');
   await page.getByLabel('对话内容').fill('生成一张海报');
   await page.getByRole('button', { name: '发送', exact: true }).click();
+  await expect(page.getByRole('alertdialog')).toContainText('未确认');
+  await dismissFeedback(page);
   await expect(
     page.getByRole('button', { name: '核对上次回复' }),
   ).toBeVisible();
@@ -274,12 +278,60 @@ test('an ambiguous SSE submission freezes the draft and reuses one request key',
   await expect(
     page.getByText('回复已保存，本次 1 积分。', { exact: true }),
   ).toBeVisible();
+  await dismissFeedback(page);
   const posts = state.writes.filter((w) => w.path.endsWith('/messages'));
   expect(posts).toHaveLength(2);
   expect(posts[0].key).toBe(posts[1].key);
   expect(posts[0].body).toBe(posts[1].body);
   expect(state.balance()).toBe(19);
 });
+test('an error dialog keeps its wallet link inside the router and navigates without crashing', async ({
+  page,
+}) => {
+  const state = await fixture(page);
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.route(`**/api/v1/chat/conversations/${cid}/messages`, (route) =>
+    route.fulfill({
+      status: 402,
+      json: { error: { code: 'INSUFFICIENT_CREDITS' } },
+    }),
+  );
+  await page.route('**/api/v1/wallet', (route) =>
+    route.fulfill({
+      json: {
+        balance: 20,
+        available: 20,
+        held: 0,
+        checked_in_today: false,
+        streak: 0,
+        next_reward: 10,
+        local_date: '2026-10-24',
+        timezone: 'Asia/Shanghai',
+      },
+    }),
+  );
+  await page.route('**/api/v1/wallet/ledger*', (route) =>
+    route.fulfill({ json: { items: [], next_cursor: null } }),
+  );
+  await page.route('**/api/v1/me/usage*', (route) =>
+    route.fulfill({ json: { daily: [], qualities: [] } }),
+  );
+  await page.goto('/chat');
+  await page.getByLabel('对话内容').fill('Check wallet');
+  await page.getByRole('button', { name: '发送', exact: true }).click();
+  const feedback = page.getByRole('alertdialog');
+  await expect(feedback).toContainText('积分不足');
+  await feedback.getByRole('link', { name: '查看积分', exact: true }).click();
+  await expect(page).toHaveURL(/\/wallet$/);
+  await expect(
+    page.getByRole('heading', { name: '我的积分', exact: true }),
+  ).toBeVisible();
+  await expect(feedback).toHaveCount(0);
+  expect(state.balance()).toBe(20);
+  expect(errors).toEqual([]);
+});
+
 test('stopping a reply restores the composer and does not charge', async ({
   page,
 }) => {
@@ -291,6 +343,7 @@ test('stopping a reply restores the composer and does not charge', async ({
   await expect(
     page.getByText('回复已停止，未完成部分不会扣积分。', { exact: true }),
   ).toBeVisible();
+  await dismissFeedback(page);
   await expect(page.getByLabel('对话内容')).toBeEnabled();
   expect(state.balance()).toBe(20);
 });
@@ -304,6 +357,7 @@ test('chat renames and deletes with accessible dialogs and no browser confirmati
   await expect(
     page.getByText('回复已保存，本次 1 积分。', { exact: true }),
   ).toBeVisible();
+  await dismissFeedback(page);
   await page.getByRole('button', { name: '重命名对话', exact: true }).click();
   await page.getByLabel('对话名称').fill('海岸视觉讨论');
   await page.getByRole('button', { name: '保存名称' }).click();

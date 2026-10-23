@@ -232,9 +232,85 @@ async fn hundred_retries_hold_once_conflict_and_insufficient_rollback(pool: PgPo
 
 #[sqlx::test(migrations = "../../migrations")]
 #[ignore = "Requires isolated PostgreSQL; run explicitly"]
+async fn ledger_foreign_keys_work_after_runtime_restriction(pool: PgPool) {
+    let owner = user(&pool).await;
+    let wallet = WalletService::new(pool.clone());
+    wallet.restrict_ledger().await.unwrap();
+    wallet.restrict_ledger().await.unwrap();
+    let broad_update: bool =
+        sqlx::query_scalar("SELECT has_table_privilege(current_user,'credit_ledger','UPDATE')")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(!broad_update);
+
+    // Run the real startup policy before granting credits: the lots FK must be
+    // able to lock the referenced immutable ledger row as the owning role.
+    assert!(!wallet.checkin(owner).await.unwrap().already_checked_in);
+    assert!(wallet.checkin(owner).await.unwrap().already_checked_in);
+    wallet.grant(owner, 5, "restricted:grant").await.unwrap();
+    let codes = wallet
+        .create_codes(
+            owner,
+            &CreateCodesRequest {
+                count: 1,
+                credits: 7,
+                max_uses: 1,
+                expires_at: None,
+            },
+        )
+        .await
+        .unwrap();
+    wallet
+        .redeem(owner, Uuid::new_v4(), &codes.codes[0].code)
+        .await
+        .unwrap();
+
+    let update_id = sqlx::query("UPDATE credit_ledger SET id=id WHERE user_id=$1")
+        .bind(owner)
+        .execute(&pool)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        update_id.as_database_error().unwrap().message(),
+        "credit ledger is append only"
+    );
+    for statement in [
+        "UPDATE credit_ledger SET balance_delta=999",
+        "DELETE FROM credit_ledger",
+        "TRUNCATE credit_ledger",
+    ] {
+        let failure = sqlx::query(statement).execute(&pool).await.unwrap_err();
+        assert_eq!(
+            failure.as_database_error().unwrap().code().as_deref(),
+            Some("42501")
+        );
+    }
+    let missing = sqlx::query(
+        "INSERT INTO wallet_credit_lots(user_id,ledger_id,credits,remaining) VALUES($1,-1,1,1)",
+    )
+    .bind(owner)
+    .execute(&pool)
+    .await
+    .unwrap_err();
+    assert_eq!(
+        missing.as_database_error().unwrap().code().as_deref(),
+        Some("23503")
+    );
+    assert_eq!(wallet.summary(owner).await.unwrap().balance, 22);
+    assert_eq!(
+        wallet.ledger(owner, None, 100).await.unwrap().items.len(),
+        3
+    );
+    assert!(wallet.reconcile().await.unwrap().is_empty());
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+#[ignore = "Requires isolated PostgreSQL; run explicitly"]
 async fn concurrent_checkin_is_once_and_ledger_is_immutable(pool: PgPool) {
     let owner = user(&pool).await;
     let wallet = WalletService::new(pool.clone());
+    wallet.restrict_ledger().await.unwrap();
     let mut tasks = Vec::new();
     for _ in 0..100 {
         let wallet = wallet.clone();

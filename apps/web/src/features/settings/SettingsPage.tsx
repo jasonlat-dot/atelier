@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import Feedback, { useConfirmNotice } from '../../components/Feedback';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   sessionApi,
   SessionError,
@@ -23,6 +24,8 @@ export default function SettingsPage({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const confirm = useConfirmNotice();
+  const confirming = useRef(false);
   const failed = useCallback(
     (error: unknown) => {
       if (
@@ -79,14 +82,16 @@ export default function SettingsPage({
     }
   };
   const revoke = async (device: Device) => {
-    if (
-      !window.confirm(
-        device.current
-          ? '撤销当前设备后将退出登录，是否继续？'
-          : '确定撤销此设备的登录会话？',
-      )
-    )
-      return;
+    if (confirming.current || busy) return;
+    confirming.current = true;
+    const accepted = await confirm(
+      device.current
+        ? '撤销当前设备后将退出登录，是否继续？'
+        : '确定撤销此设备的登录会话？',
+      { title: '撤销设备会话？', confirmLabel: '确认撤销' },
+    );
+    confirming.current = false;
+    if (!accepted) return;
     setBusy(true);
     setError('');
     setMessage('');
@@ -104,7 +109,14 @@ export default function SettingsPage({
     }
   };
   const logout = async () => {
-    if (!window.confirm('将退出所有设备，是否继续？')) return;
+    if (confirming.current || busy) return;
+    confirming.current = true;
+    const accepted = await confirm(
+      '当前浏览器和其他设备的登录都会失效，再次使用时需要重新登录。',
+      { title: '退出所有设备？', confirmLabel: '退出所有设备并返回登录' },
+    );
+    confirming.current = false;
+    if (!accepted) return;
     setBusy(true);
     setError('');
     try {
@@ -192,8 +204,16 @@ export default function SettingsPage({
           刷新设备
         </button>
       </section>
-      {message && <p role="status">{message}</p>}
-      {error && <p role="alert">{error}</p>}
+      {message && (
+        <Feedback onDismiss={() => setMessage('')} variant="success">
+          {message}
+        </Feedback>
+      )}
+      {error && (
+        <Feedback onDismiss={() => setError('')} variant="error">
+          {error}
+        </Feedback>
+      )}
       <button
         className="btn btn-light"
         disabled={busy}

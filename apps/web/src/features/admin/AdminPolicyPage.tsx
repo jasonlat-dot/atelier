@@ -1,9 +1,16 @@
+import Feedback from '../../components/Feedback';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AdminProps } from '../upstream/upstreamApi';
 import AdminDialog from '../upstream/AdminDialog';
 import { SessionError } from '../auth/sessionApi';
-import { adminApi as api, when, type Invite, type Rule } from './adminApi';
+import {
+  adminApi as api,
+  adminError,
+  when,
+  type Invite,
+  type Rule,
+} from './adminApi';
 import {
   AdminAccess,
   AdminFeedback,
@@ -95,7 +102,12 @@ function Rules(props: AdminProps) {
           刷新规则
         </button>
       </form>
-      <AdminFeedback props={props} error={query.error} message={message} />
+      <AdminFeedback
+        props={props}
+        error={query.error}
+        message={message}
+        onDismissMessage={() => setMessage('')}
+      />
       <p className="admin-note">
         启用的规则在请求提交时检查提示词和参考文本；命中规则或上游违规会计入 30
         天违规次数。正则使用服务端 Rust 语法。
@@ -356,7 +368,12 @@ function Invites(props: AdminProps) {
       <p className="admin-note">
         邀请码只在「仅限邀请」注册模式使用。完整值仅创建后显示一次，列表仅保留备注和末四位。
       </p>
-      <AdminFeedback props={props} error={query.error} message={message} />
+      <AdminFeedback
+        props={props}
+        error={query.error}
+        message={message}
+        onDismissMessage={() => setMessage('')}
+      />
       <section className="admin-panel admin-table-panel">
         <div className="admin-table-scroll">
           <table className="admin-table">
@@ -558,7 +575,12 @@ function InviteForm(
           >
             复制邀请码
           </button>
-          <p role="status">{copied}</p>
+          <Feedback
+            onDismiss={() => setCopied('')}
+            variant={copied === '已复制' ? 'success' : 'error'}
+          >
+            {copied}
+          </Feedback>
           <button className="btn btn-light" onClick={props.onClose}>
             已保存，关闭
           </button>
@@ -628,11 +650,15 @@ function InviteForm(
               disabled={uncertain}
             />
           </label>
-          <AdminFeedback props={props} error={error} />
-          {uncertain && (
-            <p className="admin-feedback admin-error">
-              创建结果尚未确认，请关闭弹窗后刷新列表。如果出现本次备注的记录，先撤销该记录再创建新邀请码，避免产生无法取回的有效邀请码。
-            </p>
+          {!!error && (
+            <Feedback variant="error" eventKey={error}>
+              {adminError(error)}
+              {uncertain && (
+                <p>
+                  创建结果尚未确认，请关闭弹窗后刷新列表。如果出现本次备注的记录，先撤销该记录再创建新邀请码，避免产生无法取回的有效邀请码。
+                </p>
+              )}
+            </Feedback>
           )}
           <footer className="admin-form-actions">
             <button

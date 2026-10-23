@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { dismissFeedback } from './feedbackTestHelpers';
 
 async function workspace(
   page: Page,
@@ -99,6 +100,8 @@ test('production workspace preserves prototype shell and synchronizes real walle
     page.getByRole('link', { name: '积分管理', exact: true }),
   ).toHaveCount(0);
   await page.getByRole('button', { name: '领取今日积分' }).dblclick();
+  await expect(page.getByRole('alertdialog')).toContainText('签到成功');
+  await dismissFeedback(page);
   await expect(page.getByRole('button', { name: '今日已签到' })).toBeDisabled();
   await expect(
     page.getByLabel('侧栏积分').getByText('77', { exact: true }),
@@ -109,8 +112,8 @@ test('production workspace preserves prototype shell and synchronizes real walle
   await expect(
     page
       .getByRole('region', { name: '钱包余额' })
-      .getByText('77', { exact: true }),
-  ).toBeVisible();
+      .getByLabel('可用积分', { exact: true }),
+  ).toHaveText('77');
   await expect(
     page.getByRole('link', { name: '积分与订阅', exact: true }),
   ).toHaveAttribute('aria-current', 'page');
@@ -192,6 +195,8 @@ test('reference home layout uses server projects and compact navigation on deskt
     .toBe(true);
   await expect(page.getByLabel('描述你想创作的内容')).toBeVisible();
   await page.getByRole('button', { name: '领取今日积分' }).click();
+  await expect(page.getByRole('alertdialog')).toContainText('签到成功');
+  await dismissFeedback(page);
   await expect(
     page.getByRole('img', { name: '已连续签到 1 天' }),
   ).toBeVisible();
@@ -217,6 +222,8 @@ test('small screens scroll and navigation closes after selecting a real page', a
     .getByRole('button', { name: '领取今日积分' })
     .scrollIntoViewIfNeeded();
   await page.getByRole('button', { name: '领取今日积分' }).click();
+  await expect(page.getByRole('alertdialog')).toContainText('签到成功');
+  await dismissFeedback(page);
   await expect(page.getByRole('button', { name: '今日已签到' })).toBeDisabled();
   expect(
     await page.evaluate(

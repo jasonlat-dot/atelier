@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { dismissFeedback } from './feedbackTestHelpers';
 const user = {
   id: '1f8848d3-1bd4-4eb3-8c91-a653c27a11a0',
   email: 'wallet@gmail.com',
@@ -82,16 +83,20 @@ test('wallet checkin, retry-safe redemption and server ledger pagination', async
   await page.goto('/wallet');
   await expect(page.getByRole('heading', { name: '我的积分' })).toBeVisible();
   await page.getByRole('button', { name: '领取今日积分' }).click();
+  await expect(page.getByRole('alertdialog')).toContainText('签到成功');
+  await dismissFeedback(page);
   await expect(page.getByRole('button', { name: '今日已签到' })).toBeDisabled();
   await page.getByLabel('兑换码', { exact: true }).fill('test-code');
   await page.getByRole('button', { name: '兑换', exact: true }).click();
   await expect(page.getByRole('alert')).toBeVisible();
+  await dismissFeedback(page);
   await page.getByRole('button', { name: '兑换', exact: true }).click();
   await expect(page.getByText('兑换成功，获得 25 积分')).toBeVisible();
+  await dismissFeedback(page);
   expect(keys).toHaveLength(2);
   expect(keys[0]).toBe(keys[1]);
   await page.getByRole('button', { name: '加载更多' }).click();
-  await expect(page.getByRole('cell', { name: '注册赠送' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /注册赠送/ })).toBeVisible();
   await expect(page.getByRole('button', { name: '加载更多' })).toHaveCount(0);
   await page.getByRole('link', { name: '工作台', exact: true }).click();
   await expect(
@@ -137,14 +142,24 @@ test('administrator adjustment confirms reason and preserves retry key', async (
   await page.getByLabel('用户 UUID').fill(user.id);
   await page.getByLabel('调整积分', { exact: true }).fill('-5');
   await page.getByLabel('调整原因').fill('Support correction');
-  page.once('dialog', (dialog) => dialog.dismiss());
   await page.getByRole('button', { name: '确认调整' }).click();
+  await page
+    .getByRole('dialog', { name: '确认调整积分？' })
+    .getByRole('button', { name: '取消', exact: true })
+    .click();
   expect(keys).toHaveLength(0);
-  page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: '确认调整' }).click();
+  await page
+    .getByRole('dialog', { name: '确认调整积分？' })
+    .getByRole('button', { name: '确认调整并入账', exact: true })
+    .click();
   await expect(page.getByRole('alert')).toBeVisible();
-  page.once('dialog', (dialog) => dialog.accept());
+  await dismissFeedback(page);
   await page.getByRole('button', { name: '确认调整' }).click();
+  await page
+    .getByRole('dialog', { name: '确认调整积分？' })
+    .getByRole('button', { name: '确认调整并入账', exact: true })
+    .click();
   await expect(page.getByText('积分调整已入账，审计记录已保存')).toBeVisible();
   expect(keys[0]).toBe(keys[1]);
 });

@@ -1,3 +1,4 @@
+import { dismissFeedback } from './feedbackTestHelpers';
 import { test, expect, type Page } from '@playwright/test';
 const id = '1f8848d3-1bd4-4eb3-8c91-a653c27a11a0';
 const plan = {
@@ -168,9 +169,11 @@ test('user reviews plan, retries the same checkout and cancels only after confir
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.getByRole('button', { name: '选择套餐' }).click();
   await page.getByRole('button', { name: '确认创建订单', exact: true }).click();
-  await expect(page.getByRole('dialog').getByRole('alert')).toBeVisible();
+  await expect(page.getByRole('alertdialog').getByRole('alert')).toBeVisible();
+  await dismissFeedback(page);
   await page.getByRole('button', { name: '确认创建订单', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('订单已创建');
+  await dismissFeedback(page);
   expect(keys).toHaveLength(2);
   expect(keys[0]).toBe(keys[1]);
   await page.getByRole('button', { name: '我的订单', exact: true }).click();
@@ -200,6 +203,7 @@ test('admin edits a plan, confirms a receipt safely and blocks refunds while cre
   await page.getByLabel('套餐名称', { exact: true }).fill('更新后的套餐');
   await page.getByRole('button', { name: '保存套餐', exact: true }).click();
   await expect(page.getByText('套餐已保存', { exact: true })).toBeVisible();
+  await dismissFeedback(page);
   await page.getByRole('button', { name: '订单管理', exact: true }).click();
   await page.getByRole('button', { name: '确认到账', exact: true }).click();
   await expect(
@@ -209,11 +213,18 @@ test('admin edits a plan, confirms a receipt safely and blocks refunds while cre
   await page.getByLabel('处理说明', { exact: true }).fill('已核对实际收款');
   await page.getByRole('checkbox').check();
   await page.getByRole('button', { name: '确认到账并发放权益' }).click();
-  await expect(page.getByRole('dialog').getByRole('alert')).toBeVisible();
+  await expect(page.getByRole('alertdialog').getByRole('alert')).toBeVisible();
+  await dismissFeedback(page);
   await page.getByRole('button', { name: '确认到账并发放权益' }).click();
+  await expect(page.getByRole('alertdialog')).toContainText('到账已确认');
+  await dismissFeedback(page);
   await expect(page.getByText('已发放', { exact: true })).toBeVisible();
   expect(keys[0]).toBe(keys[1]);
   await page.getByRole('button', { name: '办理退款', exact: true }).click();
+  await expect(page.getByRole('alertdialog')).toContainText(
+    '请等待该用户的生成任务结束',
+  );
+  await dismissFeedback(page);
   await expect(page.getByRole('dialog')).toContainText('任务预占 4');
   await expect(
     page.getByRole('button', { name: '登记退款并回收权益' }),

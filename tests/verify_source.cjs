@@ -23,3 +23,4 @@ for(const operation of [()=>m.addCredits('user-demo',1),()=>m.toggleUser('admin-
 m.switchUser('admin-demo');
 for(const delta of [NaN,Infinity,100001,-100001]){let rejected=false;try{m.addCredits('user-demo',delta);}catch{rejected=true;}check(rejected,'invalid mock adjustment');}
 console.log('Mock checkin and admin permission regressions passed');
+require('./feedback_contract.cjs');
