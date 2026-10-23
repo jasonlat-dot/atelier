@@ -14,8 +14,21 @@ use url::{Host, Url};
 #[derive(Clone, Default)]
 pub struct EgressPolicy {
     local_origins: HashSet<String>,
+    endpoint_origins: HashSet<String>,
 }
 impl EgressPolicy {
+    /// Administrators choose account endpoints. Their HTTP(S) origins are not
+    /// filtered by IP range; unrelated provider-returned download URLs do not
+    /// inherit this permission.
+    pub fn for_endpoint(&self, value: &str) -> Result<Self, Error> {
+        let url = Url::parse(value).map_err(|_| Error::UnsafeUrl)?;
+        let mut policy = self.clone();
+        policy
+            .endpoint_origins
+            .insert(url.origin().ascii_serialization());
+        policy.parse(value, false)?;
+        Ok(policy)
+    }
     pub fn with_local_origins(origins: Vec<String>) -> Result<Self, Error> {
         if origins.len() > 16 {
             return Err(Error::Validation);
@@ -40,7 +53,10 @@ impl EgressPolicy {
             }
             local_origins.insert(url.origin().ascii_serialization());
         }
-        Ok(Self { local_origins })
+        Ok(Self {
+            local_origins,
+            endpoint_origins: HashSet::new(),
+        })
     }
     pub fn parse(&self, value: &str, allow_query: bool) -> Result<Url, Error> {
         if value.len() > 2048 || value.bytes().any(|b| b <= 32 || b == 127 || b == b'\\') {
@@ -49,6 +65,9 @@ impl EgressPolicy {
         let url = Url::parse(value).map_err(|_| Error::UnsafeUrl)?;
         let local = self
             .local_origins
+            .contains(&url.origin().ascii_serialization());
+        let endpoint = self
+            .endpoint_origins
             .contains(&url.origin().ascii_serialization());
         if !matches!(url.scheme(), "http" | "https")
             || !url.username().is_empty()
@@ -60,16 +79,17 @@ impl EgressPolicy {
             return Err(Error::UnsafeUrl);
         }
         match url.host() {
-            Some(Host::Ipv4(ip)) if !public_ip(IpAddr::V4(ip)) && !local => {
+            Some(Host::Ipv4(ip)) if !public_ip(IpAddr::V4(ip)) && !local && !endpoint => {
                 return Err(Error::UnsafeUrl)
             }
-            Some(Host::Ipv6(ip)) if !public_ip(IpAddr::V6(ip)) && !local => {
+            Some(Host::Ipv6(ip)) if !public_ip(IpAddr::V6(ip)) && !local && !endpoint => {
                 return Err(Error::UnsafeUrl)
             }
             Some(Host::Domain(name))
-                if name == "localhost"
-                    || name.ends_with(".localhost")
-                    || name.ends_with(".local") =>
+                if !endpoint
+                    && (name == "localhost"
+                        || name.ends_with(".localhost")
+                        || name.ends_with(".local")) =>
             {
                 return Err(Error::UnsafeUrl)
             }
@@ -99,10 +119,15 @@ impl EgressPolicy {
         let local = self
             .local_origins
             .contains(&url.origin().ascii_serialization());
+        let endpoint = self
+            .endpoint_origins
+            .contains(&url.origin().ascii_serialization());
         if addresses.is_empty()
             || addresses.len() > 64
             || addresses.iter().any(|addr| {
-                if local {
+                if endpoint {
+                    false
+                } else if local {
                     !addr.ip().is_loopback()
                 } else {
                     !public_ip(addr.ip())
@@ -169,6 +194,12 @@ pub struct SafeHttp {
     max_duration: Duration,
 }
 impl SafeHttp {
+    pub fn for_endpoint(&self, value: &str) -> Result<Self, Error> {
+        Ok(Self {
+            policy: self.policy.for_endpoint(value)?,
+            ..self.clone()
+        })
+    }
     pub fn new(policy: EgressPolicy) -> Self {
         // reqwest's no-provider feature deliberately requires explicit setup.
         // install_default is process-once and harmless if another component won.
@@ -356,5 +387,48 @@ mod tests {
                 .parse(&format!("{scheme}://example.com/v1"), false)
                 .is_err());
         }
+    }
+
+    #[test]
+    fn administrator_endpoint_has_no_ip_range_filter_and_needs_no_allowlist() {
+        let policy = EgressPolicy::default();
+        for scheme in ["http", "https"] {
+            for host in [
+                "localhost:3000",
+                "127.0.0.1:3000",
+                "[::1]:3000",
+                "10.0.0.1:8080",
+                "192.168.1.8",
+                "172.20.0.8",
+                "100.64.0.1",
+                "169.254.169.254",
+                "0.0.0.0:3000",
+                "[fd00::1]",
+                "upstream.local",
+                "not-resolved.invalid",
+                "8.8.8.8",
+            ] {
+                let value = format!("{scheme}://{host}/v1");
+                let endpoint = policy.for_endpoint(&value).unwrap();
+                assert!(endpoint.parse(&value, false).is_ok(), "{value}");
+            }
+        }
+        let endpoint = policy.for_endpoint("http://localhost:3000/v1").unwrap();
+        assert!(endpoint
+            .parse(
+                "http://localhost:3000/images/result.png?signature=abc",
+                true
+            )
+            .is_ok());
+        // A provider-returned URL cannot authorize unrelated local services.
+        assert!(endpoint
+            .parse("http://127.0.0.1:9000/private", true)
+            .is_err());
+        assert!(policy.for_endpoint("file:///etc/passwd").is_err());
+        assert!(policy.for_endpoint("ftp://localhost/file").is_err());
+        assert!(policy.for_endpoint("http://localhost:99999/v1").is_err());
+        assert!(policy
+            .for_endpoint("http://localhost:3000/v1?key=value")
+            .is_err());
     }
 }

@@ -82,7 +82,7 @@ async fn admin_pool_and_catalog_enforce_mfa_csrf_versioning_and_never_return_sec
     let admin = session(&db, "ADMIN").await;
     let user = session(&db, "USER").await;
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let origin = format!("http://{}", listener.local_addr().unwrap());
+    let origin = format!("http://localhost:{}", listener.local_addr().unwrap().port());
     let fake = tokio::spawn(async move {
         axum::serve(
             listener,
@@ -106,7 +106,7 @@ async fn admin_pool_and_catalog_enforce_mfa_csrf_versioning_and_never_return_sec
         UpstreamService::new(
             db.clone(),
             SecretCipher::from_base64(&STANDARD.encode([39; 32])).unwrap(),
-            SafeHttp::new(EgressPolicy::with_local_origins(vec![origin.clone()]).unwrap()),
+            SafeHttp::new(EgressPolicy::default()),
         )
         .with_slots(
             SlotStore::connect(&redis, &format!("http-upstream:{}", Uuid::new_v4()))
@@ -192,7 +192,7 @@ async fn admin_pool_and_catalog_enforce_mfa_csrf_versioning_and_never_return_sec
     assert_eq!(stats.1["successes"], 1);
     let mut unsafe_body = body.clone();
     unsafe_body["name"] = json!("Unsafe");
-    unsafe_body["base_url"] = json!("https://169.254.169.254/latest/meta-data");
+    unsafe_body["base_url"] = json!("file:///etc/passwd");
     assert_eq!(
         call(
             &state,

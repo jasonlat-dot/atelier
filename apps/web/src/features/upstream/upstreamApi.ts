@@ -69,7 +69,7 @@ export function errorText(error: unknown, props: AdminProps): string {
       props.onExpired();
     if (error.code === 'MFA_REQUIRED') props.onReload();
     if (error.code === 'UPSTREAM_ADDRESS_REJECTED')
-      return '接口地址未通过校验，请使用公网 HTTP 或 HTTPS 地址，不要在地址中填写用户名、密码、查询参数或锚点。';
+      return '接口地址格式不正确，请填写完整的 HTTP 或 HTTPS 地址，例如 http://localhost:3000/v1。';
     if (error.status === 409)
       return '配置已变更或账号仍有请求处理中，请关闭后刷新，再重试。';
     if (error.status === 422)

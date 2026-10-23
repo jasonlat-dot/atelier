@@ -177,8 +177,8 @@ fn video_id(id: &str) -> Result<(), Error> {
 impl Provider for OpenAiCompatible {
     fn probe<'a>(&'a self, account: &'a ProviderAccount) -> ProviderFuture<'a, ()> {
         Box::pin(async move {
-            let response = self
-                .http
+            let http = self.http.for_endpoint(&account.base_url)?;
+            let response = http
                 .send(
                     Method::GET,
                     &endpoint(&account.base_url, "models"),
@@ -202,6 +202,7 @@ impl Provider for OpenAiCompatible {
         size: &'a str,
     ) -> ProviderFuture<'a, Vec<MediaOutput>> {
         Box::pin(async move {
+            let http = self.http.for_endpoint(&account.base_url)?;
             let editing = !input.references.is_empty();
             let payload = if editing {
                 let mut form = Form::new()
@@ -239,8 +240,7 @@ impl Provider for OpenAiCompatible {
             } else {
                 130
             };
-            let response = self
-                .http
+            let response = http
                 .send(
                     Method::POST,
                     &endpoint(
@@ -275,8 +275,7 @@ impl Provider for OpenAiCompatible {
                         }
                         Bytes::from(STANDARD.decode(encoded).map_err(|_| network())?)
                     } else if let Some(url) = item.get("url").and_then(Value::as_str) {
-                        let response = self
-                            .http
+                        let response = http
                             .send(
                                 Method::GET,
                                 url,
@@ -322,13 +321,13 @@ impl Provider for OpenAiCompatible {
         size: &'a str,
     ) -> ProviderFuture<'a, String> {
         Box::pin(async move {
+            let http = self.http.for_endpoint(&account.base_url)?;
             let mut body = json!({"model":account.upstream_model,"prompt":input.prompt,"seconds":input.seconds.to_string(),"size":size});
             if let Some(image) = &input.reference {
                 reference(image)?;
                 body["input_reference"] = json!({"image_url":format!("data:{};base64,{}",image.mime,STANDARD.encode(&image.bytes))});
             }
-            let response = self
-                .http
+            let response = http
                 .send(
                     Method::POST,
                     &endpoint(&account.base_url, "videos"),
@@ -350,9 +349,9 @@ impl Provider for OpenAiCompatible {
         id: &'a str,
     ) -> ProviderFuture<'a, VideoStatus> {
         Box::pin(async move {
+            let http = self.http.for_endpoint(&account.base_url)?;
             video_id(id)?;
-            let response = self
-                .http
+            let response = http
                 .send(
                     Method::GET,
                     &endpoint(&account.base_url, &format!("videos/{id}")),
@@ -385,9 +384,9 @@ impl Provider for OpenAiCompatible {
         id: &'a str,
     ) -> ProviderFuture<'a, MediaOutput> {
         Box::pin(async move {
+            let http = self.http.for_endpoint(&account.base_url)?;
             video_id(id)?;
-            let response = self
-                .http
+            let response = http
                 .send(
                     Method::GET,
                     &endpoint(&account.base_url, &format!("videos/{id}/content")),
@@ -413,8 +412,7 @@ impl Provider for OpenAiCompatible {
                     .get("url")
                     .and_then(Value::as_str)
                     .ok_or_else(network)?;
-                let download = self
-                    .http
+                let download = http
                     .send(
                         Method::GET,
                         url,

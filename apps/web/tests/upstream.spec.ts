@@ -210,14 +210,14 @@ test('account management writes once, hides saved credentials and uses accessibl
   await page.getByRole('button', { name: '新增账号', exact: true }).click();
   const d = page.getByRole('dialog');
   await d.getByLabel('账号名称').fill('新账号');
-  await d.getByLabel('接口地址').fill('http://8.8.8.8:8080/v1');
+  await d.getByLabel('接口地址').fill('http://localhost:3000/v1');
   await d.getByLabel('API 密钥').fill('synthetic-secret-9876');
   await d.getByRole('button', { name: '保存配置' }).dblclick();
   await expect(d).toHaveCount(0);
   expect(
     f.writes.find((w) => w.path === '/api/v1/admin/upstream-accounts')?.body
       ?.base_url,
-  ).toBe('http://8.8.8.8:8080/v1');
+  ).toBe('http://localhost:3000/v1');
   expect(
     f.writes.filter((w) => w.path === '/api/v1/admin/upstream-accounts'),
   ).toHaveLength(1);

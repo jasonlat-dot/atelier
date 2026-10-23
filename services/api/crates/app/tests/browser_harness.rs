@@ -110,7 +110,10 @@ async fn browser_harness(db: sqlx::PgPool) {
     let upstream_listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))
         .await
         .unwrap();
-    let upstream_origin = format!("http://{}", upstream_listener.local_addr().unwrap());
+    let upstream_origin = format!(
+        "http://localhost:{}",
+        upstream_listener.local_addr().unwrap().port()
+    );
     // Pass the fixture address via a test-only file, never a production API or browser response.
     let upstream_file = std::env::var("TEST_UPSTREAM_ORIGIN_FILE").ok();
     if let Some(path) = upstream_file.as_ref() {
@@ -152,8 +155,7 @@ async fn browser_harness(db: sqlx::PgPool) {
             db.clone(),
             atelier_upstream::crypto::SecretCipher::from_base64(&STANDARD.encode(key)).unwrap(),
             atelier_upstream::egress::SafeHttp::new(
-                atelier_upstream::egress::EgressPolicy::with_local_origins(vec![upstream_origin])
-                    .unwrap(),
+                atelier_upstream::egress::EgressPolicy::default(),
             ),
         )
         .with_slots(

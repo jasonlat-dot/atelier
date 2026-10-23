@@ -307,3 +307,12 @@ M1 历史交付未打包、未部署。条款仍是开发占位，正式法律�
 - 管理表单明确提示两种协议，地址拒绝使用专门提示；一般参数错误不再误提示“必须 HTTPS”。README/API/环境样例与 DECISIONS 同步，本轮不涉及站点入口、OIDC、S3 或 M6。
 - 新测试先确认公网 HTTP 被旧实现拒绝，再修改通过；数据库管理用例改用 HTTP 地址，浏览器实际输入 http://8.8.8.8:8080/v1 并断言发送值。Rust fmt/clippy/workspace test/check（普通测试新增一项，共 60）、上游隔离 PG/Redis 8 项和管理 HTTP 1 项、管理浏览器 6 项（HTTP 输入用例修改后单独再次通过）、前端 typecheck/lint/format:check/build 通过，无新依赖或迁移。
 - CI 镜像列表修复 6178fa4 的视频工具准备在 36 秒内通过（之前 5 分钟超时），继续跟进最终提交的完整远端结果。
+
+
+### 上游账号取消 IP 范围限制（负责人最终澄清）
+
+- 最新要求为“localhost 也支持”“不要有 IP 限制”“合格 HTTP 地址即可”，覆盖上一条仅允许公网的范围。保存/导入只检查 HTTP/HTTPS 基础 URL 格式，不提前解析 DNS，不按 IP 范围过滤，不需要白名单。
+- EgressPolicy::for_endpoint / SafeHttp::for_endpoint 为管理员配置的准确 origin 建立请求上下文；Provider 的连接测试、图片/编辑、视频提交/轮询/内容和同源结果下载均使用该上下文。其他临时结果 URL 不获得跨来源的内网访问权限。
+- 新的管理 HTTP 测试去掉本地例外并使用 localhost，先确认旧代码 422（预期 201），修改后保存和连接通过。新增单元/数据库回归包含 localhost、IPv4/IPv6、内网、其他地址段和未解析域名；表单回归明确输入 http://localhost:3000/v1。
+- 真实浏览器夹具同样去掉白名单并改用 localhost，上游账号配置、Google/MFA、图片生成、视频生成与钱包结算 2/2 通过。上游/生成隔离 PG、Redis、媒体回归通过（上游新增一项数据库测试）；Rust fmt/clippy/workspace test/check 与前端 typecheck/lint/format:check/build、账号页面 6/6 通过。普通 Rust 测试现为 61 项，完整基础设施总数现为 50。无新依赖、迁移或 M6 功能。
+- CI 修复 6178fa4 的 Actions #39891890729 已全部通过；完整下载日志确认实际主机 archive.ubuntu.com、无 Azure 下载，并成功保存包缓存。后续以包含最终地址范围调整的新提交继续验收，不再把 f2e0ecd 的公网范围作为最终行为。

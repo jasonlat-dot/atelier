@@ -650,8 +650,8 @@ function AccountForm({
           placeholder={a ? '已配置，留空保留' : 'https://api.example.com/v1'}
         />
         <small>
-          支持 http:// 和 https://，可填写端口，例如
-          http://api.example.com:8080/v1。
+          支持 HTTP 和 HTTPS，可填写 localhost、本机、内网或公网地址，例如
+          http://localhost:3000/v1。
         </small>
       </label>
       <label>

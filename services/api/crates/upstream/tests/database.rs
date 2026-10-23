@@ -205,3 +205,33 @@ async fn imports_and_every_management_mutation_roll_back_on_audit_failure(db: Pg
         .is_err());
     assert!(service.models().await.unwrap().is_empty());
 }
+
+#[sqlx::test(migrations = "../../migrations")]
+#[ignore = "Requires isolated PostgreSQL"]
+async fn accounts_accept_localhost_private_ips_and_unresolved_names_without_allowlists(db: PgPool) {
+    let actor = admin(&db).await;
+    let service = service(&db);
+    for (i, address) in [
+        "http://localhost:3000/v1",
+        "http://127.0.0.1:3000/v1",
+        "https://[::1]:3000/v1",
+        "http://192.168.1.8/v1",
+        "http://10.0.0.1:8080/v1",
+        "http://169.254.169.254/v1",
+        "http://not-resolved.invalid/v1",
+    ]
+    .iter()
+    .enumerate()
+    {
+        let mut input = account(&format!("Address {i}"));
+        input.base_url = Some((*address).into());
+        let saved = service.save_account(actor, None, input).await.unwrap();
+        let stored: String =
+            sqlx::query_scalar("SELECT base_url FROM upstream_accounts WHERE id=$1")
+                .bind(saved.id)
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        assert_eq!(stored, *address);
+    }
+}

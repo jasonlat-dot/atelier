@@ -74,7 +74,7 @@ impl UpstreamService {
             return Err(Error::Validation);
         }
         if let Some(url) = input.base_url.as_deref().filter(|s| !s.is_empty()) {
-            self.inner.http.policy.validate(url).await?;
+            self.inner.http.policy.for_endpoint(url)?;
         }
         Ok(())
     }
