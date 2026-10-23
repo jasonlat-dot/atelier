@@ -985,7 +985,7 @@ export default function LiveCanvasEditor({
         if (
           cached?.data.node === node &&
           cached.selected === isSelected &&
-          cached.draggable === (!readonly && !node.locked)
+          cached.draggable === (!readonly && !space && !node.locked)
         )
           return cached;
         const next: FlowNode = {
@@ -997,13 +997,13 @@ export default function LiveCanvasEditor({
           height: node.size.height,
           style: { width: node.size.width, height: node.size.height },
           selected: isSelected,
-          draggable: !readonly && !node.locked,
+          draggable: !readonly && !space && !node.locked,
           connectable: !readonly && !node.locked,
         };
         nodeCache.current.set(node.id, next);
         return next;
       }),
-    [graph.nodes, selected, readonly],
+    [graph.nodes, selected, readonly, space],
   );
   const edges = useMemo(
     () =>

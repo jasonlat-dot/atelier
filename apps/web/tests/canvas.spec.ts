@@ -695,6 +695,19 @@ test('blank drag pans by default, Shift selects nodes, toolbar hints and layer s
   await expect
     .poll(() => api.saved().viewport.x)
     .toBeGreaterThan(initial.viewport.x + 50);
+  const imageBody = (await page
+    .locator('[data-id="reference-image"] .live-node-media')
+    .boundingBox())!;
+  const previousPan = api.saved().viewport.x;
+  await page.keyboard.down('Space');
+  await drag(page, imageBody.x + 60, imageBody.y + 60, 50, 30);
+  await page.keyboard.up('Space');
+  await expect
+    .poll(() => api.saved().viewport.x)
+    .toBeGreaterThan(previousPan + 35);
+  expect(
+    api.saved().nodes.find((n) => n.id === 'reference-image')!.position.x,
+  ).toBe(50);
   const nodes = page.locator('.react-flow__node');
   await nodes.first().locator('.graph-head').click();
   await nodes
