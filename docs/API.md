@@ -92,7 +92,7 @@ Provider 和调度为内部 service：图片 generations/edits；视频 /videos 
 M4 不开放用户生成/任务/quote/SSE 接口，不修改钱包余额；这些属于 M5。HTTP 后端与现有原型管理页面已接通：`/admin/accounts`、`/admin/models`；历史 `/admin/providers` 导航至账号池。
 
 
-## M5 生成任务（后端已接通，界面进行中）
+## M5 生成任务
 
 所有路径以 `/api/v1` 为前缀，要求登录，管理员要求最近 MFA；写请求要求同源与 CSRF。客户端价格不被接受。quote/create 各按用户 30 次/分钟，JSON 最多 32 KiB。
 
@@ -106,7 +106,7 @@ M4 不开放用户生成/任务/quote/SSE 接口，不修改钱包余额；这�
 
 任务视图不返回账号 ID、租约令牌、真实模型名、上游任务 ID 或地址。价格和参数快照不可修改，终态不可再更新；同请求键异参 422 IDEMPOTENCY_CONFLICT，余额不足 402，活跃任务超限 429 TOO_MANY_ACTIVE_JOBS，免费层越级 403 RESOLUTION_NOT_ALLOWED，黑名单 422 CONTENT_POLICY。
 
-任务由 API 内持久 worker 执行：60 秒租约/20 秒续期，过期回收带令牌栅栏，三次尝试预算；无账号容量每两秒重试，五分钟失败释放。生成媒体先暂存，发布/按张结算/余量释放/终态/事件同事务；视频 ID 已持久化后不重复提交。SSE 已接入，真实生成页面在后续切片接入。
+任务由 API 内持久 worker 执行：60 秒租约/20 秒续期，过期回收带令牌栅栏，三次尝试预算；无账号容量每两秒重试，五分钟失败释放。生成媒体先暂存，发布/按张结算/余量释放/终态/事件同事务；视频 ID 已持久化后不重复提交。SSE 与真实生成页面 `/generate` 已接入，当前全部使用 FREE 层级，订阅层级由 M8 实现。
 
 
 `GET /generation/limits` 返回 tier、max_resolution、max_active_jobs、video_enabled。`GET /events?after=SEQ` 返回 SSE `job.updated`，id 为数据库 seq，JSON 为 GenerationEvent；Last-Event-ID 优先于 after。只重放本人记录，输出链接重新签名；未来游标收敛到本人最新事件。每用户最多三个 SSE 连接（超出 429 SSE_CONNECTION_LIMIT），10 秒心跳，持续复核会话及 MFA；失效断流。客户端应在 SSE 不可用时轮询任务接口，重连携带最后成功处理的游标。

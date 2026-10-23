@@ -125,7 +125,24 @@ async fn browser_harness(db: sqlx::PgPool) {
                 axum::routing::get(|| async {
                     axum::Json(serde_json::json!({"data":[{"id":"fixture-private-model"}]}))
                 }),
-            ),
+            )
+            .route("/v1/images/generations", axum::routing::post(|headers: axum::http::HeaderMap, axum::Json(body): axum::Json<serde_json::Value>| async move {
+                assert_eq!(headers[axum::http::header::AUTHORIZATION], "Bearer synthetic-browser-secret");
+                assert_eq!(body["model"], "fixture-private-model");
+                axum::Json(serde_json::json!({"data":(0..body["n"].as_u64().unwrap()).map(|_|serde_json::json!({"b64_json":STANDARD.encode(include_bytes!("fixtures/reference.png"))})).collect::<Vec<_>>()}))
+            }))
+            .route("/v1/images/edits", axum::routing::post(|mut form: axum::extract::Multipart| async move {
+                let mut found=false;
+                while let Some(field)=form.next_field().await.unwrap(){if field.name()==Some("image[]"){assert!(!field.bytes().await.unwrap().is_empty());found=true;}}
+                assert!(found);
+                axum::Json(serde_json::json!({"data":[{"b64_json":STANDARD.encode(include_bytes!("fixtures/reference.png"))}]}))
+            }))
+            .route("/v1/videos", axum::routing::post(|axum::Json(body): axum::Json<serde_json::Value>| async move {
+                assert_eq!(body["model"], "fixture-private-model");
+                axum::Json(serde_json::json!({"id":"browser_video_1","status":"queued"}))
+            }))
+            .route("/v1/videos/{id}", axum::routing::get(|| async {axum::Json(serde_json::json!({"id":"browser_video_1","status":"completed"}))}))
+            .route("/v1/videos/{id}/content", axum::routing::get(|| async {([(axum::http::header::CONTENT_TYPE,"video/mp4")],include_bytes!("fixtures/reference.mp4").as_slice())})),
         )
         .await
         .unwrap();
@@ -162,6 +179,22 @@ async fn browser_harness(db: sqlx::PgPool) {
     )
     .with_video(video);
     let processing = tokio::spawn(assets.clone().processing_loop());
+    let generation = atelier_generation::GenerationService::new(db.clone(), assets.clone())
+        .with_events(
+            &std::env::var("TEST_REDIS_URL").unwrap(),
+            &format!("browser-generation:{}", uuid::Uuid::new_v4()),
+        )
+        .await
+        .unwrap();
+    let worker = tokio::spawn(
+        atelier_generation::GenerationWorker::new(
+            generation.clone(),
+            state.upstream.clone().unwrap(),
+        )
+        .run(),
+    );
+    let events = tokio::spawn(generation.clone().event_loop());
+    state.generation = Some(generation);
     state.assets = Some(assets);
     state.auth = SessionService::new(
         Arc::new(PostgresSessions::new(db)),
@@ -185,6 +218,8 @@ async fn browser_harness(db: sqlx::PgPool) {
     )
     .await
     .unwrap();
+    worker.abort();
+    events.abort();
     processing.abort();
     upstream_server.abort();
 }

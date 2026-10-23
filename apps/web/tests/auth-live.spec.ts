@@ -246,4 +246,119 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   expect(
     (await (await page.request.get('/api/v1/wallet')).json()).balance,
   ).toBe(20);
+  // M5: the browser uses real PostgreSQL/Redis, wallet transactions and durable worker.
+  // Only the paid upstream is replaced with an isolated local fixture.
+  await page.getByRole('link', { name: '图片与视频生成', exact: true }).click();
+  await page.getByLabel('画面描述').fill('Live coastal landscape');
+  await page.getByRole('button', { name: '生成图片', exact: true }).click();
+  await expect(page.locator('.gen-status')).toHaveText('生成完成', {
+    timeout: 20000,
+  });
+  await expect(page.locator('.gen-settlement')).toContainText('已结算 10');
+  await page.getByRole('button', { name: '预览结果 1' }).click();
+  await expect
+    .poll(() =>
+      page
+        .getByRole('img', { name: '生成结果大图' })
+        .evaluate((el) => (el as HTMLImageElement).naturalWidth),
+    )
+    .toBe(16);
+  await page.keyboard.press('Escape');
+  await page.reload();
+  await expect(page.locator('.gen-status')).toHaveText('生成完成');
+  expect(
+    (await (await page.request.get('/api/v1/wallet')).json()).balance,
+  ).toBe(10);
+  await page.getByRole('link', { name: '我的素材库', exact: true }).click();
+  await expect(page.locator('.asset-card')).toHaveCount(1);
+  // Create a video model using the same documented management APIs and actual CSRF.
+  const headers = {
+    origin: new URL(page.url()).origin,
+    'X-CSRF-Token': me.csrf_token,
+  };
+  let video = await page.request.post('/api/v1/admin/models', {
+    headers,
+    data: {
+      id: 'live-video',
+      display_name: 'Live Video',
+      kind: 'video',
+      upstream_model: 'fixture-private-model',
+      enabled: false,
+      sort_order: 0,
+      capabilities: {
+        qualities: ['standard'],
+        ratios: ['16:9'],
+        resolutions: ['720p'],
+        max_n: 1,
+        max_refs: 1,
+        seconds: [4],
+      },
+    },
+  });
+  expect(video.status()).toBe(201);
+  let videoModel = await video.json();
+  video = await page.request.put('/api/v1/admin/models/live-video/accounts', {
+    headers,
+    data: {
+      revision: videoModel.revision,
+      account_ids: [],
+      group_tags: ['default'],
+    },
+  });
+  expect(video.ok()).toBe(true);
+  videoModel = await video.json();
+  const pricing = await (
+    await page.request.get('/api/v1/admin/pricing')
+  ).json();
+  pricing.rules.push({
+    model_id: 'live-video',
+    quality: 'standard',
+    base_credits: 1,
+    edit_surcharge: 0,
+  });
+  expect(
+    (
+      await page.request.put('/api/v1/admin/pricing', {
+        headers,
+        data: pricing,
+      })
+    ).ok(),
+  ).toBe(true);
+  expect(
+    (
+      await page.request.patch('/api/v1/admin/models', {
+        headers,
+        data: {
+          id: 'live-video',
+          display_name: 'Live Video',
+          kind: 'video',
+          enabled: true,
+          sort_order: 0,
+          revision: videoModel.revision,
+          capabilities: videoModel.capabilities,
+        },
+      })
+    ).ok(),
+  ).toBe(true);
+  await page.getByRole('link', { name: '图片与视频生成', exact: true }).click();
+  await page.getByRole('button', { name: '视频', exact: true }).click();
+  await page.getByLabel('画面描述').fill('Live gentle ocean waves');
+  await page.getByRole('button', { name: '生成视频', exact: true }).click();
+  await expect(page.locator('.gen-status')).toHaveText('生成完成', {
+    timeout: 30000,
+  });
+  await expect(page.locator('.gen-settlement')).toContainText('已结算 4');
+  await page.getByRole('button', { name: '预览结果 1' }).click();
+  const generatedVideo = page.getByRole('dialog').locator('video');
+  await expect
+    .poll(() => generatedVideo.evaluate((el) => el.readyState), {
+      timeout: 15000,
+    })
+    .toBeGreaterThanOrEqual(2);
+  await page.keyboard.press('Escape');
+  expect(
+    (await (await page.request.get('/api/v1/wallet')).json()).balance,
+  ).toBe(6);
+  await page.reload();
+  await expect(page.locator('.gen-status')).toHaveText('生成完成');
 });

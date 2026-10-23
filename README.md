@@ -60,7 +60,7 @@ cargo run -p atelier-app
 `npm run build:mock` 单独输出 `dist-mock`，只能用于本地预览。生产构建显式设置 `VITE_API_MODE=mock` 会失败。
 Rust 自动执行 `services/api/migrations`，并可托管 `WEB_DIR` 的 SPA。
 配置样例见 `services/api/.env.example`。启动进程必须注入 DATABASE_URL、REDIS_URL、PUBLIC_BASE_URL、GOOGLE_CLIENT_ID、GOOGLE_CLIENT_SECRET、MASTER_KEY、BOOTSTRAP_ADMIN_EMAILS。认证凭据和主密钥没有默认值，缺失会拒绝启动；不要把任何服务端凭据写入 VITE_* 或前端文件。Google OAuth Web 客户端的回调为 PUBLIC_BASE_URL + /api/v1/auth/google/callback。MASTER_KEY 为持久保存的随机 32 字节 base64。没有开发登录或内存 Session。
-账号资料、设备列表/撤销、全设备注销已接服务端会话；M2 已接积分、签到、兑换和管理员调账，生成等业务随后续里程碑接入。
+账号资料、设备列表/撤销、全设备注销已接服务端会话；M2 已接积分、签到、兑换和管理员调账，M5 已接图片与视频生成、任务与积分结算。
 
 开发基础设施：`infra/compose.yaml` 提供 PostgreSQL 16 与带密码 Redis 7，仅绑定 127.0.0.1；当前复用已部署 WSL 服务，无需另启动 compose。
 旧原型迁移已归档到 `docs/legacy`；已有旧版数据库不要直接执行新迁移，需要专门迁移方案。
@@ -119,4 +119,18 @@ cargo test --locked -p atelier-auth --tests -- --ignored
 
 出站默认仅支持公网 HTTPS，并拒绝私网、重定向和环境代理。生产无需配置 `UPSTREAM_DEV_ALLOW_ORIGINS`；只有隔离本地假上游开发才可显式填写准确 loopback origin，且 API 与公开入口都必须为 loopback。实际供应商协议或模型能力需要用供应商真实配置核对，本轮使用受控假上游验收，未发起付费生成。
 
-重启仓库根目录的 `npm run dev` 后，新迁移会自动执行。M4 只交付账号、模型、价格和内部路由适配；用户创作任务、积分预占/结算与进度推送属于 M5，本轮未启动。验收与后续续接见 [M4 记录](docs/PR_M4.md)。
+重启仓库根目录的 `npm run dev` 后，新迁移会自动执行。M4 账号、模型、价格和内部路由适配验收见 [M4 记录](docs/PR_M4.md)。
+
+
+## M5 图片与视频生成
+
+重启根目录 `npm run dev` 应用迁移后，从侧栏“图片与视频生成”或首页“开始生成”进入 `/generate`。需要管理员先按上面的 M4 顺序配置可用账号、绑定、模型能力和价格并启用；没有可用模型时页面会明确提示。视频还需要启用 FFmpeg/ffprobe。
+
+1. 选择图片或视频、模型，填写画面描述。参考图模式可从自己的素材库选择或上传图片。
+2. 选择模型支持的参数，检查服务端实际尺寸与预计积分；当前 FREE 默认最高 2K、同时一个活跃任务。
+3. 点击生成后预占积分，可查看实时进度或离开页面稍后返回。取消、失败或部分成功时，未产出的积分自动释放；仅保存并发布的结果结算。
+4. 在生成记录查看/切换任务，预览和下载图片或视频；结果同时进入素材库。复用参数不会自动提交，需要再次确认报价并点击生成。
+
+网络提交结果不明时请使用页面的“重试确认提交”，它保留相同请求编号，避免重复扣分。SSE 断线会自动查询任务；代理应关闭 `/api/v1/events` 的响应缓冲并允许长连接。
+
+本轮不自动进入 M6 画布/项目功能；S3 继续待定。真实供应商的兼容性和付费效果需部署者使用自己的配置核对；验收记录见 [M5 记录](docs/PR_M5.md)。

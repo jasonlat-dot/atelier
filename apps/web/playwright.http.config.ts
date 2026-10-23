@@ -7,6 +7,7 @@ export default defineConfig({
     'workspace.spec.ts',
     'assets.spec.ts',
     'upstream.spec.ts',
+    'generation.spec.ts',
   ],
   workers: 1,
   use: {

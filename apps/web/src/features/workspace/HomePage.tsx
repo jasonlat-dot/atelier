@@ -4,6 +4,7 @@ import {
   GalleryHorizontal,
   MessageSquare,
   Plus,
+  Sparkles,
 } from 'lucide-react';
 import type { Me } from '../auth/sessionApi';
 import { Link } from 'react-router-dom';
@@ -41,10 +42,16 @@ export default function HomePage(props: {
             从一个想法开始，连接图片、视频与文字，完成你的下一次创作。
           </p>
         </div>
-        <button className="btn btn-dark" disabled title="画布创作即将开放">
-          <Plus size={16} />
-          新建画布
-        </button>
+        <div className="gen-actions">
+          <Link className="btn btn-dark" to="/generate">
+            <Sparkles size={16} />
+            开始生成
+          </Link>
+          <button className="btn" disabled title="画布创作即将开放">
+            <Plus size={16} />
+            新建画布
+          </button>
+        </div>
       </div>
       <div className="quick-cards">
         {shortcuts.map(({ name, description, icon: Icon }) => {
@@ -87,9 +94,7 @@ export default function HomePage(props: {
         <div className="workspace-empty">
           <GalleryHorizontal size={30} strokeWidth={1.2} />
           <h3>留一片空间，给下一个好想法</h3>
-          <p>
-            画布创作正在准备中。你可以先签到积累积分，或查看账号与积分记录。
-          </p>
+          <p>画布创作正在准备中。你可以先生成图片与视频，或签到积累积分。</p>
         </div>
       </div>
       <div className="section-head">

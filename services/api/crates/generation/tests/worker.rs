@@ -108,6 +108,9 @@ async fn video_submit(
     assert_eq!(body["seconds"], "4");
     assert_eq!(body["size"], "1280x720");
     fake.hit(format!("{mode}:video-submit"));
+    if mode == "ambiguous" {
+        tokio::time::sleep(Duration::from_secs(10)).await;
+    }
     Json(json!({"id":"video_test_1","status":"queued"}))
 }
 async fn fixture() -> Fixture {
@@ -746,4 +749,121 @@ async fn running_worker_renews_then_cancels_and_releases_all_capacity(db: PgPool
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
     panic!("cancel did not release account slot");
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+#[ignore = "Requires isolated PostgreSQL and TEST_REDIS_URL"]
+async fn persistent_retry_budget_stops_after_three_distinct_accounts(db: PgPool) {
+    let fixture = fixture().await;
+    let (actor, upstream, _) = service(&db, &fixture, Duration::from_secs(3)).await;
+    for i in 0..4 {
+        account(
+            &upstream,
+            actor,
+            &fixture,
+            &format!("Broken {i}"),
+            "broken",
+            "pool",
+            (i, 100),
+        )
+        .await;
+    }
+    model(&upstream, actor, "image", "image", "pool").await;
+    let (s, _) = generation(&db);
+    let owner = user(&db).await;
+    let id = s
+        .create(owner, Uuid::new_v4(), input("image", 1))
+        .await
+        .unwrap()
+        .job
+        .id;
+    for attempt in 1..=3 {
+        // New worker object each time: retries cannot depend on process memory.
+        sqlx::query("UPDATE generation_jobs SET next_attempt_at=clock_timestamp() WHERE id=$1")
+            .bind(id)
+            .execute(&db)
+            .await
+            .unwrap();
+        GenerationWorker::new(s.clone(), upstream.clone())
+            .run_once()
+            .await
+            .unwrap();
+        let job = s.get(owner, id).await.unwrap();
+        assert_eq!(job.attempts, attempt);
+        assert_eq!(job.status, if attempt == 3 { "FAILED" } else { "ROUTING" });
+    }
+    let worker = GenerationWorker::new(s.clone(), upstream);
+    assert!(!worker.run_once().await.unwrap());
+    assert_eq!(fixture.fake.count("broken:image"), 3);
+    let tried: i32 =
+        sqlx::query_scalar("SELECT cardinality(tried_accounts) FROM generation_jobs WHERE id=$1")
+            .bind(id)
+            .fetch_one(&db)
+            .await
+            .unwrap();
+    assert_eq!(tried, 3);
+    let wallet = WalletService::new(db.clone()).summary(owner).await.unwrap();
+    assert_eq!((wallet.balance, wallet.held), (1000, 0));
+    let release_count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM credit_ledger WHERE user_id=$1 AND type='RELEASE'",
+    )
+    .bind(owner)
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(release_count, 1);
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+#[ignore = "Requires isolated PostgreSQL, TEST_REDIS_URL and FFmpeg"]
+async fn crash_during_ambiguous_video_submission_never_submits_again(db: PgPool) {
+    let fixture = fixture().await;
+    let (actor, upstream, _) = service(&db, &fixture, Duration::from_secs(20)).await;
+    account(
+        &upstream,
+        actor,
+        &fixture,
+        "Video",
+        "ambiguous",
+        "video",
+        (0, 100),
+    )
+    .await;
+    model(&upstream, actor, "video", "video", "video").await;
+    let assets = AssetService::new(
+        db.clone(),
+        Storage::memory(),
+        MediaSigner::from_base64(&STANDARD.encode([68; 32])).unwrap(),
+    )
+    .with_video(
+        atelier_assets::video::VideoProcessor::from_lookup(|k| std::env::var(k).ok())
+            .unwrap()
+            .unwrap(),
+    );
+    let s = GenerationService::new(db.clone(), assets);
+    let worker = GenerationWorker::new(s.clone(), upstream);
+    let owner = user(&db).await;
+    let input: JobInput = serde_json::from_value(json!({"model_id":"video","prompt":"A quiet film","quality":"standard","ratio":"16:9","resolution":"720p","seconds":4,"n":1})).unwrap();
+    let id = s.create(owner, Uuid::new_v4(), input).await.unwrap().job.id;
+    let w = worker.clone();
+    let task = tokio::spawn(async move { w.run_once().await });
+    for _ in 0..100 {
+        if fixture.fake.count("ambiguous:video-submit") == 1 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    assert_eq!(fixture.fake.count("ambiguous:video-submit"), 1);
+    task.abort();
+    let _ = task.await;
+    expire(&db, id).await;
+    worker.recover_expired().await.unwrap();
+    assert!(!worker.run_once().await.unwrap());
+    let job = s.get(owner, id).await.unwrap();
+    assert_eq!(job.status, "FAILED");
+    assert_eq!(job.error_code.as_deref(), Some("WORKER_LOST"));
+    assert_eq!((job.settled, job.released), (0, 40));
+    assert_eq!(fixture.fake.count("ambiguous:video-submit"), 1);
+    let wallet = WalletService::new(db).summary(owner).await.unwrap();
+    assert_eq!((wallet.balance, wallet.held), (1000, 0));
 }

@@ -11,6 +11,7 @@ import WalletPage from './features/wallet/WalletPage';
 import AdminCreditsPage from './features/wallet/AdminCreditsPage';
 import AdminAccountsPage from './features/upstream/AdminAccountsPage';
 import AdminModelsPage from './features/upstream/AdminModelsPage';
+import GenerationPage from './features/generation/GenerationPage';
 
 type AuthState =
   | { status: 'loading' }
@@ -111,6 +112,12 @@ export default function ProductionApp() {
   return (
     <WorkspaceShell me={me} onExpired={expired} onReload={reload}>
       <Routes>
+        <Route
+          path="/generate"
+          element={
+            <GenerationPage me={me} onExpired={expired} onReload={reload} />
+          }
+        />
         <Route
           path="/admin/accounts"
           element={
