@@ -20,4 +20,4 @@ agent-core 对外只有 LlmClient、IntentClassifier、ContextCompressor，不�
 
 ## 远端
 
-后端基础 a12699d 的 Actions #39903985055 两作业 completed/success。最终功能提交和完成状态以 PROGRESS 最新核对为准。本轮完成 M7 后停止，不进入 M8。
+后端基础 a12699d 的 Actions #39903985055 两作业 completed/success。完整功能 `20a54b3` 的 [Actions #39905794003](https://github.com/jasonlat-dot/atelier/actions/runs/39905794003) baseline 成功，真实浏览器测试存在跳转等待时序问题；已补 UUID URL 等待与响应成功断言，修复提交继续验收，完成状态以 PROGRESS 最新核对为准。本轮完成 M7 后停止，不进入 M8。

@@ -625,6 +625,7 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   await expect(
     page.getByRole('heading', { name: '海岸创作建议' }),
   ).toBeVisible();
+  await expect(page).toHaveURL(/\/chat\/[0-9a-f-]{36}$/);
   const conversationId = new URL(page.url()).pathname.split('/').pop()!;
   expect(
     (await (await page.request.get('/api/v1/wallet')).json()).balance,
@@ -658,9 +659,11 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   await expect
     .poll(
       async () => {
-        const view = await (
-          await page.request.get(`/api/v1/chat/conversations/${conversationId}`)
-        ).json();
+        const response = await page.request.get(
+          `/api/v1/chat/conversations/${conversationId}`,
+        );
+        expect(response.ok()).toBe(true);
+        const view = await response.json();
         return view.turns.at(-1).status;
       },
       { timeout: 10000 },

@@ -355,3 +355,8 @@ M1 历史交付未打包、未部署。条款仍是开发占位，正式法律�
 - [x] HTTP 浏览器 39/39（新增对话 5 项）、Mock 浏览器 1/1；Rust workspace fmt/clippy/test/check、接口契约、构建隔离/代理及 CI 换源测试通过；cargo audit（342 crates）与官方 npm audit 0 漏洞、无豁免。
 - [x] 完整 PG/Redis/媒体及 app HTTP 均通过；真实 PG/Redis 浏览器 2/2，覆盖 chat 模型配置、SSE 回复保存扣 1、刷新、画布草稿不创建任务、停止、502 和无 DONE 截断均不扣费。没有实际付费供应商调用。
 - [ ] 最终完整功能推送后等待 Actions；未核对前不标 M7 完成。
+
+
+### M7 · 远端浏览器等待修正
+
+完整功能 20a54b3 的 Actions #39905794003：baseline 成功，identity-schema 的 Rust/数据库/Redis/媒体/HTTP 均通过，最后真实浏览器失败。日志显示停止检查中的 view.turns 未定义；测试在“回复已保存”出现后立即从页面取 ID，尚未等待列表/钱包刷新后的路由跳转，快浏览器可能取到 /chat 而非 /chat/UUID。新增明确 UUID URL 等待，轮询同时检查 HTTP 成功；不放宽状态、余额或时限断言，不改生产逻辑。修复后重新本地与远端验收，M7 尚未标记完成。
