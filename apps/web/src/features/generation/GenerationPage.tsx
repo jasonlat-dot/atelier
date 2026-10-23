@@ -920,14 +920,6 @@ export default function GenerationPage(props: Props) {
                     <article key={asset.id}>
                       <button
                         className="gen-output-preview"
-                        style={{
-                          aspectRatio:
-                            asset.width && asset.height
-                              ? `${asset.width} / ${asset.height}`
-                              : asset.kind === 'video'
-                                ? '16 / 9'
-                                : '1 / 1',
-                        }}
                         aria-label={`预览结果 ${idx + 1}`}
                         onClick={() => setPreview(asset)}
                       >

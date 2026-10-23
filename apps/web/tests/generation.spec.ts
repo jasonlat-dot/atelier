@@ -82,11 +82,15 @@ const jobBase = {
 };
 async function fixture(
   page: Page,
-  options: { ambiguous?: boolean; empty?: boolean } = {},
+  options: {
+    ambiguous?: boolean;
+    empty?: boolean;
+    jobs?: (typeof jobBase)[];
+  } = {},
 ) {
   const writes: { body: Record<string, unknown>; key?: string }[] = [];
   const state = {
-    jobs: [] as (typeof jobBase)[],
+    jobs: options.jobs || ([] as (typeof jobBase)[]),
     available: 100,
     held: 0,
     expired: false,
@@ -228,6 +232,102 @@ async function fixture(
   await expect(page.getByRole('heading', { name: '生成工作台' })).toBeVisible();
   return { writes, state };
 }
+test('result preview stays within the workspace and viewport for wide screens and portrait media', async ({
+  page,
+}, info) => {
+  await page.setViewportSize({ width: 2473, height: 1138 });
+  const fixtureData = await fixture(page, {
+    jobs: [
+      {
+        ...jobBase,
+        status: 'SUCCEEDED',
+        progress: 100,
+        settled: 7,
+        outputs: [{ idx: 0, asset: image }],
+      },
+    ],
+  });
+  await page.route('**/fixture.png', (route) => {
+    const { width, height } = fixtureData.state.jobs[0].outputs[0].asset;
+    return route.fulfill({
+      contentType: 'image/svg+xml',
+      body: `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="100%" height="100%" fill="#e8e1d4"/><rect x="8" y="8" width="${width - 16}" height="${height - 16}" fill="none" stroke="#8c7358" stroke-width="16"/><circle cx="${width / 2}" cy="${height / 2}" r="${Math.min(width, height) / 4}" fill="#cbb9a0"/></svg>`,
+    });
+  });
+  for (const viewport of [
+    { width: 2473, height: 1138 },
+    { width: 1440, height: 900 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport);
+    for (const [width, height] of [
+      [1024, 1024],
+      [900, 1600],
+      [1600, 900],
+    ]) {
+      fixtureData.state.jobs[0].outputs[0].asset = { ...image, width, height };
+      await page.reload();
+      const media = page.getByRole('button', {
+        name: '预览结果 1',
+        exact: true,
+      });
+      await expect(media).toBeVisible();
+      const bounds = await media.boundingBox();
+      await page.screenshot({
+        path: info.outputPath(
+          `preview-${viewport.width}-${width}x${height}.png`,
+        ),
+        fullPage: false,
+      });
+      expect(bounds!.height).toBeLessThanOrEqual(480);
+      expect(bounds!.height).toBeGreaterThanOrEqual(180);
+      expect(
+        await media
+          .locator('img')
+          .evaluate((el) => getComputedStyle(el).objectFit),
+      ).toBe('contain');
+      expect(
+        await page
+          .locator('.generation-page')
+          .evaluate((el) => el.getBoundingClientRect().width),
+      ).toBeLessThanOrEqual(1440);
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+      if (viewport.width >= 1181) {
+        expect(bounds!.y).toBeGreaterThanOrEqual(64);
+        expect(bounds!.y + bounds!.height).toBeLessThan(viewport.height);
+        const action = await page
+          .getByRole('button', { name: '复用参数', exact: true })
+          .boundingBox();
+        expect(
+          action!.y + action!.height,
+          JSON.stringify(
+            await page.locator('.gen-stage').evaluate((el) => ({
+              width: el.getBoundingClientRect().width,
+              top: el.getBoundingClientRect().top,
+              html: [...el.children].map((child) => ({
+                name: child.className,
+                height: child.getBoundingClientRect().height,
+              })),
+            })),
+          ),
+        ).toBeLessThan(viewport.height);
+        const submit = await page
+          .getByRole('button', { name: '生成图片', exact: true })
+          .boundingBox();
+        expect(submit!.y + submit!.height).toBeLessThan(viewport.height);
+      }
+    }
+    await page.screenshot({
+      path: info.outputPath(`bounded-preview-${viewport.width}.png`),
+      fullPage: false,
+    });
+  }
+  expect(fixtureData.writes).toHaveLength(0);
+});
 test('home composer carries a private draft into generation without submitting a paid job', async ({
   page,
 }) => {
