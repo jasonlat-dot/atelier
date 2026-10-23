@@ -180,7 +180,7 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   await expect(page.getByRole('heading', { name: '账号设置' })).toBeVisible();
   me = await (await page.request.get('/api/v1/me')).json();
   expect(me.mfa_required).toBe(false);
-  expect((await page.request.get('/api/v1/admin/users')).status()).toBe(404);
+  expect((await page.request.get('/api/v1/admin/users')).status()).toBe(200);
   const replay = await page.request.post('/api/v1/admin/mfa/verify', {
     headers: {
       origin: new URL(page.url()).origin,

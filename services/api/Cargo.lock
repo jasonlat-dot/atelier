@@ -82,6 +82,26 @@ dependencies = [
 [[package]]
 name = "atelier-admin"
 version = "0.1.0"
+dependencies = [
+ "atelier-auth",
+ "atelier-chat",
+ "atelier-common",
+ "atelier-generation",
+ "atelier-wallet",
+ "axum",
+ "base64 0.22.1",
+ "chrono",
+ "getrandom 0.4.3",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "thiserror 2.0.21",
+ "tokio",
+ "utoipa",
+ "uuid",
+]
 
 [[package]]
 name = "atelier-agent-core"
@@ -100,6 +120,7 @@ dependencies = [
 name = "atelier-app"
 version = "0.1.0"
 dependencies = [
+ "atelier-admin",
  "atelier-agent-core",
  "atelier-assets",
  "atelier-auth",

@@ -102,9 +102,9 @@ jobs:
           ffprobe -version
           timeout --version
           prlimit --version
-      - run: cargo test --locked -p atelier-auth -p atelier-wallet -p atelier-assets -p atelier-upstream -p atelier-generation -p atelier-canvas -p atelier-chat --tests -- --ignored
+      - run: cargo test --locked -p atelier-auth -p atelier-wallet -p atelier-assets -p atelier-upstream -p atelier-generation -p atelier-canvas -p atelier-chat -p atelier-admin --tests -- --ignored
         working-directory: services/api
-      - run: cargo test --locked -p atelier-app --test wallet_http --test billing_http -- --ignored
+      - run: cargo test --locked -p atelier-app --test wallet_http --test billing_http --test admin_http -- --ignored
         working-directory: services/api
       - run: cargo test --locked -p atelier-app --test assets_schema --test assets_http --test upstream_http --test generation_http --test canvas_http --test chat_http -- --ignored
         working-directory: services/api

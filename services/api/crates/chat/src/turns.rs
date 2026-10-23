@@ -3,6 +3,13 @@ use atelier_agent_core::{
     estimate_text, should_compress, ChatRequest, Compressed, ContextCompressor, EvidenceCompressor,
     Intent, LlmClient, Message,
 };
+fn text_error(e: atelier_agent_core::CoreError) -> ChatError {
+    if matches!(e, atelier_agent_core::CoreError::ContentPolicy) {
+        ChatError::ContentPolicy
+    } else {
+        ChatError::Store
+    }
+}
 use atelier_wallet::{Operation, WalletService};
 use futures_util::StreamExt;
 use sqlx::Row;
@@ -87,9 +94,9 @@ impl ChatService {
                     .send(ChatEvent::Intent(turn.intent.unwrap_or(Intent::Chat)))
                     .await
                     .map_err(|_| ChatError::Conflict)?;
-                let mut stream = client.stream(request).await.map_err(|_| ChatError::Store)?;
+                let mut stream = client.stream(request).await.map_err(text_error)?;
                 while let Some(part) = stream.next().await {
-                    let text = part.map_err(|_| ChatError::Store)?;
+                    let text = part.map_err(text_error)?;
                     if reply.len() + text.len() > 65536 {
                         return Err(ChatError::Context);
                     }
@@ -164,7 +171,9 @@ impl ChatService {
                         "FAILED"
                     },
                     &reply,
-                    if matches!(error, ChatError::Context) {
+                    if matches!(error, ChatError::ContentPolicy) {
+                        "CONTENT_POLICY"
+                    } else if matches!(error, ChatError::Context) {
                         "CONTEXT_LIMIT"
                     } else if matches!(error, ChatError::Conflict) {
                         "CANCELLED"
@@ -369,6 +378,12 @@ impl ChatService {
             .execute(&mut *tx)
             .await?;
         sqlx::query("UPDATE chat_turns SET status=$3,action=$4,estimated_tokens=$5,error_code=$6,finished_at=clock_timestamp() WHERE id=$1 AND token=$2").bind(id).bind(token).bind(actual).bind(action).bind(estimated.max(0)).bind(if success{None}else{Some(if code.is_empty(){"CANCELLED"}else{code})}).execute(&mut *tx).await?;
+        if !success && code == "CONTENT_POLICY" {
+            sqlx::query("INSERT INTO moderation_violations(user_id,source) VALUES($1,'upstream')")
+                .bind(owner)
+                .execute(&mut *tx)
+                .await?;
+        }
         sqlx::query("UPDATE conversations SET updated_at=clock_timestamp() WHERE id=$1")
             .bind(conversation)
             .execute(&mut *tx)

@@ -12,6 +12,8 @@ pub type CoreFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, CoreError>> +
 pub type TokenStream = Pin<Box<dyn futures_util::Stream<Item = Result<String, CoreError>> + Send>>;
 #[derive(Debug, thiserror::Error)]
 pub enum CoreError {
+    #[error("Language content rejected")]
+    ContentPolicy,
     #[error("Language service unavailable")]
     Unavailable,
     #[error("Language output is invalid or exceeds limits")]

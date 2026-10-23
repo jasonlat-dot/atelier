@@ -245,3 +245,38 @@ async fn live_settings_whitelist_expired_invite_and_session_rotation(pool: PgPoo
     .await
     .unwrap();
 }
+
+#[sqlx::test(migrations = "../../migrations")]
+#[ignore = "Requires isolated PostgreSQL"]
+async fn revoked_invitation_cannot_register_or_consume_its_capacity(pool: PgPool) {
+    use sha2::{Digest, Sha256};
+    mode(&pool, "INVITE_ONLY").await;
+    sqlx::query("INSERT INTO invite_codes(code_hash,max_uses,revoked_at) VALUES($1,2,now())")
+        .bind(Sha256::digest(b"revoked-invite").as_slice())
+        .execute(&pool)
+        .await
+        .unwrap();
+    let repo = PostgresIdentity::new(pool.clone(), HashSet::new());
+    assert!(matches!(
+        repo.login(
+            support::identity("revoked-user", "revokeduser@gmail.com"),
+            context("192.0.2.50", Some("revoked-invite"))
+        )
+        .await,
+        Err(atelier_auth::identity::AuthFailure::Invite)
+    ));
+    assert_eq!(
+        sqlx::query_scalar::<_, i32>("SELECT used_count FROM invite_codes")
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        0
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT count(*) FROM users")
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        0
+    );
+}

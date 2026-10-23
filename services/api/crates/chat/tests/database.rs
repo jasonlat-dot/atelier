@@ -439,3 +439,34 @@ async fn revoked_session_and_completion_audit_failure_release_without_settlement
         .iter()
         .all(|t| t.status != "SUCCEEDED"));
 }
+
+struct PolicyRejection;
+impl LlmClient for PolicyRejection {
+    fn stream(&self, _: ChatRequest) -> CoreFuture<'_, TokenStream> {
+        Box::pin(async { Err(CoreError::ContentPolicy) })
+    }
+}
+#[sqlx::test(migrations = "../../migrations")]
+#[ignore = "Requires isolated PostgreSQL"]
+async fn upstream_rejection_records_one_violation_and_releases_the_reserved_credit(db: PgPool) {
+    let owner = user(&db).await;
+    let s = service(&db, false, false)
+        .await
+        .with_client(Arc::new(PolicyRejection));
+    let c = conversation(&s, owner).await;
+    let events = run(&s, owner, c, Uuid::new_v4()).await;
+    assert!(matches!(events.last(),Some(ChatEvent::Error(e)) if e.code=="CONTENT_POLICY"));
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM moderation_violations WHERE user_id=$1 AND source='upstream'"
+        )
+        .bind(owner)
+        .fetch_one(&db)
+        .await
+        .unwrap(),
+        1
+    );
+    let w = WalletService::new(db);
+    assert_eq!(w.summary(owner).await.unwrap().held, 0);
+    assert_eq!(w.summary(owner).await.unwrap().balance, 20);
+}

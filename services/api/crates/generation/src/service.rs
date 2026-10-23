@@ -13,6 +13,44 @@ pub struct GenerationService {
     pub(crate) bus: Option<std::sync::Arc<crate::events::EventBus>>,
 }
 impl GenerationService {
+    /// Caller holds the owner row; administrative and user cancellation share one state machine.
+    pub async fn cancel_in_transaction(
+        db: &mut PgConnection,
+        owner: Uuid,
+        id: Uuid,
+    ) -> Result<(), GenerationError> {
+        let status: Option<String> = sqlx::query_scalar(
+            "SELECT status FROM generation_jobs WHERE id=$1 AND owner_id=$2 FOR UPDATE",
+        )
+        .bind(id)
+        .bind(owner)
+        .fetch_optional(&mut *db)
+        .await?;
+        match status.as_deref() {
+            None => return Err(GenerationError::NotFound),
+            Some("QUEUED" | "ROUTING") => {
+                terminal_failure(db, owner, id, "CANCELLED", None).await?
+            }
+            Some("RUNNING" | "STORING") => {
+                let changed=sqlx::query("UPDATE generation_jobs SET cancel_requested=true,updated_at=clock_timestamp() WHERE id=$1 AND NOT cancel_requested").bind(id).execute(&mut *db).await?;
+                if changed.rows_affected() > 0 {
+                    event(db, owner, id).await?;
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+    pub async fn cancel_owner_in_transaction(
+        db: &mut PgConnection,
+        owner: Uuid,
+    ) -> Result<usize, GenerationError> {
+        let ids:Vec<Uuid>=sqlx::query_scalar("SELECT id FROM generation_jobs WHERE owner_id=$1 AND finished_at IS NULL ORDER BY id FOR UPDATE").bind(owner).fetch_all(&mut *db).await?;
+        for id in &ids {
+            Self::cancel_in_transaction(db, owner, *id).await?;
+        }
+        Ok(ids.len())
+    }
     pub fn new(db: PgPool, assets: AssetService) -> Self {
         Self {
             db,

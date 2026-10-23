@@ -128,9 +128,9 @@ async fn revoke_device(
 
 #[derive(OpenApi)]
 #[openapi(
-    paths(crate::billing_http::plans,crate::billing_http::subscription,crate::billing_http::create_order,crate::billing_http::orders,crate::billing_http::order,crate::billing_http::cancel,crate::billing_http::admin_plans,crate::billing_http::create_plan,crate::billing_http::update_plan,crate::billing_http::admin_orders,crate::billing_http::paid,crate::billing_http::refund_quote,crate::billing_http::refund,crate::chat_http::config,crate::chat_http::list,crate::chat_http::create,crate::chat_http::get_one,crate::chat_http::rename,crate::chat_http::delete_one,crate::chat_http::cancel,crate::chat_http::send,crate::canvas_http::export,crate::canvas_http::import,crate::canvas_http::list,crate::canvas_http::create,crate::canvas_http::get_one,crate::canvas_http::save,crate::canvas_http::rename,crate::canvas_http::delete_one,crate::canvas_http::duplicate,crate::canvas_http::snapshots,crate::canvas_http::restore,crate::canvas_http::references,crate::generation_http::events,crate::generation_http::limits,crate::generation_http::quote,crate::generation_http::create,crate::generation_http::list,crate::generation_http::get_one,crate::generation_http::cancel,crate::upstream_http::accounts,crate::upstream_http::account,crate::upstream_http::create_account,crate::upstream_http::update_account,crate::upstream_http::delete_account,crate::upstream_http::import_accounts,crate::upstream_http::probe,crate::upstream_http::refresh_quota,crate::upstream_http::stats,crate::upstream_http::models,crate::upstream_http::create_model,crate::upstream_http::update_model,crate::upstream_http::bindings,crate::upstream_http::pricing,crate::upstream_http::save_pricing,crate::upstream_http::catalog,crate::assets_http::list,crate::assets_http::get_one,crate::assets_http::limits,crate::assets_http::upload,crate::assets_http::delete_one,crate::assets_http::delete_many,crate::assets_http::media,crate::wallet_http::summary,crate::wallet_http::ledger,crate::wallet_http::checkin,crate::wallet_http::redeem,crate::wallet_http::adjust,crate::wallet_http::create_codes,crate::wallet_http::codes,health, me, rename, logout, devices, revoke_device,crate::login_http::google_start,crate::login_http::google_callback,crate::login_http::public_config,crate::login_http::mfa_setup,crate::login_http::mfa_verify),
+    paths(crate::admin_http::dashboard,crate::admin_http::usage,crate::admin_http::users,crate::admin_http::user_detail,crate::admin_http::user_ledger,crate::admin_http::user_action,crate::admin_http::jobs,crate::admin_http::job_action,crate::admin_http::settings,crate::admin_http::save_settings,crate::admin_http::rules,crate::admin_http::create_rule,crate::admin_http::update_rule,crate::admin_http::delete_rule,crate::admin_http::invites,crate::admin_http::create_invite,crate::admin_http::update_invite,crate::admin_http::revoke_invite,crate::admin_http::audit_logs,crate::billing_http::plans,crate::billing_http::subscription,crate::billing_http::create_order,crate::billing_http::orders,crate::billing_http::order,crate::billing_http::cancel,crate::billing_http::admin_plans,crate::billing_http::create_plan,crate::billing_http::update_plan,crate::billing_http::admin_orders,crate::billing_http::paid,crate::billing_http::refund_quote,crate::billing_http::refund,crate::chat_http::config,crate::chat_http::list,crate::chat_http::create,crate::chat_http::get_one,crate::chat_http::rename,crate::chat_http::delete_one,crate::chat_http::cancel,crate::chat_http::send,crate::canvas_http::export,crate::canvas_http::import,crate::canvas_http::list,crate::canvas_http::create,crate::canvas_http::get_one,crate::canvas_http::save,crate::canvas_http::rename,crate::canvas_http::delete_one,crate::canvas_http::duplicate,crate::canvas_http::snapshots,crate::canvas_http::restore,crate::canvas_http::references,crate::generation_http::events,crate::generation_http::limits,crate::generation_http::quote,crate::generation_http::create,crate::generation_http::list,crate::generation_http::get_one,crate::generation_http::cancel,crate::upstream_http::accounts,crate::upstream_http::account,crate::upstream_http::create_account,crate::upstream_http::update_account,crate::upstream_http::delete_account,crate::upstream_http::import_accounts,crate::upstream_http::probe,crate::upstream_http::refresh_quota,crate::upstream_http::stats,crate::upstream_http::models,crate::upstream_http::create_model,crate::upstream_http::update_model,crate::upstream_http::bindings,crate::upstream_http::pricing,crate::upstream_http::save_pricing,crate::upstream_http::catalog,crate::assets_http::list,crate::assets_http::get_one,crate::assets_http::limits,crate::assets_http::upload,crate::assets_http::delete_one,crate::assets_http::delete_many,crate::assets_http::media,crate::wallet_http::summary,crate::wallet_http::ledger,crate::wallet_http::checkin,crate::wallet_http::redeem,crate::wallet_http::adjust,crate::wallet_http::create_codes,crate::wallet_http::codes,health, me, rename, logout, devices, revoke_device,crate::login_http::google_start,crate::login_http::google_callback,crate::login_http::public_config,crate::login_http::mfa_setup,crate::login_http::mfa_verify),
     modifiers(&CookieSecurity),
-    components(schemas(atelier_wallet::PlanInput,atelier_wallet::PlanView,atelier_wallet::OrderInput,atelier_wallet::OrderView,atelier_wallet::OrderPage,atelier_wallet::PaidInput,atelier_wallet::RefundInput,atelier_wallet::RefundQuote,atelier_wallet::Entitlements,crate::billing_http::PlanUpdate,crate::billing_http::Checkout,
+    components(schemas(atelier_admin::AdminUser,atelier_admin::AdminUserPage,atelier_admin::AdminUserDetail,atelier_admin::AdminSession,atelier_admin::AdminUserAction,atelier_admin::AdminJob,atelier_admin::AdminJobPage,atelier_admin::AdminJobAction,atelier_admin::AdminCostRate,atelier_admin::AdminSettingsValues,atelier_admin::AdminCostModel,atelier_admin::AdminSettings,atelier_admin::AdminSettingsUpdate,atelier_admin::AdminRule,atelier_admin::AdminRuleInput,atelier_admin::AdminRevisionReason,atelier_admin::AdminRulePage,atelier_admin::AdminInvite,atelier_admin::AdminInviteInput,atelier_admin::AdminInviteUpdate,atelier_admin::AdminInviteCreated,atelier_admin::AdminInvitePage,atelier_admin::AdminAudit,atelier_admin::AdminAuditPage,atelier_admin::AdminDay,atelier_admin::AdminQuality,atelier_admin::AdminHealth,atelier_admin::AdminNotification,atelier_admin::AdminEstimate,atelier_admin::AdminOrderAmount,atelier_admin::AdminDashboard,atelier_admin::UsageView,atelier_wallet::PlanInput,atelier_wallet::PlanView,atelier_wallet::OrderInput,atelier_wallet::OrderView,atelier_wallet::OrderPage,atelier_wallet::PaidInput,atelier_wallet::RefundInput,atelier_wallet::RefundQuote,atelier_wallet::Entitlements,crate::billing_http::PlanUpdate,crate::billing_http::Checkout,
 atelier_chat::ConversationInput,atelier_chat::Conversation,atelier_chat::ConversationPage,atelier_chat::ConversationView,atelier_chat::SendMessage,atelier_chat::ChatTurn,atelier_chat::CanvasAction,atelier_chat::CanvasDraft,atelier_chat::ChatConfig,atelier_chat::ChatModel,atelier_chat::ChatEvent,atelier_chat::ChatDelta,atelier_chat::ChatFailure,atelier_agent_core::Intent,
 atelier_canvas::ProjectInfo,atelier_canvas::ProjectPage,atelier_canvas::ProjectView,atelier_canvas::CreateProject,atelier_canvas::RenameProject,atelier_canvas::ProjectSnapshot,atelier_canvas::ProjectReference,atelier_canvas::CanvasGraph,atelier_canvas::CanvasNode,atelier_canvas::NodeContent,atelier_canvas::CanvasEdge,atelier_canvas::Point,atelier_canvas::NodeSize,atelier_canvas::Viewport,atelier_canvas::Background,atelier_canvas::EdgeRole,atelier_canvas::TextData,atelier_canvas::ImageData,atelier_canvas::VideoData,atelier_canvas::GenerateData,atelier_canvas::GenMeta,
         atelier_generation::GenerationEvent,atelier_generation::EventOutput,atelier_generation::GenerationLimits,atelier_generation::JobInput,atelier_generation::QuoteInput,atelier_generation::Quote,atelier_generation::JobView,atelier_generation::JobParams,atelier_generation::Reference,atelier_generation::JobOutput,atelier_generation::JobReceipt,atelier_generation::JobPage,atelier_generation::JobEvent,
@@ -158,6 +158,82 @@ pub fn openapi() -> utoipa::openapi::OpenApi {
 
 pub fn router(state: AppState) -> Router {
     let protected = Router::new()
+        .route(
+            "/api/v1/admin/dashboard",
+            get(crate::admin_http::dashboard)
+                .layer(axum::extract::DefaultBodyLimit::max(131072))
+                .fallback(admin_missing),
+        )
+        .route(
+            "/api/v1/usage",
+            get(crate::admin_http::usage)
+                .layer(axum::extract::DefaultBodyLimit::max(131072))
+                .fallback(protected_missing),
+        )
+        .route(
+            "/api/v1/admin/users",
+            get(crate::admin_http::users)
+                .layer(axum::extract::DefaultBodyLimit::max(131072))
+                .fallback(admin_missing),
+        )
+        .route(
+            "/api/v1/admin/users/{id}",
+            get(crate::admin_http::user_detail)
+                .layer(axum::extract::DefaultBodyLimit::max(131072))
+                .fallback(admin_missing),
+        )
+        .route(
+            "/api/v1/admin/users/{id}/ledger",
+            get(crate::admin_http::user_ledger)
+                .layer(axum::extract::DefaultBodyLimit::max(131072))
+                .fallback(admin_missing),
+        )
+        .route(
+            "/api/v1/admin/users/{id}/{action}",
+            post(crate::admin_http::user_action)
+                .layer(axum::extract::DefaultBodyLimit::max(131072))
+                .fallback(admin_missing),
+        )
+        .route(
+            "/api/v1/admin/jobs",
+            get(crate::admin_http::jobs)
+                .layer(axum::extract::DefaultBodyLimit::max(131072))
+                .fallback(admin_missing),
+        )
+        .route(
+            "/api/v1/admin/jobs/{id}/{action}",
+            post(crate::admin_http::job_action)
+                .layer(axum::extract::DefaultBodyLimit::max(131072))
+                .fallback(admin_missing),
+        )
+        .route(
+            "/api/v1/admin/moderation-rules",
+            get(crate::admin_http::rules)
+                .post(crate::admin_http::create_rule)
+                .layer(axum::extract::DefaultBodyLimit::max(131072))
+                .fallback(admin_missing),
+        )
+        .route(
+            "/api/v1/admin/moderation-rules/{id}",
+            axum::routing::patch(crate::admin_http::update_rule)
+                .delete(crate::admin_http::delete_rule)
+                .layer(axum::extract::DefaultBodyLimit::max(131072))
+                .fallback(admin_missing),
+        )
+        .route(
+            "/api/v1/admin/invite-codes",
+            get(crate::admin_http::invites)
+                .post(crate::admin_http::create_invite)
+                .layer(axum::extract::DefaultBodyLimit::max(131072))
+                .fallback(admin_missing),
+        )
+        .route(
+            "/api/v1/admin/invite-codes/{id}",
+            axum::routing::patch(crate::admin_http::update_invite)
+                .delete(crate::admin_http::revoke_invite)
+                .layer(axum::extract::DefaultBodyLimit::max(131072))
+                .fallback(admin_missing),
+        )
         .route(
             "/api/v1/plans",
             get(crate::billing_http::plans)
@@ -460,8 +536,17 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/admin/mfa/verify",
             post(crate::login_http::mfa_verify).fallback(admin_missing),
         )
-        .route("/api/v1/admin/settings", any(super_admin_missing))
-        .route("/api/v1/admin/audit", any(super_admin_missing))
+        .route(
+            "/api/v1/admin/settings",
+            get(crate::admin_http::settings)
+                .put(crate::admin_http::save_settings)
+                .layer(axum::extract::DefaultBodyLimit::max(131072))
+                .fallback(super_admin_missing),
+        )
+        .route(
+            "/api/v1/admin/audit",
+            get(crate::admin_http::audit_logs).fallback(super_admin_missing),
+        )
         .route("/api/v1/admin", any(admin_missing))
         .route("/api/v1/admin/{*path}", any(admin_missing))
         .route("/api/admin", any(admin_missing))

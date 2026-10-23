@@ -209,7 +209,7 @@ impl IdentityRepository for PostgresIdentity {
                     mode == RegistrationMode::InviteOnly && !bootstrap && !whitelisted;
                 let invite = if needs_invite {
                     if let Some(code) = &context.invite {
-                        sqlx::query_scalar::<_,uuid::Uuid>("SELECT id FROM invite_codes WHERE code_hash=$1 AND used_count<max_uses AND (expires_at IS NULL OR expires_at>now()) FOR UPDATE").bind(Sha256::digest(code.as_bytes()).as_slice()).fetch_optional(&mut *tx).await?
+                        sqlx::query_scalar::<_,uuid::Uuid>("SELECT id FROM invite_codes WHERE code_hash=$1 AND revoked_at IS NULL AND used_count<max_uses AND (expires_at IS NULL OR expires_at>now()) FOR UPDATE").bind(Sha256::digest(code.as_bytes()).as_slice()).fetch_optional(&mut *tx).await?
                     } else {
                         None
                     }

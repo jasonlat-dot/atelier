@@ -1,3 +1,4 @@
+pub mod admin_http;
 pub mod assets_http;
 pub mod auth_http;
 pub mod billing_http;

@@ -268,22 +268,50 @@ impl WalletService {
         amount: i64,
         reason: &str,
     ) -> Result<CreditReceipt, WalletError> {
-        if amount == 0
+        let mut tx = self.pool.begin().await?;
+        let result =
+            Self::adjust_in_transaction(&mut tx, actor, owner, request, amount, reason).await?;
+        tx.commit().await?;
+        Ok(result)
+    }
+    pub async fn adjust_in_transaction(
+        db: &mut PgConnection,
+        actor: Uuid,
+        owner: Uuid,
+        request: Uuid,
+        amount: i64,
+        reason: &str,
+    ) -> Result<CreditReceipt, WalletError> {
+        if request.is_nil()
+            || amount == 0
             || amount.checked_abs().is_none()
             || reason.trim().is_empty()
             || reason.chars().count() > 500
         {
             return Err(WalletError::Validation);
         }
-        let mut tx = self.pool.begin().await?;
         let scope = format!("admin:{actor}");
         let fingerprint = json!({"owner":owner,"amount":amount,"reason":reason});
-        if let Some(result) = repo::receipt(&mut tx, &scope, request, &fingerprint).await? {
+        if let Some(result) = repo::receipt(db, &scope, request, &fingerprint).await? {
             return serde_json::from_value(result).map_err(|_| WalletError::Store);
         }
-        repo::lock_key(&mut tx, &format!("admin:{request}")).await?;
+        let limit: Option<serde_json::Value> = sqlx::query_scalar(
+            "SELECT value FROM system_settings WHERE key='admin_adjust_limit' FOR SHARE",
+        )
+        .fetch_optional(&mut *db)
+        .await?;
+        let limit = limit
+            .unwrap_or(json!(100000))
+            .as_i64()
+            .filter(|v| (1..=1000000).contains(v))
+            .ok_or(WalletError::Store)?;
+        if amount.checked_abs().is_none_or(|v| v > limit) {
+            return Err(WalletError::Validation);
+        }
+        repo::lock_key(db, &format!("admin:{request}")).await?;
+        let (balance, held) = repo::wallet(db, owner).await?;
         let receipt = write(
-            &mut tx,
+            db,
             &format!("admin:{request}"),
             repo::Journal {
                 id: 0,
@@ -298,17 +326,44 @@ impl WalletService {
             },
         )
         .await?;
-        repo::audit(
-            &mut tx,
-            actor,
-            "WALLET_ADJUST",
-            &owner.to_string(),
-            json!({"amount":amount,"reason":reason,"request_id":request}),
-        )
-        .await?;
-        repo::save_receipt(&mut tx, &scope, request, fingerprint, json!(receipt)).await?;
-        tx.commit().await?;
+        sqlx::query("INSERT INTO audit_logs(actor_id,action,target_type,target_id,before,after) VALUES($1,'WALLET_ADJUST','wallet',$2,$3,$4)").bind(actor).bind(owner.to_string()).bind(json!({"balance":balance,"held":held})).bind(json!({"balance":balance+amount,"held":held,"amount":amount,"reason":reason,"request_id":request})).execute(&mut *db).await?;
+        repo::save_receipt(db, &scope, request, fingerprint, json!(receipt)).await?;
         Ok(receipt)
+    }
+    /// An administrator compensates an already settled job once, without rewriting its settlement.
+    pub async fn refund_job_in_transaction(
+        db: &mut PgConnection,
+        owner: Uuid,
+        job: Uuid,
+        actor: Uuid,
+        amount: i64,
+        reason: &str,
+    ) -> Result<CreditReceipt, WalletError> {
+        if amount <= 0 || reason.trim().is_empty() || reason.chars().count() > 500 {
+            return Err(WalletError::Validation);
+        }
+        let key = format!("job:{job}:admin-refund");
+        repo::lock_key(db, &key).await?;
+        let settled:i64=sqlx::query_scalar("SELECT COALESCE(-sum(balance_delta),0)::bigint FROM credit_ledger WHERE user_id=$1 AND ref_type='job' AND ref_id=$2 AND type='SETTLE'").bind(owner).bind(job.to_string()).fetch_one(&mut *db).await?;
+        if amount != settled {
+            return Err(WalletError::Validation);
+        }
+        write(
+            db,
+            &key,
+            repo::Journal {
+                id: 0,
+                owner,
+                kind: "REFUND".into(),
+                balance: amount,
+                held: 0,
+                ref_type: Some("job_refund".into()),
+                reference: Some(job.to_string()),
+                reason: Some(reason.into()),
+                actor: Some(actor),
+            },
+        )
+        .await
     }
     pub async fn redeem(
         &self,

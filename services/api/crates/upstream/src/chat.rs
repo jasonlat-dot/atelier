@@ -136,6 +136,11 @@ pub(crate) fn stream(lease: RouteLease, response: GuardedResponse) -> TokenStrea
                         let data: Value =
                             serde_json::from_str(&frame).map_err(|_| CoreError::Invalid)?;
                         if !data["error"].is_null() {
+                            if classify(400, &data, None)
+                                .is_some_and(|e| e.code == crate::FailureCode::ContentPolicy)
+                            {
+                                return Err(CoreError::ContentPolicy);
+                            }
                             return Err(CoreError::Unavailable);
                         }
                         let choices = data["choices"].as_array().ok_or(CoreError::Invalid)?;
@@ -147,13 +152,16 @@ pub(crate) fn stream(lease: RouteLease, response: GuardedResponse) -> TokenStrea
                         }
                         let choice = &choices[0];
                         let delta = &choice["delta"];
-                        if !delta["tool_calls"].is_null()
-                            || !delta["function_call"].is_null()
-                            || !delta["refusal"].is_null()
-                        {
+                        if !delta["refusal"].is_null() {
+                            return Err(CoreError::ContentPolicy);
+                        }
+                        if !delta["tool_calls"].is_null() || !delta["function_call"].is_null() {
                             return Err(CoreError::Invalid);
                         }
                         if !choice["finish_reason"].is_null() {
+                            if choice["finish_reason"] == "content_filter" {
+                                return Err(CoreError::ContentPolicy);
+                            }
                             if choice["finish_reason"] != "stop" {
                                 return Err(CoreError::Invalid);
                             }
@@ -184,9 +192,17 @@ pub(crate) fn stream(lease: RouteLease, response: GuardedResponse) -> TokenStrea
                 Ok(None) => Ok(None),
                 Err(error) => {
                     if let Some(lease) = state.lease.take() {
-                        let _ = lease
-                            .finish_failure(crate::ProviderFailure::network(), "chat")
-                            .await;
+                        let failure = if matches!(error, CoreError::ContentPolicy) {
+                            crate::ProviderFailure {
+                                code: crate::FailureCode::ContentPolicy,
+                                retry_after: None,
+                                quota_exhausted: false,
+                                produced: state.has_text,
+                            }
+                        } else {
+                            crate::ProviderFailure::network()
+                        };
+                        let _ = lease.finish_failure(failure, "chat").await;
                     }
                     Err(error)
                 }
@@ -228,8 +244,13 @@ impl LlmClient for ModelClient {
             let response = match lease.open_chat(&req).await {
                 Ok(response) => response,
                 Err(Error::Provider(failure)) => {
+                    let rejected = failure.code == crate::FailureCode::ContentPolicy;
                     let _ = lease.finish_failure(failure, "chat").await;
-                    return Err(CoreError::Unavailable);
+                    return Err(if rejected {
+                        CoreError::ContentPolicy
+                    } else {
+                        CoreError::Unavailable
+                    });
                 }
                 Err(_) => return Err(CoreError::Unavailable),
             };

@@ -12,6 +12,12 @@ pub struct PostgresSessions {
     pool: PgPool,
 }
 impl PostgresSessions {
+    pub async fn revoke_owner_in_transaction(
+        db: &mut sqlx::PgConnection,
+        owner: Uuid,
+    ) -> Result<u64, sqlx::Error> {
+        Ok(sqlx::query("UPDATE sessions SET revoked_at=clock_timestamp() WHERE user_id=$1 AND revoked_at IS NULL").bind(owner).execute(db).await?.rows_affected())
+    }
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }

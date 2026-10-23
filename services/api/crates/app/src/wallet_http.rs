@@ -115,8 +115,8 @@ pub async fn adjust(
     let request = key(&headers)?;
     let Json(body) = body.map_err(|_| invalid())?;
     Ok(Json(
-        service(&state)
-            .adjust(actor.user().id, id, request, body.amount, &body.reason)
+        atelier_admin::AdminService::new(state.db.clone())
+            .adjust_credits(actor.user().id, id, request, body.amount, &body.reason)
             .await?,
     ))
 }

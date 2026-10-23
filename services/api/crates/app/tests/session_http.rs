@@ -299,6 +299,8 @@ async fn csrf_guards_every_mutation_and_admin_role_cannot_come_from_json() {
 #[tokio::test]
 async fn admin_routes_require_recent_mfa_and_re_read_roles() {
     let (state, repo, cookie, _) = fixture();
+    // This authorization fixture has no database. Real successful reads are in admin_http.
+    state.db.close().await;
     {
         let mut record = repo.record.lock().unwrap();
         record.user.role = Role::Admin;
@@ -332,7 +334,7 @@ async fn admin_routes_require_recent_mfa_and_re_read_roles() {
         )
         .await
         .status(),
-        StatusCode::NOT_FOUND
+        StatusCode::SERVICE_UNAVAILABLE
     );
     repo.record.lock().unwrap().user.role = Role::User;
     assert_eq!(
@@ -526,6 +528,8 @@ async fn current_device_revocation_clears_cookie_and_repository_failure_fails_cl
 #[tokio::test]
 async fn super_admin_permission_is_distinct_and_mfa_expiry_is_enforced_over_http() {
     let (state, repo, cookie, _) = fixture();
+    // This authorization fixture has no database. Real successful reads are in admin_http.
+    state.db.close().await;
     {
         let mut row = repo.record.lock().unwrap();
         row.user.role = Role::Admin;
@@ -559,7 +563,7 @@ async fn super_admin_permission_is_distinct_and_mfa_expiry_is_enforced_over_http
         )
         .await
         .status(),
-        StatusCode::NOT_FOUND
+        StatusCode::SERVICE_UNAVAILABLE
     );
     repo.record.lock().unwrap().mfa_verified_at = Some(Utc::now() - Duration::hours(12));
     assert_eq!(

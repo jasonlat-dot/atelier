@@ -57,6 +57,30 @@ pub(crate) async fn audit(
     Ok(())
 }
 impl ChatService {
+    /// Stop private work without exposing its messages to an administrator.
+    pub async fn cancel_owner_in_transaction(
+        db: &mut PgConnection,
+        owner: Uuid,
+    ) -> Result<usize, ChatError> {
+        let rows=sqlx::query("SELECT id,cost FROM chat_turns WHERE owner_id=$1 AND status='RUNNING' ORDER BY id FOR UPDATE").bind(owner).fetch_all(&mut *db).await?;
+        for row in &rows {
+            let id: Uuid = row.get("id");
+            let cost: i64 = row.get("cost");
+            if cost > 0 {
+                WalletService::apply_in_transaction(
+                    db,
+                    owner,
+                    Operation::Release {
+                        job: id,
+                        amount: cost,
+                    },
+                )
+                .await?;
+            }
+            sqlx::query("UPDATE chat_turns SET status='CANCELLED',cancel_requested=true,error_code='ACCOUNT_DISABLED',finished_at=clock_timestamp() WHERE id=$1").bind(id).execute(&mut *db).await?;
+        }
+        Ok(rows.len())
+    }
     pub fn new(db: PgPool, upstream: atelier_upstream::UpstreamService) -> Self {
         Self {
             db,
@@ -273,6 +297,12 @@ impl ChatService {
             }
             tx.commit().await?;
             return Ok(Start::Replay(Box::new(self.turn(owner, id).await?)));
+        }
+        if intent == Intent::Unsafe {
+            sqlx::query("INSERT INTO moderation_violations(user_id,source) VALUES($1,'local')")
+                .bind(owner)
+                .execute(&mut *tx)
+                .await?;
         }
         if intent == Intent::Unsafe
             || atelier_generation::content_is_blocked(&mut tx, owner, &input.content)

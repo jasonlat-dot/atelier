@@ -30,6 +30,7 @@ atelier-generation = { path = "crates/generation" }
 atelier-canvas = { path = "crates/canvas" }
 atelier-agent-core = { path = "crates/agent-core" }
 atelier-chat = { path = "crates/chat" }
+atelier-admin = { path = "crates/admin" }
 
 chrono = { version = "0.4", features = ["serde"] }
 base64 = "0.22"

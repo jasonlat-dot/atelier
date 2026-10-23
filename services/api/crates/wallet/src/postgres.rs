@@ -183,7 +183,7 @@ pub(crate) async fn audit(
     target: &str,
     after: Value,
 ) -> Result<(), WalletError> {
-    sqlx::query("INSERT INTO audit_logs(actor_id,action,target_type,target_id,after) VALUES($1,$2,'wallet',$3,$4)")
+    sqlx::query("INSERT INTO audit_logs(actor_id,action,target_type,target_id,before,after) VALUES($1,$2,'wallet',$3,'null'::jsonb,$4)")
         .bind(actor).bind(action).bind(target).bind(after).execute(db).await?;
     Ok(())
 }

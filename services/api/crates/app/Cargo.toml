@@ -9,6 +9,7 @@ workspace = true
 
 [dependencies]
 atelier-common.workspace = true
+atelier-admin.workspace = true
 atelier-auth.workspace = true
 atelier-wallet.workspace = true
 atelier-assets.workspace = true
