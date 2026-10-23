@@ -204,7 +204,9 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   await dialog.getByRole('button', { name: '保存配置' }).click();
   await expect(dialog).toHaveCount(0);
   await page.getByRole('button', { name: '测试连接 Live upstream' }).click();
-  await expect(page.getByRole('status')).toContainText('连接正常');
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Live upstream 连接正常' }),
+  ).toBeVisible();
   await page.reload();
   await expect(
     page.getByRole('cell', { name: /^Live upstream/ }),

@@ -229,7 +229,9 @@ test('account management writes once, hides saved credentials and uses accessibl
   await page
     .getByRole('button', { name: '测试连接 图片主池', exact: true })
     .dblclick();
-  await expect(page.getByRole('status')).toContainText('连接正常');
+  await expect(
+    page.getByRole('status').filter({ hasText: '图片主池 连接正常' }),
+  ).toBeVisible();
   expect(f.writes.filter((w) => w.path.endsWith('/test'))).toHaveLength(1);
   await page.getByRole('button', { name: '查看统计 图片主池' }).click();
   await expect(d).toContainText('90%');
