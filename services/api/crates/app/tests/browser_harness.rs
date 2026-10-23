@@ -197,6 +197,11 @@ async fn browser_harness(db: sqlx::PgPool) {
     );
     let events = tokio::spawn(generation.clone().event_loop());
     state.generation = Some(generation);
+    state.chat = Some(atelier_chat::ChatService::new(
+        db.clone(),
+        state.upstream.clone().unwrap(),
+    ));
+    let chat_recovery = tokio::spawn(state.chat.clone().unwrap().recovery_loop());
     state.canvas = Some(atelier_canvas::CanvasService::new(
         db.clone(),
         assets.clone(),
@@ -225,6 +230,7 @@ async fn browser_harness(db: sqlx::PgPool) {
     .await
     .unwrap();
     worker.abort();
+    chat_recovery.abort();
     events.abort();
     processing.abort();
     upstream_server.abort();

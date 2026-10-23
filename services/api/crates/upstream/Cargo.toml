@@ -9,6 +9,8 @@ workspace = true
 
 [dependencies]
 atelier-common.workspace = true
+atelier-agent-core.workspace = true
+futures-util = "0.3"
 axum.workspace = true
 tokio.workspace = true
 serde.workspace = true

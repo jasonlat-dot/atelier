@@ -95,6 +95,15 @@ impl Drop for RouteLease {
     }
 }
 impl RouteLease {
+    pub(crate) async fn open_chat(
+        &self,
+        input: &atelier_agent_core::ChatRequest,
+    ) -> Result<crate::egress::GuardedResponse, Error> {
+        if self.model.as_ref().is_none_or(|m| m.kind != "chat") {
+            return Err(Error::Validation);
+        }
+        tokio::select! {result=crate::chat::open(&self.service.inner.http,&self.context,input)=>result,_=self.invalid()=>Err(Error::Store)}
+    }
     pub fn model_revision(&self) -> Option<i64> {
         self.model.as_ref().map(|m| m.revision)
     }
@@ -158,7 +167,9 @@ impl RouteLease {
         actor: Option<Uuid>,
         recover: bool,
     ) -> Result<(), Error> {
-        if !(0..=self.units).contains(&used) || !["probe", "image", "video"].contains(&operation) {
+        if !(0..=self.units).contains(&used)
+            || !["probe", "image", "video", "chat"].contains(&operation)
+        {
             return Err(Error::Validation);
         }
         let mut tx = if let Some(actor) = actor {

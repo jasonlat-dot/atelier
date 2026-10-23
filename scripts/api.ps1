@@ -24,9 +24,9 @@ try {
             'run' { & cargo run --locked -p atelier-app }
             'infrastructure' { & cargo run --locked -p atelier-app --example check_infrastructure -- --migrate }
             'test-infrastructure' {
-                & cargo test --locked -p atelier-auth -p atelier-wallet -p atelier-assets -p atelier-upstream -p atelier-generation -p atelier-canvas --tests -- --ignored
+                & cargo test --locked -p atelier-auth -p atelier-wallet -p atelier-assets -p atelier-upstream -p atelier-generation -p atelier-canvas -p atelier-chat --tests -- --ignored
                 if ($LASTEXITCODE -ne 0) { throw 'Database regression failed' }
-                & cargo test --locked -p atelier-app --test wallet_http --test assets_schema --test assets_http --test upstream_http --test generation_http --test canvas_http -- --ignored
+                & cargo test --locked -p atelier-app --test wallet_http --test assets_schema --test assets_http --test upstream_http --test generation_http --test canvas_http --test chat_http -- --ignored
             }
             'test-browser' {
                 Push-Location (Join-Path $apiRoot '../../apps/web')

@@ -86,14 +86,25 @@ version = "0.1.0"
 [[package]]
 name = "atelier-agent-core"
 version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "regex",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "utoipa",
+]
 
 [[package]]
 name = "atelier-app"
 version = "0.1.0"
 dependencies = [
+ "atelier-agent-core",
  "atelier-assets",
  "atelier-auth",
  "atelier-canvas",
+ "atelier-chat",
  "atelier-common",
  "atelier-generation",
  "atelier-upstream",
@@ -194,6 +205,27 @@ dependencies = [
 [[package]]
 name = "atelier-chat"
 version = "0.1.0"
+dependencies = [
+ "atelier-agent-core",
+ "atelier-assets",
+ "atelier-common",
+ "atelier-generation",
+ "atelier-upstream",
+ "atelier-wallet",
+ "axum",
+ "base64 0.22.1",
+ "chrono",
+ "futures-util",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "utoipa",
+ "uuid",
+]
 
 [[package]]
 name = "atelier-common"
@@ -236,12 +268,14 @@ dependencies = [
 name = "atelier-upstream"
 version = "0.1.0"
 dependencies = [
+ "atelier-agent-core",
  "atelier-common",
  "axum",
  "base64 0.22.1",
  "bytes",
  "chacha20poly1305",
  "chrono",
+ "futures-util",
  "getrandom 0.4.3",
  "redis",
  "reqwest 0.13.5",

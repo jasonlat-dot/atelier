@@ -78,6 +78,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let generation_worker =
         atelier_generation::GenerationWorker::new(generation.clone(), upstream.clone());
     let state = AppState {
+        chat: Some(atelier_chat::ChatService::new(db.clone(), upstream.clone())),
         canvas: Some(atelier_canvas::CanvasService::new(
             db.clone(),
             assets.clone(),
@@ -108,6 +109,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let listener = tokio::net::TcpListener::bind(config.bind_address).await?;
     let reconciliation =
         tokio::spawn(atelier_wallet::WalletService::new(db.clone()).reconciliation_loop());
+    let chat_recovery =
+        tokio::spawn(atelier_chat::ChatService::new(db.clone(), upstream.clone()).recovery_loop());
     let video_processing = tokio::spawn(assets.clone().processing_loop());
     let generation_processing = tokio::spawn(generation_worker.run());
     let generation_events = tokio::spawn(generation.event_loop());
@@ -121,6 +124,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .with_graceful_shutdown(shutdown())
     .await?;
     reconciliation.abort();
+    chat_recovery.abort();
     media_maintenance.abort();
     video_processing.abort();
     generation_processing.abort();

@@ -214,7 +214,7 @@ impl SafeHttp {
         self.max_duration = limit.min(self.max_duration).max(Duration::from_millis(1));
         self
     }
-    pub async fn send(
+    pub async fn open_stream(
         &self,
         method: Method,
         url: &str,
@@ -222,16 +222,16 @@ impl SafeHttp {
         payload: Payload,
         timeout: Duration,
         max_bytes: usize,
-    ) -> Result<Response, Error> {
+    ) -> Result<GuardedResponse, Error> {
         if max_bytes > 256 * 1024 * 1024 {
             return Err(Error::Validation);
         }
-        let _slot = self
+        let slot = self
             .slots
             .clone()
             .try_acquire_owned()
             .map_err(|_| Error::NoCapacity)?;
-        tokio::time::timeout(timeout.min(self.max_duration), async {
+        let response = tokio::time::timeout(timeout.min(self.max_duration), async {
             let url = self.policy.parse(url, true)?;
             let addrs = self.policy.addresses(&url).await?;
             let mut builder = reqwest::Client::builder()
@@ -258,7 +258,7 @@ impl SafeHttp {
                 Payload::Json(value) => request.json(&value),
                 Payload::Multipart(form) => request.multipart(form),
             };
-            let mut response = request
+            let response = request
                 .send()
                 .await
                 .map_err(|_| Error::Provider(ProviderFailure::network()))?;
@@ -271,51 +271,101 @@ impl SafeHttp {
             {
                 return Err(Error::Provider(ProviderFailure::network()));
             }
-            let status = response.status().as_u16();
-            let retry_after = response
-                .headers()
-                .get(header::RETRY_AFTER)
-                .and_then(|v| v.to_str().ok())
-                .and_then(|value| {
-                    value.parse::<u64>().ok().or_else(|| {
-                        chrono::DateTime::parse_from_rfc2822(value)
-                            .ok()
-                            .map(|date| {
-                                (date.timestamp() - chrono::Utc::now().timestamp()).max(1) as u64
-                            })
-                    })
-                })
-                .map(|n| n.clamp(1, 86400));
-            let content_type = response
-                .headers()
-                .get(header::CONTENT_TYPE)
-                .and_then(|v| v.to_str().ok())
-                .unwrap_or("")
-                .split(';')
-                .next()
-                .unwrap_or("")
-                .to_owned();
-            let mut body = Vec::new();
-            while let Some(chunk) = response
-                .chunk()
-                .await
-                .map_err(|_| Error::Provider(ProviderFailure::network()))?
-            {
-                if body.len() + chunk.len() > max_bytes {
-                    return Err(Error::Provider(ProviderFailure::network()));
-                }
-                body.extend_from_slice(&chunk);
-            }
-            Ok(Response {
-                status,
-                retry_after,
-                content_type,
-                body: body.into(),
-            })
+
+            Ok::<_, Error>(response)
         })
         .await
-        .map_err(|_| Error::Provider(ProviderFailure::network()))?
+        .map_err(|_| Error::Provider(ProviderFailure::network()))??;
+        Ok(GuardedResponse {
+            response,
+            _slot: slot,
+            total: 0,
+            max_bytes,
+        })
     }
+    pub async fn send(
+        &self,
+        method: Method,
+        url: &str,
+        secret: Option<&str>,
+        payload: Payload,
+        timeout: Duration,
+        max_bytes: usize,
+    ) -> Result<Response, Error> {
+        let mut stream = self
+            .open_stream(method, url, secret, payload, timeout, max_bytes)
+            .await?;
+        let status = stream.response.status().as_u16();
+        let retry_after = retry_after(&stream.response);
+        let content_type = stream.content_type();
+        let mut body = Vec::new();
+        while let Some(chunk) = stream.chunk().await? {
+            body.extend_from_slice(&chunk);
+        }
+        Ok(Response {
+            status,
+            retry_after,
+            content_type,
+            body: body.into(),
+        })
+    }
+}
+
+pub struct GuardedResponse {
+    response: reqwest::Response,
+    _slot: tokio::sync::OwnedSemaphorePermit,
+    total: usize,
+    max_bytes: usize,
+}
+impl GuardedResponse {
+    pub fn status(&self) -> u16 {
+        self.response.status().as_u16()
+    }
+    pub fn retry_after(&self) -> Option<u64> {
+        retry_after(&self.response)
+    }
+    pub fn content_type(&self) -> String {
+        self.response
+            .headers()
+            .get(header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("")
+            .split(';')
+            .next()
+            .unwrap_or("")
+            .to_owned()
+    }
+    pub async fn chunk(&mut self) -> Result<Option<Bytes>, Error> {
+        let chunk = self
+            .response
+            .chunk()
+            .await
+            .map_err(|_| Error::Provider(ProviderFailure::network()))?;
+        if let Some(chunk) = &chunk {
+            self.total = self
+                .total
+                .checked_add(chunk.len())
+                .ok_or(Error::Validation)?;
+            if self.total > self.max_bytes {
+                return Err(Error::Provider(ProviderFailure::network()));
+            }
+        }
+        Ok(chunk)
+    }
+}
+fn retry_after(response: &reqwest::Response) -> Option<u64> {
+    response
+        .headers()
+        .get(header::RETRY_AFTER)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| {
+            v.parse::<u64>().ok().or_else(|| {
+                chrono::DateTime::parse_from_rfc2822(v)
+                    .ok()
+                    .map(|d| (d.timestamp() - chrono::Utc::now().timestamp()).max(1) as u64)
+            })
+        })
+        .map(|n| n.clamp(1, 86400))
 }
 #[cfg(test)]
 mod tests {

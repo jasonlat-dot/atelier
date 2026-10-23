@@ -16,6 +16,6 @@
 
 ## 远端
 
-基础切片 0bc3f86 的 Actions #39898214495 全绿。最终功能远端检查提交后跟进，确认后再在 PROGRESS 标记完成。
+基础切片 0bc3f86 的 Actions #39898214495 全绿。最终功能 5c7257df78884ff1bd916da86b9472aaceb79888 的 Actions #39901276711 两作业 completed/success，已在 PROGRESS 标记完成。
 
 负责人已授权 M6 后继续 M7；S3 仍待定，不进入 M8。

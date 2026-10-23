@@ -1,4 +1,5 @@
 //! Server-only credentials, guarded transport and upstream capacity routing.
+mod chat;
 pub mod crypto;
 pub mod egress;
 pub mod provider;

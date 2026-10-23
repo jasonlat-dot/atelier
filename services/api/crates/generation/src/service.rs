@@ -462,3 +462,18 @@ async fn moderated(tx: &mut PgConnection, prompt: &str) -> Result<bool, Generati
     }
     Ok(false)
 }
+/// Shared content boundary for other paid text entry points. Caller commits a rejection audit.
+pub async fn content_is_blocked(
+    tx: &mut PgConnection,
+    owner: Uuid,
+    prompt: &str,
+) -> Result<bool, GenerationError> {
+    let blocked = moderated(tx, prompt).await?;
+    if blocked {
+        sqlx::query("INSERT INTO moderation_violations(user_id,source) VALUES($1,'local')")
+            .bind(owner)
+            .execute(tx)
+            .await?;
+    }
+    Ok(blocked)
+}

@@ -4,5 +4,28 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[dependencies]
+atelier-common.workspace = true
+atelier-agent-core.workspace = true
+atelier-upstream.workspace = true
+atelier-generation.workspace = true
+atelier-wallet.workspace = true
+axum.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+utoipa.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+futures-util = "0.3"
+tracing.workspace = true
+
+[dev-dependencies]
+atelier-assets.workspace = true
+base64.workspace = true
+
 [lints]
 workspace = true

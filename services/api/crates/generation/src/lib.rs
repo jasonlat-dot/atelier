@@ -6,6 +6,7 @@ mod worker;
 use atelier_common::ApiError;
 use axum::http::StatusCode;
 pub use events::EventPermit;
+pub use service::content_is_blocked;
 pub use service::GenerationService;
 pub use types::*;
 pub use worker::GenerationWorker;
