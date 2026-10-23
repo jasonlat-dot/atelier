@@ -1,5 +1,6 @@
 pub mod assets_http;
 pub mod auth_http;
+pub mod canvas_http;
 pub mod config;
 pub mod generation_http;
 pub mod login_http;
@@ -26,6 +27,7 @@ pub struct AppState {
     pub assets: Option<atelier_assets::AssetService>,
     pub upstream: Option<atelier_upstream::UpstreamService>,
     pub generation: Option<atelier_generation::GenerationService>,
+    pub canvas: Option<atelier_canvas::CanvasService>,
     pub trusted_proxy_ips: Arc<std::collections::HashSet<std::net::IpAddr>>,
 }
 
@@ -46,6 +48,7 @@ impl AppState {
             assets: None,
             upstream: None,
             generation: None,
+            canvas: None,
             trusted_proxy_ips: Arc::new(std::collections::HashSet::new()),
             db,
             web_dir: "__no_static_assets__".into(),

@@ -78,6 +78,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let generation_worker =
         atelier_generation::GenerationWorker::new(generation.clone(), upstream.clone());
     let state = AppState {
+        canvas: Some(atelier_canvas::CanvasService::new(
+            db.clone(),
+            assets.clone(),
+        )),
         generation: Some(generation.clone()),
         upstream: Some(upstream.clone()),
         assets: Some(assets.clone()),

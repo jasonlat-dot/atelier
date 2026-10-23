@@ -93,6 +93,7 @@ version = "0.1.0"
 dependencies = [
  "atelier-assets",
  "atelier-auth",
+ "atelier-canvas",
  "atelier-common",
  "atelier-generation",
  "atelier-upstream",
@@ -173,6 +174,20 @@ dependencies = [
 [[package]]
 name = "atelier-canvas"
 version = "0.1.0"
+dependencies = [
+ "atelier-assets",
+ "atelier-common",
+ "axum",
+ "chrono",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "thiserror 2.0.21",
+ "tokio",
+ "utoipa",
+ "uuid",
+]
 
 [[package]]
 name = "atelier-chat"
@@ -193,6 +208,7 @@ name = "atelier-generation"
 version = "0.1.0"
 dependencies = [
  "atelier-assets",
+ "atelier-canvas",
  "atelier-common",
  "atelier-upstream",
  "atelier-wallet",

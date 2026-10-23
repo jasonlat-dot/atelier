@@ -73,6 +73,8 @@ pub struct JobOutput {
 #[derive(Serialize, ToSchema)]
 pub struct JobView {
     pub id: Uuid,
+    pub project_id: Option<Uuid>,
+    pub node_id: Option<String>,
     pub kind: String,
     pub model_id: String,
     pub display_name: String,

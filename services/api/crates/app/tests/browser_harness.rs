@@ -197,6 +197,10 @@ async fn browser_harness(db: sqlx::PgPool) {
     );
     let events = tokio::spawn(generation.clone().event_loop());
     state.generation = Some(generation);
+    state.canvas = Some(atelier_canvas::CanvasService::new(
+        db.clone(),
+        assets.clone(),
+    ));
     state.assets = Some(assets);
     state.auth = SessionService::new(
         Arc::new(PostgresSessions::new(db)),

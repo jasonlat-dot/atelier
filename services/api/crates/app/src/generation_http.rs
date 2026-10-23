@@ -80,6 +80,7 @@ pub async fn create(
 #[derive(Deserialize, utoipa::IntoParams)]
 #[serde(deny_unknown_fields)]
 pub struct JobsQuery {
+    pub project_id: Option<Uuid>,
     pub before: Option<Uuid>,
     pub status: Option<String>,
     pub limit: Option<i64>,
@@ -93,7 +94,13 @@ pub async fn list(
     let Query(q) = query.map_err(|_| invalid())?;
     Ok(Json(
         service(&s)?
-            .list(actor.user().id, q.before, q.status, q.limit.unwrap_or(25))
+            .list_project(
+                actor.user().id,
+                q.before,
+                q.status,
+                q.limit.unwrap_or(25),
+                q.project_id,
+            )
             .await?,
     ))
 }

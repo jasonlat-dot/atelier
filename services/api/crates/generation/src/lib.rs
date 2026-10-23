@@ -39,6 +39,15 @@ impl From<sqlx::Error> for GenerationError {
         Self::Store
     }
 }
+impl From<atelier_canvas::CanvasError> for GenerationError {
+    fn from(error: atelier_canvas::CanvasError) -> Self {
+        match error {
+            atelier_canvas::CanvasError::NotFound => Self::NotFound,
+            atelier_canvas::CanvasError::Validation => Self::Validation,
+            _ => Self::Store,
+        }
+    }
+}
 impl From<atelier_assets::AssetError> for GenerationError {
     fn from(e: atelier_assets::AssetError) -> Self {
         match e {

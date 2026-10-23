@@ -34,13 +34,13 @@ export const generationApi = {
       signal,
     ),
   get: (id: string, signal?: AbortSignal) =>
-    request<Job>(
+    request<Schema['JobReceipt']>(
       `/generation/jobs/${encodeURIComponent(id)}`,
       'GET',
       undefined,
       undefined,
       signal,
-    ),
+    ).then((receipt) => receipt.job),
   cancel: (id: string, csrf: string) =>
     request<Schema['JobReceipt']>(
       `/generation/jobs/${encodeURIComponent(id)}/cancel`,

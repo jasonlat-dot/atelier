@@ -29,6 +29,35 @@ pub struct MediaData {
     pub partial: bool,
 }
 impl AssetService {
+    /// Canvas references retain ownership even after a media item expires or is deleted.
+    /// This lets other graph edits remain saveable while the UI shows missing-media nodes.
+    pub async fn validate_canvas_assets(
+        db: &mut sqlx::PgConnection,
+        owner: Uuid,
+        ids: &[Uuid],
+    ) -> Result<(), AssetError> {
+        if ids.len() > 500 {
+            return Err(AssetError::Validation);
+        }
+        let rows:Vec<Uuid>=sqlx::query_scalar("SELECT id FROM assets WHERE owner_id=$1 AND id=ANY($2) AND generation_published FOR SHARE")
+            .bind(owner).bind(ids).fetch_all(db).await?;
+        if rows.len() != ids.len() {
+            return Err(AssetError::NotFound);
+        }
+        Ok(())
+    }
+    pub async fn canvas_views(
+        &self,
+        owner: Uuid,
+        ids: &[Uuid],
+    ) -> Result<Vec<AssetView>, AssetError> {
+        if ids.len() > 500 {
+            return Err(AssetError::Validation);
+        }
+        let rows:Vec<AssetRecord>=sqlx::query_as("SELECT * FROM assets WHERE owner_id=$1 AND id=ANY($2) AND generation_published AND deleted_at IS NULL AND expires_at>clock_timestamp()")
+            .bind(owner).bind(ids).fetch_all(&self.db).await?;
+        Ok(rows.into_iter().map(|row| self.view(row)).collect())
+    }
     pub async fn validate_references_in_transaction(
         db: &mut sqlx::PgConnection,
         owner: Uuid,

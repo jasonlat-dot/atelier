@@ -57,7 +57,7 @@ impl GenerationService {
         key: Uuid,
         mut input: JobInput,
     ) -> Result<JobReceipt, GenerationError> {
-        if key.is_nil() || input.project_id.is_some() || input.node_id.is_some() {
+        if key.is_nil() {
             return Err(GenerationError::Validation);
         }
         input.prompt = input.prompt.trim().to_owned();
@@ -100,6 +100,13 @@ impl GenerationService {
                 job: self.get(owner, id).await?,
             });
         }
+        atelier_canvas::CanvasService::validate_generation_link(
+            &mut tx,
+            owner,
+            input.project_id,
+            input.node_id.as_deref(),
+        )
+        .await?;
         if moderated(&mut tx, &input.prompt).await? {
             sqlx::query("INSERT INTO moderation_violations(user_id,source) VALUES($1,'local')")
                 .bind(owner)
@@ -140,8 +147,8 @@ impl GenerationService {
             seconds: input.seconds,
         };
         let id = Uuid::new_v4();
-        sqlx::query("INSERT INTO generation_jobs(id,owner_id,model_id,kind,model_revision,prompt,params,size,cost_per_output,n,cost,idempotency_key,request_hash) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)")
-   .bind(id).bind(owner).bind(input.model_id).bind(&quote.kind).bind(quote.model_revision).bind(input.prompt).bind(serde_json::to_value(params).map_err(|_|GenerationError::Store)?).bind(quote.size).bind(quote.cost_per_output).bind(i32::from(input.n)).bind(quote.cost).bind(key).bind(hash).execute(&mut *tx).await?;
+        sqlx::query("INSERT INTO generation_jobs(id,owner_id,model_id,kind,model_revision,prompt,params,size,cost_per_output,n,cost,idempotency_key,request_hash,project_id,node_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)")
+   .bind(id).bind(owner).bind(input.model_id).bind(&quote.kind).bind(quote.model_revision).bind(input.prompt).bind(serde_json::to_value(params).map_err(|_|GenerationError::Store)?).bind(quote.size).bind(quote.cost_per_output).bind(i32::from(input.n)).bind(quote.cost).bind(key).bind(hash).bind(input.project_id).bind(input.node_id).execute(&mut *tx).await?;
         WalletService::apply_in_transaction(
             &mut tx,
             owner,
@@ -178,6 +185,8 @@ impl GenerationService {
         }
         Ok(JobView {
             id,
+            project_id: row.get("project_id"),
+            node_id: row.get("node_id"),
             kind: row.get("kind"),
             model_id: row.get("model_id"),
             display_name: row.get("display_name"),
@@ -208,11 +217,21 @@ impl GenerationService {
         status: Option<String>,
         limit: i64,
     ) -> Result<JobPage, GenerationError> {
+        self.list_project(owner, before, status, limit, None).await
+    }
+    pub async fn list_project(
+        &self,
+        owner: Uuid,
+        before: Option<Uuid>,
+        status: Option<String>,
+        limit: i64,
+        project: Option<Uuid>,
+    ) -> Result<JobPage, GenerationError> {
         if !(1..=100).contains(&limit) || status.as_deref().is_some_and(|s| !is_status(s)) {
             return Err(GenerationError::Validation);
         }
-        let mut ids:Vec<Uuid>=sqlx::query_scalar("SELECT id FROM generation_jobs WHERE owner_id=$1 AND ($2::text IS NULL OR status=$2) AND ($3::uuid IS NULL OR (created_at,id)<(SELECT created_at,id FROM generation_jobs WHERE id=$3 AND owner_id=$1)) ORDER BY created_at DESC,id DESC LIMIT $4")
-   .bind(owner).bind(status).bind(before).bind(limit+1).fetch_all(&self.db).await?;
+        let mut ids:Vec<Uuid>=sqlx::query_scalar("SELECT id FROM generation_jobs WHERE owner_id=$1 AND ($2::text IS NULL OR status=$2) AND ($3::uuid IS NULL OR (created_at,id)<(SELECT created_at,id FROM generation_jobs WHERE id=$3 AND owner_id=$1)) AND ($5::uuid IS NULL OR project_id=$5) ORDER BY created_at DESC,id DESC LIMIT $4")
+   .bind(owner).bind(status).bind(before).bind(limit+1).bind(project).fetch_all(&self.db).await?;
         let more = ids.len() > limit as usize;
         ids.truncate(limit as usize);
         let next_cursor = if more { ids.last().copied() } else { None };

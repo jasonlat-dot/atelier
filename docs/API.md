@@ -110,3 +110,12 @@ M4 不开放用户生成/任务/quote/SSE 接口，不修改钱包余额；这�
 
 
 `GET /generation/limits` 返回 tier、max_resolution、max_active_jobs、video_enabled。`GET /events?after=SEQ` 返回 SSE `job.updated`，id 为数据库 seq，JSON 为 GenerationEvent；Last-Event-ID 优先于 after。只重放本人记录，输出链接重新签名；未来游标收敛到本人最新事件。每用户最多三个 SSE 连接（超出 429 SSE_CONNECTION_LIMIT），10 秒心跳，持续复核会话及 MFA；失效断流。客户端应在 SSE 不可用时轮询任务接口，重连携带最后成功处理的游标。
+
+
+### M6 项目与画布（接口基础已接通，画布 UI 进行中）
+
+`GET/POST /api/v1/projects` 列表/创建（创建要求 UUID `Idempotency-Key`）；`GET/PATCH/DELETE /api/v1/projects/{id}` 读取/重命名/软删除；`PUT /api/v1/projects/{id}/graph` 保存图。所有写请求复用会话、Origin、CSRF；重命名/删除/保存要求 `If-Match: "<revision>"`，缺少返回 428，旧版本 409 `REVISION_CONFLICT`。跨账号统一 404。
+
+`POST /projects/{id}/duplicate` 同样要求创建幂等键；`GET /projects/{id}/snapshots` 最近 50 版；`POST /projects/{id}/snapshots/{snapshot}/restore` 带当前 `If-Match`，恢复为新版本。项目读取中的 `assets` 为最新可用素材视图，失效素材不返回 URL；图中只保留素材 ID。`GET /assets/{id}/projects` 返回当前用户引用此素材的项目。
+
+生成输入现支持成对 `project_id/node_id`；服务端核对本人有效项目中的 generate 节点后才冻结积分。`GET /generation/jobs?project_id=<uuid>` 查询该项目的本人任务，`JobView` 返回关联字段；独立生成兼容空关联。

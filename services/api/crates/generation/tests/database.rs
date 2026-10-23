@@ -37,6 +37,90 @@ fn input() -> JobInput {
 }
 #[sqlx::test(migrations = "../../migrations")]
 #[ignore = "Requires isolated PostgreSQL"]
+async fn canvas_generation_link_is_checked_before_hold_and_persisted(db: PgPool) {
+    model(&db).await;
+    let user = owner(&db).await;
+    let other = owner(&db).await;
+    let assets = AssetService::new(
+        db.clone(),
+        Storage::memory(),
+        MediaSigner::from_base64(&STANDARD.encode([53; 32])).unwrap(),
+    );
+    let canvas = atelier_canvas::CanvasService::new(db.clone(), assets);
+    let graph:atelier_canvas::CanvasGraph=serde_json::from_value(serde_json::json!({"version":1,"nodes":[{"id":"generator","type":"generate","position":{"x":0,"y":0},"size":{"width":260,"height":200},"data":{"modelId":"image","quality":"low","ratio":"16:9","resolution":"2K","n":2}}],"edges":[],"viewport":{"x":0,"y":0,"zoom":1},"background":"dots"})).unwrap();
+    let project = canvas
+        .create(
+            user,
+            Uuid::new_v4(),
+            atelier_canvas::CreateProject {
+                name: "Creation".into(),
+                graph,
+            },
+        )
+        .await
+        .unwrap();
+    let s = service(&db);
+    let mut draft = input();
+    draft.project_id = Some(project.project.id);
+    draft.node_id = Some("generator".into());
+    assert!(matches!(
+        s.create(other, Uuid::new_v4(), draft.clone()).await,
+        Err(GenerationError::NotFound)
+    ));
+    assert_eq!(
+        WalletService::new(db.clone())
+            .summary(other)
+            .await
+            .unwrap()
+            .held,
+        0
+    );
+    draft.node_id = Some("missing".into());
+    assert!(matches!(
+        s.create(user, Uuid::new_v4(), draft.clone()).await,
+        Err(GenerationError::Validation)
+    ));
+    assert_eq!(
+        WalletService::new(db.clone())
+            .summary(user)
+            .await
+            .unwrap()
+            .held,
+        0
+    );
+    draft.node_id = Some("generator".into());
+    let key = Uuid::new_v4();
+    let job = s.create(user, key, draft.clone()).await.unwrap().job;
+    assert_eq!(job.project_id, Some(project.project.id));
+    assert_eq!(job.node_id.as_deref(), Some("generator"));
+    assert_eq!(
+        s.list_project(user, None, None, 25, Some(project.project.id))
+            .await
+            .unwrap()
+            .items
+            .len(),
+        1
+    );
+    assert!(s
+        .list_project(other, None, None, 25, Some(project.project.id))
+        .await
+        .unwrap()
+        .items
+        .is_empty());
+    canvas.delete(user, project.project.id, 0).await.unwrap();
+    assert_eq!(s.create(user, key, draft).await.unwrap().job.id, job.id);
+    assert!(
+        sqlx::query("UPDATE generation_jobs SET node_id='other' WHERE id=$1")
+            .bind(job.id)
+            .execute(&db)
+            .await
+            .is_err()
+    );
+    s.cancel(user, job.id).await.unwrap();
+    assert_eq!(WalletService::new(db).summary(user).await.unwrap().held, 0);
+}
+#[sqlx::test(migrations = "../../migrations")]
+#[ignore = "Requires isolated PostgreSQL"]
 async fn authoritative_price_holds_idempotency_and_concurrent_cancellation_are_atomic(db: PgPool) {
     model(&db).await;
     let user = owner(&db).await;

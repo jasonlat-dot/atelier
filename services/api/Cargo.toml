@@ -27,6 +27,7 @@ atelier-wallet = { path = "crates/wallet" }
 atelier-assets = { path = "crates/assets" }
 atelier-upstream = { path = "crates/upstream" }
 atelier-generation = { path = "crates/generation" }
+atelier-canvas = { path = "crates/canvas" }
 
 chrono = { version = "0.4", features = ["serde"] }
 base64 = "0.22"
