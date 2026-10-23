@@ -49,7 +49,7 @@ const creation = [
 ];
 const personal = [
   { path: '/wallet', label: '积分与订阅', icon: CircleDollarSign, ready: true },
-  { path: '/usage', label: '用量分析', icon: ChartColumn },
+  { path: '/usage', label: '用量分析', icon: ChartColumn, ready: true },
   { path: '/settings', label: '账号设置', icon: Settings, ready: true },
 ];
 const admin = [
@@ -59,8 +59,17 @@ const admin = [
     icon: CircleDollarSign,
     ready: true,
   },
-  { path: '/admin', label: '运营总览', icon: ChartColumn },
-  { path: '/admin/users', label: '用户管理', icon: Users },
+  { path: '/admin', label: '运营总览', icon: ChartColumn, ready: true },
+  { path: '/admin/users', label: '用户管理', icon: Users, ready: true },
+  { path: '/admin/jobs', label: '任务管理', icon: Sparkles, ready: true },
+  {
+    path: '/admin/policy',
+    label: '内容与邀请',
+    icon: ShieldCheck,
+    ready: true,
+  },
+  { path: '/admin/settings', label: '平台设置', icon: Settings, ready: true },
+  { path: '/admin/audit', label: '审计日志', icon: ShieldCheck, ready: true },
   {
     path: '/admin/credits',
     label: '积分管理',
@@ -129,7 +138,18 @@ export default function WorkspaceShell({
   const groups = [
     ['创作空间', creation],
     ['账户与资产', personal],
-    ...(me.user.role === 'USER' ? [] : [['运营管理', admin]]),
+    ...(me.user.role === 'USER'
+      ? []
+      : [
+          [
+            '运营管理',
+            admin.filter(
+              (item) =>
+                me.user.role === 'SUPER_ADMIN' ||
+                !['/admin/settings', '/admin/audit'].includes(item.path),
+            ),
+          ],
+        ]),
   ] as [string, typeof creation][];
   const initial = me.user.display_name.trim().slice(0, 1).toUpperCase();
   return (
@@ -274,13 +294,23 @@ export default function WorkspaceShell({
                 <Search size={15} />
                 <span>搜索项目、素材与功能</span>
               </div>
-              <button
-                className="icon-btn"
-                disabled
-                aria-label="通知（即将开放）"
-              >
-                <Bell size={17} />
-              </button>
+              {me.user.role !== 'USER' ? (
+                <Link
+                  className="icon-btn"
+                  to="/admin"
+                  aria-label="查看管理通知"
+                >
+                  <Bell size={17} />
+                </Link>
+              ) : (
+                <button
+                  className="icon-btn"
+                  disabled
+                  aria-label="通知（即将开放）"
+                >
+                  <Bell size={17} />
+                </button>
+              )}
               <Link to="/settings" aria-label="当前账号资料">
                 <span className="avatar tiny">{initial}</span>
               </Link>

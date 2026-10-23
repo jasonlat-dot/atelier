@@ -139,6 +139,12 @@ impl AdminService {
         }
         let mut cancelled_generation = 0;
         let mut cancelled_chat = 0;
+        let sessions_before: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM sessions WHERE user_id=$1 AND revoked_at IS NULL",
+        )
+        .bind(id)
+        .fetch_one(&mut *tx)
+        .await?;
         match action {
             "disable" => {
                 sqlx::query("UPDATE users SET status='DISABLED',disabled_reason=$2 WHERE id=$1")
@@ -184,7 +190,15 @@ impl AdminService {
             sqlx::query("UPDATE admin_notifications SET reviewed_at=clock_timestamp(),reviewed_by=$2 WHERE user_id=$1 AND reviewed_at IS NULL").bind(id).bind(who).execute(&mut *tx).await?;
         }
         let view = user(&mut tx, id, false).await?;
-        audit(&mut tx,who,&format!("ADMIN_USER_{}",action.replace('-',"_").to_uppercase()),"users",&id.to_string(),json!(old),json!({"user":view,"cancelled_generation":cancelled_generation,"cancelled_chat":cancelled_chat}),&input.reason).await?;
+        let sessions_after: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM sessions WHERE user_id=$1 AND revoked_at IS NULL",
+        )
+        .bind(id)
+        .fetch_one(&mut *tx)
+        .await?;
+        let mut before = json!(old);
+        before["unrevoked_sessions"] = json!(sessions_before);
+        audit(&mut tx,who,&format!("ADMIN_USER_{}",action.replace('-',"_").to_uppercase()),"users",&id.to_string(),before,json!({"user":view,"unrevoked_sessions":sessions_after,"cancelled_generation":cancelled_generation,"cancelled_chat":cancelled_chat}),&input.reason).await?;
         tx.commit().await?;
         Ok(view)
     }

@@ -1,0 +1,492 @@
+import { test, expect, type Page } from '@playwright/test';
+import type { components } from '../src/lib/generated/api';
+type S = components['schemas'];
+const id = '1f8848d3-1bd4-4eb3-8c91-a653c27a11a0';
+const owner = '2f8848d3-1bd4-4eb3-8c91-a653c27a11a0';
+const jobId = '3f8848d3-1bd4-4eb3-8c91-a653c27a11a0';
+const stamp = '2026-10-23T01:00:00Z';
+const person: S['AdminUser'] = {
+  id: owner,
+  email: 'creator@gmail.com',
+  display_name: '创作者',
+  role: 'USER',
+  status: 'ACTIVE',
+  disabled_reason: null,
+  revision: 1,
+  mfa_enabled: false,
+  created_at: stamp,
+  last_login_at: stamp,
+  balance: 40,
+  held: 5,
+  violations: 2,
+};
+const values: S['AdminSettingsValues'] = {
+  registration_mode: 'CLOSED',
+  registration_whitelist: [],
+  signup_max_per_ip_24h: 5,
+  signup_bonus: 20,
+  checkin_base: 10,
+  checkin_streak_cap: 5,
+  checkin_tz: 'Asia/Shanghai',
+  free_max_resolution: '2K',
+  max_active_jobs_free: 1,
+  asset_retention_days_free: 30,
+  chat_credits_per_message: 1,
+  chat_context_window: 32768,
+  chat_output_tokens: 4096,
+  maintenance_mode: false,
+  admin_adjust_limit: 100000,
+  moderation_threshold: 5,
+  upstream_cost_rates: [],
+};
+async function mock(page: Page, role = 'SUPER_ADMIN') {
+  const state = {
+    user: structuredClone(person),
+    requests: [] as string[],
+    keys: [] as string[],
+    bodies: [] as unknown[],
+    creditFail: true,
+    jobFail: true,
+    inviteFail: false,
+    invites: [] as S['AdminInvite'][],
+    rules: [] as S['AdminRule'][],
+    settings: {
+      revision: 1,
+      values: structuredClone(values),
+      models: [
+        { id: 'public-image', display_name: 'Studio Image', kind: 'image' },
+      ],
+    },
+    jobs: [
+      {
+        id: jobId,
+        owner_id: owner,
+        email: person.email,
+        model_id: 'public-image',
+        display_name: 'Studio Image',
+        kind: 'image',
+        status: 'SUCCEEDED',
+        cost: 6,
+        settled: 6,
+        released: 0,
+        refunded: 0,
+        progress: 100,
+        attempts: 1,
+        cancel_requested: false,
+        error_code: null,
+        created_at: stamp,
+        finished_at: stamp,
+      },
+    ] as S['AdminJob'][],
+  };
+  await page.route('**/api/v1/**', async (route) => {
+    const req = route.request();
+    const url = new URL(req.url());
+    const path = url.pathname.replace('/api/v1', '');
+    state.requests.push(`${req.method()} ${path}${url.search}`);
+    const ok = (json: unknown) => route.fulfill({ json });
+    const fail = (status: number, code: string) =>
+      route.fulfill({ status, json: { error: { code, message: 'fixture' } } });
+    if (req.method() !== 'GET')
+      expect(req.headers()['x-csrf-token']).toBe('csrf');
+    if (path === '/me')
+      return ok({
+        user: {
+          id,
+          email: 'admin@gmail.com',
+          display_name: '管理员',
+          role,
+          mfa_enabled: role !== 'USER',
+        },
+        csrf_token: 'csrf',
+        mfa_required: false,
+      });
+    if (path === '/wallet')
+      return ok({
+        balance: 30,
+        held: 0,
+        available: 30,
+        checked_in_today: false,
+        streak: 0,
+        next_reward: 10,
+        local_date: '2026-10-23',
+        timezone: 'Asia/Shanghai',
+      });
+    if (path === '/me/usage')
+      return ok({
+        days: 7,
+        daily: [
+          { day: '2026-10-23', jobs: 2, succeeded: 1, failed: 1, consumed: 7 },
+        ],
+        qualities: [{ quality: 'high', jobs: 2 }],
+      });
+    if (path === '/admin/users')
+      return ok({
+        items: url.searchParams.get('before')
+          ? [
+              {
+                ...state.user,
+                id: jobId,
+                email: 'next@gmail.com',
+                display_name: '下一页用户',
+              },
+            ]
+          : [state.user],
+        next_cursor: url.searchParams.has('before') ? null : owner,
+      });
+    if (path === `/admin/users/${owner}`)
+      return ok({
+        user: state.user,
+        adjust_limit: 100000,
+        jobs: state.jobs,
+        sessions: [],
+        ledger: { items: [], next_cursor: null },
+      });
+    if (path === `/admin/users/${owner}/credits`) {
+      state.keys.push(req.headers()['idempotency-key']);
+      state.bodies.push(req.postDataJSON());
+      if (state.creditFail) {
+        state.creditFail = false;
+        return fail(503, 'UNAVAILABLE');
+      }
+      state.user.balance += req.postDataJSON().amount;
+      return ok({
+        balance: state.user.balance,
+        held: 5,
+        available: state.user.balance - 5,
+      });
+    }
+    if (
+      path === `/admin/users/${owner}/disable` ||
+      path === `/admin/users/${owner}/enable`
+    ) {
+      state.user.status = path.endsWith('disable') ? 'DISABLED' : 'ACTIVE';
+      state.user.revision++;
+      return ok(state.user);
+    }
+    if (path === '/admin/settings') {
+      if (req.method() === 'GET') return ok(state.settings);
+      state.bodies.push(req.postDataJSON());
+      state.settings = {
+        ...state.settings,
+        revision: 2,
+        values: req.postDataJSON().values,
+      };
+      return ok(state.settings);
+    }
+    if (path === '/admin/jobs')
+      return ok({ items: state.jobs, next_cursor: null });
+    if (path === `/admin/jobs/${jobId}/refund`) {
+      state.keys.push(req.headers()['idempotency-key']);
+      state.bodies.push(req.postDataJSON());
+      if (state.jobFail) {
+        state.jobFail = false;
+        return fail(503, 'UNAVAILABLE');
+      }
+      state.jobs[0].refunded = 6;
+      return ok(state.jobs[0]);
+    }
+    if (path === '/admin/moderation-rules') {
+      if (req.method() === 'GET')
+        return ok({ items: state.rules, next_cursor: null });
+      const r = { ...req.postDataJSON(), id: 1, revision: 1 };
+      state.rules = [r];
+      return ok(r);
+    }
+    if (path === '/admin/moderation-rules/1') {
+      if (req.method() === 'DELETE') {
+        state.rules = [];
+        return route.fulfill({ status: 204 });
+      }
+      state.rules = [{ ...req.postDataJSON(), id: 1, revision: 2 }];
+      return ok(state.rules[0]);
+    }
+    if (path === '/admin/invite-codes') {
+      if (req.method() === 'GET')
+        return ok({ items: state.invites, next_cursor: null });
+      if (state.inviteFail) return fail(503, 'UNAVAILABLE');
+      const invite = {
+        id: jobId,
+        label: req.postDataJSON().label,
+        max_uses: req.postDataJSON().max_uses,
+        used_count: 0,
+        last4: 'abcd',
+        expires_at: null,
+        created_at: stamp,
+        revoked_at: null,
+        revision: 1,
+      };
+      state.invites = [invite];
+      return ok({ invite, code: 'ati_fixture_onetime_abcd' });
+    }
+    if (path === `/admin/invite-codes/${jobId}`) {
+      state.invites[0].revoked_at = stamp;
+      return ok(state.invites[0]);
+    }
+    if (path === '/admin/audit')
+      return ok({
+        items: [
+          {
+            id: 1,
+            actor_id: id,
+            email: 'admin@gmail.com',
+            action: 'ADMIN_SETTINGS_UPDATED',
+            target_type: 'settings',
+            target_id: 'global',
+            before: { registration_mode: 'CLOSED' },
+            after: { value: { registration_mode: 'OPEN' }, reason: '核对注册' },
+            created_at: stamp,
+          },
+        ],
+        next_cursor: null,
+      });
+    if (path === '/admin/dashboard')
+      return ok({
+        days: 7,
+        users_total: 123,
+        active_users_today: 12,
+        new_users: 5,
+        jobs_total: 10,
+        succeeded_jobs: 8,
+        failed_jobs: 1,
+        active_jobs: 1,
+        issued_credits: 500,
+        consumed_credits: 160,
+        compensated_credits: 6,
+        pending_orders: 0,
+        order_amounts: [],
+        daily: [
+          { day: '2026-10-22', jobs: 3, succeeded: 3, failed: 0, consumed: 60 },
+          {
+            day: '2026-10-23',
+            jobs: 7,
+            succeeded: 5,
+            failed: 1,
+            consumed: 100,
+          },
+        ],
+        qualities: [{ quality: 'high', jobs: 10 }],
+        health: [
+          {
+            status: 'ACTIVE',
+            accounts: 2,
+            capacity: 4,
+            live_slots: 1,
+            quota_remaining: 200,
+          },
+        ],
+        notifications: [],
+        pending_reviews: 0,
+        estimated_costs: [],
+        unpriced_units: 8,
+      });
+    return fail(404, 'NOT_FOUND');
+  });
+  page.on('dialog', () => {
+    throw new Error('Native browser dialog is not allowed');
+  });
+  return state;
+}
+test('ordinary users cannot mount admin requests and can see only own usage', async ({
+  page,
+}) => {
+  const state = await mock(page, 'USER');
+  for (const path of [
+    '/admin',
+    '/admin/users',
+    '/admin/jobs',
+    '/admin/settings',
+    '/admin/policy',
+    '/admin/audit',
+  ]) {
+    await page.goto(path);
+    await expect(page.getByRole('heading', { name: '无权访问' })).toBeVisible();
+  }
+  expect(state.requests.some((p) => p.includes('/admin/'))).toBe(false);
+  await page.goto('/usage');
+  await expect(
+    page.getByRole('heading', { name: '用量分析', exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText('本期积分消费', { exact: true })).toBeVisible();
+  expect(state.requests.some((p) => p.includes('/me/usage?'))).toBe(true);
+});
+test('administrator has no settings or audit surface', async ({ page }) => {
+  const state = await mock(page, 'ADMIN');
+  await page.goto('/admin/settings');
+  await expect(page.getByRole('heading', { name: '无权访问' })).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: '平台设置', exact: true }),
+  ).toHaveCount(0);
+  await page.goto('/admin/audit');
+  await expect(page.getByRole('heading', { name: '无权访问' })).toBeVisible();
+  expect(state.requests.some((p) => p.includes('/admin/'))).toBe(false);
+});
+test('user pagination search and credit confirmation preserve financial retry', async ({
+  page,
+}) => {
+  const state = await mock(page);
+  await page.goto('/admin/users');
+  await page.getByRole('button', { name: '下一页', exact: true }).click();
+  await expect(page.getByText('下一页用户', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '上一页', exact: true }).click();
+  await page.getByLabel('搜索用户').fill('creator');
+  await page.getByRole('button', { name: '搜索', exact: true }).click();
+  await expect
+    .poll(() => state.requests.some((r) => r.includes('q=creator')))
+    .toBe(true);
+  await page.getByRole('button', { name: '查看用户', exact: true }).click();
+  await page.getByRole('button', { name: '调整积分', exact: true }).click();
+  const modal = page.getByRole('dialog', { name: '调整积分', exact: true });
+  await modal.getByLabel('调整积分', { exact: false }).fill('7');
+  await modal.getByLabel('处理说明').fill('补充验收积分');
+  await modal.getByRole('button', { name: '核对调整', exact: true }).click();
+  expect(state.keys).toHaveLength(0);
+  await expect(modal).toContainText('调整后预计可用 42');
+  await modal
+    .getByRole('button', { name: '确认调整积分', exact: true })
+    .click();
+  await expect(
+    modal.getByRole('button', { name: '按原内容重试' }),
+  ).toBeVisible();
+  await modal.getByRole('button', { name: '按原内容重试' }).click();
+  await expect(modal).toHaveCount(0);
+  expect(state.keys[0]).toBe(state.keys[1]);
+  expect(state.bodies[0]).toEqual(state.bodies[1]);
+  expect(state.user.balance).toBe(47);
+  await page.getByRole('button', { name: '禁用账号', exact: true }).click();
+  const disable = page.getByRole('dialog', { name: '禁用账号', exact: true });
+  await expect(disable).toContainText('立即撤销全部会话');
+  await disable.getByLabel('处理说明').fill('验收禁用');
+  await disable
+    .getByRole('button', { name: '确认禁用账号', exact: true })
+    .click();
+  await expect(
+    page.getByRole('button', { name: '恢复账号', exact: true }),
+  ).toBeVisible();
+});
+test('settings changes require an explicit review and audit reason', async ({
+  page,
+}) => {
+  const state = await mock(page);
+  await page.goto('/admin/settings');
+  await page.getByRole('radio', { name: '开放注册', exact: false }).check();
+  await page.getByLabel('注册赠送积分', { exact: false }).fill('25');
+  await page.getByRole('button', { name: '核对并保存' }).click();
+  const dialog = page.getByRole('dialog', { name: '确认变更平台设置' });
+  await expect(dialog).toContainText('CLOSED → OPEN');
+  expect(state.bodies).toHaveLength(0);
+  await dialog.getByLabel('变更说明').fill('开放小范围验收');
+  await dialog.getByRole('button', { name: '确认保存设置' }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(state.settings.values.registration_mode).toBe('OPEN');
+  expect(state.settings.values.signup_bonus).toBe(25);
+  await expect(page.getByRole('button', { name: '核对并保存' })).toBeDisabled();
+  await page.getByRole('link', { name: '审计日志', exact: true }).click();
+  await page.getByRole('button', { name: '查看变更' }).click();
+  await expect(page.getByRole('dialog')).toContainText('核对注册');
+});
+test('rules and one-time invite creation use custom dialogs and can be revoked', async ({
+  page,
+}) => {
+  const state = await mock(page);
+  await page.goto('/admin/policy');
+  await page.getByRole('button', { name: '新增规则', exact: true }).click();
+  let dialog = page.getByRole('dialog');
+  await dialog.getByLabel('匹配内容').fill('fixture-blocked');
+  await dialog.getByLabel('处理说明').fill('测试内容拦截');
+  await dialog.getByRole('button', { name: '保存规则', exact: true }).click();
+  await expect(
+    page.getByText('fixture-blocked', { exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: '删除规则', exact: true }).click();
+  dialog = page.getByRole('dialog');
+  await dialog.getByLabel('处理说明').fill('移除测试规则');
+  await dialog.getByRole('button', { name: '确认删除规则' }).click();
+  await expect(page.getByText('暂无匹配的内容规则。')).toBeVisible();
+  await page.getByRole('tab', { name: '邀请码', exact: true }).click();
+  await page.getByRole('button', { name: '创建邀请码', exact: true }).click();
+  dialog = page.getByRole('dialog');
+  await dialog.getByLabel('邀请备注').fill('验收邀请');
+  await dialog.getByLabel('处理说明').fill('测试注册');
+  await dialog.getByRole('button', { name: '确认创建邀请' }).click();
+  await expect(page.getByLabel('完整邀请码', { exact: true })).toHaveValue(
+    'ati_fixture_onetime_abcd',
+  );
+  await page.getByRole('button', { name: '已保存，关闭' }).click();
+  await expect(page.getByText('•••• abcd', { exact: true })).toBeVisible();
+  await expect(
+    page.getByText('ati_fixture_onetime_abcd', { exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: '撤销邀请', exact: true }).click();
+  dialog = page.getByRole('dialog');
+  await dialog.getByLabel('处理说明').fill('验收结束');
+  await dialog.getByRole('button', { name: '确认撤销邀请' }).click();
+  await expect(page.getByText('已撤销', { exact: true })).toBeVisible();
+  expect(state.invites[0].revoked_at).toBeTruthy();
+});
+test('ambiguous invite creation prevents duplicate creation', async ({
+  page,
+}) => {
+  const state = await mock(page);
+  state.inviteFail = true;
+  await page.goto('/admin/policy');
+  await page.getByRole('tab', { name: '邀请码', exact: true }).click();
+  await page.getByRole('button', { name: '创建邀请码', exact: true }).click();
+  const modal = page.getByRole('dialog');
+  await modal.getByLabel('邀请备注').fill('不确定邀请');
+  await modal.getByLabel('处理说明').fill('故障验收');
+  await modal.getByRole('button', { name: '确认创建邀请' }).click();
+  await expect(
+    modal.getByRole('button', { name: '确认创建邀请' }),
+  ).toBeDisabled();
+  await expect(modal).toContainText('先撤销该记录再创建');
+  expect(
+    state.requests.filter((r) => r === 'POST /admin/invite-codes'),
+  ).toHaveLength(1);
+});
+test('job compensation retries keep the same request and disable a second compensation', async ({
+  page,
+}) => {
+  const state = await mock(page);
+  await page.goto('/admin/jobs');
+  await page.getByRole('button', { name: '补偿积分', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '确认补偿积分' });
+  await expect(dialog).toContainText('不会恢复原订单');
+  await dialog.getByLabel('处理说明').fill('质量问题人工补偿');
+  await dialog
+    .getByRole('button', { name: '确认补偿积分', exact: true })
+    .click();
+  await dialog.getByRole('button', { name: '按原请求重试' }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(state.keys[0]).toBe(state.keys[1]);
+  expect(state.bodies[0]).toEqual(state.bodies[1]);
+  await expect(
+    page.getByRole('button', { name: '补偿积分', exact: true }),
+  ).toBeDisabled();
+});
+test('dashboard and settings remain contained on desktop and mobile', async ({
+  page,
+}) => {
+  await mock(page);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('/admin');
+  await expect(page.getByText('8 个输出单位未计入估算。')).toBeVisible();
+  await page.screenshot({
+    path: test.info().outputPath('m9-dashboard.png'),
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/admin/settings');
+  await expect(page.getByRole('button', { name: '核对并保存' })).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    )
+    .toBe(true);
+  await page.screenshot({
+    path: test.info().outputPath('m9-settings-mobile.png'),
+    fullPage: true,
+  });
+});

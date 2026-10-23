@@ -97,7 +97,7 @@ pub async fn dashboard(
 ) -> Result<Json<AdminDashboard>, ApiError> {
     Ok(Json(service(&s).dashboard(query(q)?.days).await?))
 }
-#[utoipa::path(get,path="/api/v1/usage",params(DaysQuery),security(("session"=[])),responses((status=200,body=UsageView),(status=401,body=ErrorResponse),(status=403,body=ErrorResponse),(status=422,body=ErrorResponse),(status=503,body=ErrorResponse)))]
+#[utoipa::path(get,path="/api/v1/me/usage",params(DaysQuery),security(("session"=[])),responses((status=200,body=UsageView),(status=401,body=ErrorResponse),(status=403,body=ErrorResponse),(status=422,body=ErrorResponse),(status=503,body=ErrorResponse)))]
 pub async fn usage(
     State(s): State<AppState>,
     AuthUser(a): AuthUser,

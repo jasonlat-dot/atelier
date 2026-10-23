@@ -126,6 +126,18 @@ async fn every_admin_surface_rejects_users_and_super_settings_remain_protected(d
             result.1
         );
     }
+    let usage = call(
+        &s,
+        &user,
+        "GET",
+        "/api/v1/me/usage?days=1",
+        false,
+        serde_json::json!({}),
+    )
+    .await;
+    assert_eq!(usage.0, StatusCode::OK);
+    assert_eq!(usage.1["days"], 1);
+    assert_eq!(usage.1["daily"].as_array().unwrap().len(), 1);
     assert_eq!(
         call(
             &s,

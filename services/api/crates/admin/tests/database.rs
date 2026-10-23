@@ -79,6 +79,9 @@ async fn user_governance_is_versioned_revokes_sessions_cancels_holds_and_preserv
         .unwrap();
     assert_eq!(u.status, "DISABLED");
     assert_eq!(u.held, 0);
+    let logged:serde_json::Value=sqlx::query_scalar("SELECT jsonb_build_object('before',before,'after',after) FROM audit_logs WHERE action='ADMIN_USER_DISABLE' AND target_id=$1").bind(owner.to_string()).fetch_one(&db).await.unwrap();
+    assert_eq!(logged["before"]["unrevoked_sessions"], 1);
+    assert_eq!(logged["after"]["value"]["unrevoked_sessions"], 0);
     assert_eq!(
         s.jobs("", None, Some(owner), None).await.unwrap().items[0].status,
         "CANCELLED"
@@ -506,4 +509,84 @@ async fn dashboard_costs_use_explicit_currency_rates_and_personal_usage_cannot_m
     let usage = s.usage(a, 7).await.unwrap();
     assert_eq!(usage.daily.iter().map(|d| d.jobs).sum::<i64>(), 1);
     assert_eq!(usage.daily.iter().map(|d| d.consumed).sum::<i64>(), 10);
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+#[ignore = "Requires isolated PostgreSQL"]
+async fn manual_cancel_releases_queued_hold_once_and_signals_running_work(db: PgPool) {
+    let admin = user(&db, "ADMIN").await;
+    let owner = user(&db, "USER").await;
+    let queued = job(&db, owner).await;
+    let s = AdminService::new(db.clone());
+    let input = AdminJobAction {
+        reason: "人工取消核对".into(),
+        expected_credits: None,
+    };
+    let key = Uuid::new_v4();
+    assert_eq!(
+        s.job_action(admin, queued, key, "cancel", &input)
+            .await
+            .unwrap()
+            .status,
+        "CANCELLED"
+    );
+    assert_eq!(
+        s.job_action(admin, queued, key, "cancel", &input)
+            .await
+            .unwrap()
+            .released,
+        10
+    );
+    assert_eq!(
+        WalletService::new(db.clone())
+            .summary(owner)
+            .await
+            .unwrap()
+            .held,
+        0
+    );
+    assert!(matches!(
+        s.job_action(
+            admin,
+            queued,
+            key,
+            "cancel",
+            &AdminJobAction {
+                reason: "不同内容".into(),
+                expected_credits: None
+            }
+        )
+        .await,
+        Err(AdminError::Conflict)
+    ));
+    let running = job(&db, owner).await;
+    sqlx::query("UPDATE generation_jobs SET status='ROUTING' WHERE id=$1")
+        .bind(running)
+        .execute(&db)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE generation_jobs SET status='RUNNING' WHERE id=$1")
+        .bind(running)
+        .execute(&db)
+        .await
+        .unwrap();
+    let view = s
+        .job_action(admin, running, Uuid::new_v4(), "cancel", &input)
+        .await
+        .unwrap();
+    assert_eq!(view.status, "RUNNING");
+    assert!(view.cancel_requested);
+    assert_eq!(
+        WalletService::new(db.clone())
+            .summary(owner)
+            .await
+            .unwrap()
+            .held,
+        10
+    );
+    assert!(WalletService::new(db.clone())
+        .reconcile()
+        .await
+        .unwrap()
+        .is_empty());
 }

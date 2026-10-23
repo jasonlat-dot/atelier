@@ -5,6 +5,7 @@ export default defineConfig({
     'session-settings.spec.ts',
     'wallet.spec.ts',
     'billing.spec.ts',
+    'admin.spec.ts',
     'workspace.spec.ts',
     'assets.spec.ts',
     'upstream.spec.ts',

@@ -807,4 +807,138 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   expect(
     (await (await page.request.get('/api/v1/subscription')).json()).tier,
   ).toBe('FREE');
+
+  // M9: real management writes, wallet effects, revision and audit in the same
+  // isolated PG/Redis application. No financial supplier is contacted.
+  const people = await (await page.request.get('/api/v1/admin/users')).json();
+  const managed = people.items.find((u: { role: string }) => u.role === 'USER');
+  expect(managed).toBeTruthy();
+  await page.getByRole('link', { name: '用户管理', exact: true }).click();
+  await page.getByLabel('搜索用户').fill(managed.email);
+  await page.getByRole('button', { name: '搜索', exact: true }).click();
+  await page.getByRole('button', { name: '查看用户', exact: true }).click();
+  await page.getByRole('button', { name: '调整积分', exact: true }).click();
+  let manageDialog = page.getByRole('dialog', {
+    name: '调整积分',
+    exact: true,
+  });
+  await manageDialog.getByLabel('调整积分', { exact: false }).fill('7');
+  await manageDialog.getByLabel('处理说明').fill('真实管理回归增加七积分');
+  await manageDialog
+    .getByRole('button', { name: '核对调整', exact: true })
+    .click();
+  await manageDialog
+    .getByRole('button', { name: '确认调整积分', exact: true })
+    .click();
+  await expect(manageDialog).toHaveCount(0);
+  const adjusted = await (
+    await page.request.get(`/api/v1/admin/users/${managed.id}`)
+  ).json();
+  expect(adjusted.user.balance).toBe(managed.balance + 7);
+  await page.getByRole('button', { name: '禁用账号', exact: true }).click();
+  manageDialog = page.getByRole('dialog', { name: '禁用账号', exact: true });
+  await manageDialog.getByLabel('处理说明').fill('真实管理回归禁用');
+  await manageDialog
+    .getByRole('button', { name: '确认禁用账号', exact: true })
+    .click();
+  await expect(
+    page.getByRole('button', { name: '恢复账号', exact: true }),
+  ).toBeVisible();
+  expect(
+    (await (await page.request.get(`/api/v1/admin/users/${managed.id}`)).json())
+      .user.status,
+  ).toBe('DISABLED');
+  await page.getByRole('button', { name: '恢复账号', exact: true }).click();
+  manageDialog = page.getByRole('dialog', { name: '恢复账号', exact: true });
+  await manageDialog.getByLabel('处理说明').fill('真实管理回归恢复');
+  await manageDialog
+    .getByRole('button', { name: '确认恢复账号', exact: true })
+    .click();
+  await expect(
+    page.getByRole('button', { name: '禁用账号', exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: '关闭弹窗', exact: true }).click();
+  await page.getByRole('link', { name: '平台设置', exact: true }).click();
+  await page.getByRole('radio', { name: '仅限邀请', exact: false }).check();
+  await page.getByRole('button', { name: '核对并保存', exact: true }).click();
+  manageDialog = page.getByRole('dialog', { name: '确认变更平台设置' });
+  await manageDialog.getByLabel('变更说明').fill('真实管理回归邀请模式');
+  await manageDialog.getByRole('button', { name: '确认保存设置' }).click();
+  await expect(manageDialog).toHaveCount(0);
+  expect(
+    (await (await page.request.get('/api/v1/admin/settings')).json()).values
+      .registration_mode,
+  ).toBe('INVITE_ONLY');
+  await page.getByRole('link', { name: '内容与邀请', exact: true }).click();
+  await page.getByRole('button', { name: '新增规则', exact: true }).click();
+  manageDialog = page.getByRole('dialog');
+  await manageDialog.getByLabel('匹配内容').fill('m9-browser-blocked');
+  await manageDialog.getByLabel('处理说明').fill('真实管理回归内容规则');
+  await manageDialog
+    .getByRole('button', { name: '保存规则', exact: true })
+    .click();
+  await expect(
+    page.getByText('m9-browser-blocked', { exact: true }),
+  ).toBeVisible();
+  await page.getByRole('tab', { name: '邀请码', exact: true }).click();
+  await page.getByRole('button', { name: '创建邀请码', exact: true }).click();
+  manageDialog = page.getByRole('dialog');
+  await manageDialog.getByLabel('邀请备注').fill('M9 browser invite');
+  await manageDialog.getByLabel('处理说明').fill('真实管理回归邀请');
+  await manageDialog.getByRole('button', { name: '确认创建邀请' }).click();
+  await expect(page.getByLabel('完整邀请码', { exact: true })).toHaveValue(
+    /^ati_/,
+  );
+  await page.getByRole('button', { name: '已保存，关闭' }).click();
+  await page.getByRole('button', { name: '撤销邀请', exact: true }).click();
+  manageDialog = page.getByRole('dialog');
+  await manageDialog.getByLabel('处理说明').fill('真实管理回归撤销邀请');
+  await manageDialog.getByRole('button', { name: '确认撤销邀请' }).click();
+  await expect(page.getByText('已撤销', { exact: true })).toBeVisible();
+  const adminJobs = await (await page.request.get('/api/v1/admin/jobs')).json();
+  const compensate = adminJobs.items.find(
+    (j: { settled: number; refunded: number; status: string }) =>
+      j.settled > 0 &&
+      j.refunded === 0 &&
+      ['SUCCEEDED', 'PARTIAL'].includes(j.status),
+  );
+  expect(compensate).toBeTruthy();
+  const beforeCompensation = await (
+    await page.request.get('/api/v1/wallet')
+  ).json();
+  await page.getByRole('link', { name: '任务管理', exact: true }).click();
+  const taskRow = page.getByRole('row').filter({ hasText: compensate.id });
+  await taskRow.getByRole('button', { name: '补偿积分', exact: true }).click();
+  manageDialog = page.getByRole('dialog', { name: '确认补偿积分' });
+  await manageDialog.getByLabel('处理说明').fill('真实管理回归补偿已结算任务');
+  await manageDialog
+    .getByRole('button', { name: '确认补偿积分', exact: true })
+    .click();
+  await expect(manageDialog).toHaveCount(0);
+  await expect(
+    taskRow.getByRole('button', { name: '补偿积分', exact: true }),
+  ).toBeDisabled();
+  expect(
+    (await (await page.request.get('/api/v1/wallet')).json()).balance,
+  ).toBe(beforeCompensation.balance + compensate.settled);
+  await page.getByRole('link', { name: '审计日志', exact: true }).click();
+  await page.getByLabel('搜索审计日志').fill('ADMIN_USER_DISABLE');
+  await page.getByRole('button', { name: '搜索', exact: true }).click();
+  await page
+    .getByRole('button', { name: '查看变更', exact: true })
+    .first()
+    .click();
+  await expect(page.getByRole('dialog')).toContainText('真实管理回归禁用');
+  await page.getByRole('button', { name: '关闭弹窗', exact: true }).click();
+  await page.getByRole('link', { name: '运营总览', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: '运营总览', exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText('平台注册用户', { exact: true })).toBeVisible();
+  await expect(page.getByText('账号池健康', { exact: true })).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await page.screenshot({
+    path: test.info().outputPath('m9-real-dashboard.png'),
+    fullPage: true,
+  });
 });

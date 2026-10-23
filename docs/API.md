@@ -162,3 +162,32 @@ SSE `delta` 为 `{turn_id,text}`，`intent` 为六类枚举字符串，`action` 
 409 BILLING_CONFLICT 表示套餐修订、状态或退款份额已变化，需要重新读取确认；409 DUPLICATE_TRADE 为凭证重复；422 PAYMENT_MISMATCH 为金额/币种不符；409 ORDER_CREDITS_HELD 为存在任务预占。相同幂等键必须保留相同正文；重复收款确认只返回已有结果，不再次发积分。
 
 订阅一次购买一个已付款周期，随后购买的周期排队；每日后台扫描及钱包/订阅/生成/素材请求同步推进。完全错过的已结束周期中，不结转的过期积分不补发，可结转的已付款积分补发一次，不自动扣费。生成 limits/quote/create 使用实时权益；新素材到期时间取当时 retention_days。退款先由管理员线下完成再登记，按 FIFO 记录的本订单未消费积分比例计算并回收，预占存在时阻止；退款登记、余额、周期状态、审计同事务。退款不会自动转账，兑换码继续使用 M2 接口。
+
+### M9 管理与用量
+
+以下路径均以 `/api/v1` 为前缀。所有管理接口需要 ADMIN/SUPER_ADMIN 和近期 MFA；普通用户在请求解析前返回 403。写请求同时需要可信 Origin、CSRF 与非空 reason（最多 500 字符）；数字和枚举以生成的 OpenAPI 为准。
+
+| 方法与路径 | 权限与语义 |
+| --- | --- |
+| GET `/me/usage?days=7` | 本人按 UTC 日和质量汇总，days 1–90，默认 7；`/usage` 保留为兼容别名 |
+| GET `/admin/dashboard?days=7` | 平台指标、成本估算、账号池与未复核通知 |
+| GET `/admin/users?q=&status=&role=&before=UUID` | 25 条，按创建时间/UUID 倒序，next_cursor |
+| GET `/admin/users/{id}` | 安全资料、当前调整上限、钱包/最近 25 条流水、最近 10 个任务、最多 20 台有效设备 |
+| GET `/admin/users/{id}/ledger?before=ID` | 用户流水，25 条 |
+| POST `/admin/users/{id}/disable`、`/enable`、`/revoke-sessions`、`/review` | revision + reason，review 只标记通知已复核 |
+| POST `/admin/users/{id}/role` | SUPER_ADMIN；revision + reason + role |
+| POST `/admin/users/{id}/credits` | amount 正负整数 + reason，UUID Idempotency-Key；沿用 M2 回执 |
+| GET `/admin/jobs?q=&status=&user_id=&before=UUID` | 安全任务元数据，25 条，不返回提示词、上游地址或真实模型 |
+| POST `/admin/jobs/{id}/cancel` | reason + UUID Idempotency-Key，排队立即取消，运行任务标记取消 |
+| POST `/admin/jobs/{id}/refund` | reason + expected_credits + UUID Idempotency-Key；仅补偿实际结算全额一次 |
+| GET / PUT `/admin/settings` | SUPER_ADMIN；读取 revision/values/公开模型；写入 revision + values + reason |
+| GET / POST `/admin/moderation-rules` | q/before 数字 ID 分页；创建 pattern/is_regex/enabled/reason |
+| PATCH / DELETE `/admin/moderation-rules/{id}` | 修改携带 revision/完整字段/reason；删除 revision/reason，软删除 |
+| GET / POST `/admin/invite-codes` | q/before UUID 分页；创建 label/max_uses/expires_at/reason，响应仅此一次附带 code |
+| PATCH `/admin/invite-codes/{id}` | revision + details（创建同形），不能把上限降到已使用次数以下 |
+| DELETE `/admin/invite-codes/{id}` | revision + reason，撤销后不能恢复 |
+| GET `/admin/audit?q=&before=ID` | SUPER_ADMIN；25 条脱敏只读前后值，按 ID 倒序 |
+
+ADMIN 只能修改 USER，不能处置其他管理员的积分、身份或任务。自我禁用被拒绝；最后一个有效超级管理员不能被降权或禁用。409 ADMIN_CONFLICT 表示版本、状态或幂等内容已变化，应重新读取；409 LAST_SUPER_ADMIN 表示最后管理员保护；422 VALIDATION 表示参数无效。审计与业务写入同事务，失败不提交。
+
+任务补偿为独立积分来源，不修改生成结果/终态，不恢复原订单现金退款份额。未知网络结果的金融请求重试必须保留原键和正文。邀请码创建没有自动重试，结果不明时先查询备注/末四位并撤销无法取回的记录，避免发出多个未知有效码。成本估算单价整数 `unit_cost_micros` 表示百万分之一货币单位，按公开模型、图片张数/视频秒数/成功对话条数分别估计，币种 CNY/USD；缺价与真实供应商费用未计入，详见 PR_M9。

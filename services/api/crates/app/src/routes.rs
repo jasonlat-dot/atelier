@@ -171,6 +171,10 @@ pub fn router(state: AppState) -> Router {
                 .fallback(protected_missing),
         )
         .route(
+            "/api/v1/me/usage",
+            get(crate::admin_http::usage).fallback(protected_missing),
+        )
+        .route(
             "/api/v1/admin/users",
             get(crate::admin_http::users)
                 .layer(axum::extract::DefaultBodyLimit::max(131072))

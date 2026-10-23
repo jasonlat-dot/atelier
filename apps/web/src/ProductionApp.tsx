@@ -23,6 +23,17 @@ import GenerationPage from './features/generation/GenerationPage';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import LiveCanvasPage from './features/canvas/LiveCanvasPage';
 import ProjectsPage from './features/canvas/ProjectsPage';
+const AdminDashboardPage = lazy(
+  () => import('./features/admin/AdminDashboardPage'),
+);
+const AdminUsersPage = lazy(() => import('./features/admin/AdminUsersPage'));
+const AdminJobsPage = lazy(() => import('./features/admin/AdminJobsPage'));
+const AdminSettingsPage = lazy(
+  () => import('./features/admin/AdminSettingsPage'),
+);
+const AdminPolicyPage = lazy(() => import('./features/admin/AdminPolicyPage'));
+const AdminAuditPage = lazy(() => import('./features/admin/AdminAuditPage'));
+const UsagePage = lazy(() => import('./features/admin/UsagePage'));
 const LiveChatPage = lazy(() => import('./features/chat/LiveChatPage'));
 
 type AuthState =
@@ -133,110 +144,186 @@ export default function ProductionApp() {
   return (
     <QueryClientProvider client={queries}>
       <WorkspaceShell me={me} onExpired={expired} onReload={reload}>
-        <Routes>
-          <Route
-            path="/chat/:id?"
-            element={
-              <Suspense
-                fallback={
-                  <main className="page-padding">
-                    <p role="status">正在加载对话…</p>
-                  </main>
-                }
-              >
-                <LiveChatPage me={me} onExpired={expired} onReload={reload} />
-              </Suspense>
-            }
-          />
-          <Route
-            path="/canvas"
-            element={
-              <ProjectsPage me={me} onExpired={expired} onReload={reload} />
-            }
-          />
-          <Route
-            path="/canvas/:id"
-            element={
-              <LiveCanvasPage me={me} onExpired={expired} onReload={reload} />
-            }
-          />
-          <Route
-            path="/generate"
-            element={
-              <GenerationPage me={me} onExpired={expired} onReload={reload} />
-            }
-          />
-          <Route
-            path="/admin/accounts"
-            element={
-              <AdminAccountsPage
-                me={me}
-                onExpired={expired}
-                onReload={reload}
-              />
-            }
-          />
-          <Route
-            path="/admin/providers"
-            element={<Navigate to="/admin/accounts" replace />}
-          />
-          <Route
-            path="/admin/models"
-            element={
-              <AdminModelsPage me={me} onExpired={expired} onReload={reload} />
-            }
-          />
-          <Route
-            path="/assets"
-            element={
-              <AssetsPage me={me} onExpired={expired} onReload={reload} />
-            }
-          />
-          <Route
-            path="/"
-            element={<HomePage me={me} onExpired={expired} onReload={reload} />}
-          />
-          <Route
-            path="/wallet"
-            element={
-              <WalletPage me={me} onExpired={expired} onReload={reload} />
-            }
-          />
-          <Route
-            path="/admin/plans"
-            element={
-              <AdminBillingPage me={me} onExpired={expired} onReload={reload} />
-            }
-          />
-          <Route
-            path="/admin/credits"
-            element={
-              <AdminCreditsPage me={me} onExpired={expired} onReload={reload} />
-            }
-          />
-          <Route
-            path="/settings"
-            element={
-              <SettingsPage
-                me={me}
-                onChange={changed}
-                onExpired={expired}
-                onReload={reload}
-              />
-            }
-          />
-          <Route
-            path="/admin/*"
-            element={
-              <main className="account-shell">
-                <h1>
-                  {me.user.role === 'USER' ? '无权访问' : '管理功能正在准备中'}
-                </h1>
-              </main>
-            }
-          />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        <Suspense
+          fallback={
+            <main className="page-padding">
+              <p role="status">正在加载页面…</p>
+            </main>
+          }
+        >
+          <Routes>
+            <Route
+              path="/admin"
+              element={
+                <AdminDashboardPage
+                  me={me}
+                  onExpired={expired}
+                  onReload={reload}
+                />
+              }
+            />
+            <Route
+              path="/admin/users"
+              element={
+                <AdminUsersPage me={me} onExpired={expired} onReload={reload} />
+              }
+            />
+            <Route
+              path="/admin/jobs"
+              element={
+                <AdminJobsPage me={me} onExpired={expired} onReload={reload} />
+              }
+            />
+            <Route
+              path="/admin/settings"
+              element={
+                <AdminSettingsPage
+                  me={me}
+                  onExpired={expired}
+                  onReload={reload}
+                />
+              }
+            />
+            <Route
+              path="/admin/policy"
+              element={
+                <AdminPolicyPage
+                  me={me}
+                  onExpired={expired}
+                  onReload={reload}
+                />
+              }
+            />
+            <Route
+              path="/admin/audit"
+              element={
+                <AdminAuditPage me={me} onExpired={expired} onReload={reload} />
+              }
+            />
+            <Route
+              path="/usage"
+              element={
+                <UsagePage me={me} onExpired={expired} onReload={reload} />
+              }
+            />
+            <Route
+              path="/chat/:id?"
+              element={
+                <Suspense
+                  fallback={
+                    <main className="page-padding">
+                      <p role="status">正在加载对话…</p>
+                    </main>
+                  }
+                >
+                  <LiveChatPage me={me} onExpired={expired} onReload={reload} />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/canvas"
+              element={
+                <ProjectsPage me={me} onExpired={expired} onReload={reload} />
+              }
+            />
+            <Route
+              path="/canvas/:id"
+              element={
+                <LiveCanvasPage me={me} onExpired={expired} onReload={reload} />
+              }
+            />
+            <Route
+              path="/generate"
+              element={
+                <GenerationPage me={me} onExpired={expired} onReload={reload} />
+              }
+            />
+            <Route
+              path="/admin/accounts"
+              element={
+                <AdminAccountsPage
+                  me={me}
+                  onExpired={expired}
+                  onReload={reload}
+                />
+              }
+            />
+            <Route
+              path="/admin/providers"
+              element={<Navigate to="/admin/accounts" replace />}
+            />
+            <Route
+              path="/admin/models"
+              element={
+                <AdminModelsPage
+                  me={me}
+                  onExpired={expired}
+                  onReload={reload}
+                />
+              }
+            />
+            <Route
+              path="/assets"
+              element={
+                <AssetsPage me={me} onExpired={expired} onReload={reload} />
+              }
+            />
+            <Route
+              path="/"
+              element={
+                <HomePage me={me} onExpired={expired} onReload={reload} />
+              }
+            />
+            <Route
+              path="/wallet"
+              element={
+                <WalletPage me={me} onExpired={expired} onReload={reload} />
+              }
+            />
+            <Route
+              path="/admin/plans"
+              element={
+                <AdminBillingPage
+                  me={me}
+                  onExpired={expired}
+                  onReload={reload}
+                />
+              }
+            />
+            <Route
+              path="/admin/credits"
+              element={
+                <AdminCreditsPage
+                  me={me}
+                  onExpired={expired}
+                  onReload={reload}
+                />
+              }
+            />
+            <Route
+              path="/settings"
+              element={
+                <SettingsPage
+                  me={me}
+                  onChange={changed}
+                  onExpired={expired}
+                  onReload={reload}
+                />
+              }
+            />
+            <Route
+              path="/admin/*"
+              element={
+                <main className="account-shell">
+                  <h1>
+                    {me.user.role === 'USER' ? '无权访问' : '未找到管理页面'}
+                  </h1>
+                </main>
+              }
+            />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
       </WorkspaceShell>
     </QueryClientProvider>
   );
