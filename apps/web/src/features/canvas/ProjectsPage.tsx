@@ -1,5 +1,5 @@
 import { useCallback, useState, useRef } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Plus,
@@ -7,13 +7,30 @@ import {
   Copy,
   Pencil,
   Trash2,
-  ArrowRight,
+  Search,
+  LayoutGrid,
+  List,
+  Upload,
+  X,
 } from 'lucide-react';
 import { SessionError } from '../auth/sessionApi';
 import AssetDialog from '../assets/AssetDialog';
 import { projectApi, type ProjectInfo } from './projectApi';
 import type { CanvasProps } from './LiveCanvasPage';
+import ProjectPreview from './ProjectPreview';
 import './LiveCanvas.css';
+import './ProjectsPage.css';
+
+function updatedLabel(value: string) {
+  const date = new Date(value);
+  const today = date.toDateString() === new Date().toDateString();
+  return `${today ? '今天 ' : ''}${date.toLocaleString('zh-CN', {
+    ...(today ? {} : { month: 'long', day: 'numeric' }),
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })}`;
+}
 export function ProjectGrid({
   me,
   onExpired,
@@ -21,7 +38,6 @@ export function ProjectGrid({
   home = false,
 }: CanvasProps & { home?: boolean }) {
   const navigate = useNavigate(),
-    [before, setBefore] = useState<string>(),
     [action, setAction] = useState<{
       type: 'rename' | 'delete';
       project: ProjectInfo;
@@ -29,11 +45,39 @@ export function ProjectGrid({
   const [name, setName] = useState(''),
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
-  const query = useQuery({
-    queryKey: ['projects', me.user.id, before],
-    queryFn: ({ signal }) => projectApi.list(before, signal),
+  const [filter, setFilter] = useState(''),
+    [sort, setSort] = useState('updated'),
+    [view, setView] = useState<'grid' | 'list'>('grid');
+  const query = useInfiniteQuery({
+    queryKey: ['projects', me.user.id, home ? 'home' : 'library'],
+    queryFn: ({ pageParam, signal }) => projectApi.list(pageParam, signal),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) =>
+      home ? undefined : last.next_cursor || undefined,
     staleTime: 0,
   });
+  const projects = (
+    query.data?.pages.flatMap((page) => page.items) || []
+  ).filter(
+    (project, index, items) =>
+      items.findIndex((item) => item.id === project.id) === index,
+  );
+  const visible = projects
+    .filter(
+      (project) =>
+        home ||
+        project.name
+          .toLocaleLowerCase()
+          .includes(filter.trim().toLocaleLowerCase()),
+    )
+    .sort((a, b) =>
+      home || sort === 'updated'
+        ? Date.parse(b.updated_at) - Date.parse(a.updated_at)
+        : sort === 'name'
+          ? a.name.localeCompare(b.name, 'zh-CN')
+          : b.revision - a.revision,
+    )
+    .slice(0, home ? 2 : undefined);
   const importFile = useRef<HTMLInputElement>(null);
   const importing = useRef<{ file: File; key: string }>();
   const failed = useCallback(
@@ -67,57 +111,124 @@ export function ProjectGrid({
   return (
     <>
       {!home && (
-        <div className="gen-actions">
-          <button
-            className="btn"
-            disabled={busy}
-            onClick={() => importFile.current?.click()}
-          >
-            导入项目 ZIP
-          </button>
-          {importing.current && (
-            <button
-              className="btn"
-              disabled={busy}
-              onClick={() =>
-                void act(async () => {
-                  const item = importing.current!;
-                  const project = await projectApi.import(
-                    item.file,
-                    me.csrf_token,
-                    item.key,
-                  );
-                  importing.current = undefined;
-                  navigate(`/canvas/${project.project.id}`);
-                })
-              }
+        <>
+          <div className="canvas-library-head">
+            <div>
+              <h1>我的创作画布</h1>
+              <p>把想法、参考与生成结果，连接成你的下一件作品。</p>
+            </div>
+            <div className="canvas-library-head-actions">
+              <button
+                className="btn"
+                disabled={busy}
+                onClick={() => importFile.current?.click()}
+              >
+                <Upload size={15} />
+                导入项目 ZIP
+              </button>
+              {importing.current && (
+                <button
+                  className="btn"
+                  disabled={busy}
+                  onClick={() =>
+                    void act(async () => {
+                      const item = importing.current!;
+                      const project = await projectApi.import(
+                        item.file,
+                        me.csrf_token,
+                        item.key,
+                      );
+                      importing.current = undefined;
+                      navigate(`/canvas/${project.project.id}`);
+                    })
+                  }
+                >
+                  重试上次导入
+                </button>
+              )}
+              <input
+                hidden
+                ref={importFile}
+                type="file"
+                aria-label="导入项目 ZIP"
+                accept=".zip,application/zip"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = '';
+                  if (!file) return;
+                  importing.current = { file, key: crypto.randomUUID() };
+                  void act(async () => {
+                    const project = await projectApi.import(
+                      file,
+                      me.csrf_token,
+                      importing.current!.key,
+                    );
+                    importing.current = undefined;
+                    navigate(`/canvas/${project.project.id}`);
+                  });
+                }}
+              />
+              <Link className="btn btn-dark" to="/canvas/new">
+                <Plus size={16} />
+                新建画布
+              </Link>
+            </div>
+          </div>
+          <div className="canvas-library-toolbar">
+            <div className="canvas-library-search">
+              <Search size={16} aria-hidden="true" />
+              <input
+                aria-label="筛选画布"
+                placeholder="在已加载画布中筛选名称…"
+                value={filter}
+                onChange={(event) => setFilter(event.target.value)}
+              />
+              {filter && (
+                <button
+                  className="icon-btn"
+                  aria-label="清除画布筛选"
+                  onClick={() => setFilter('')}
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+            <span className="canvas-library-count" role="status">
+              {query.isPending
+                ? '正在读取画布…'
+                : `${filter.trim() ? '匹配' : '已加载'} ${visible.length} 个画布`}
+            </span>
+            <select
+              aria-label="画布排序"
+              value={sort}
+              onChange={(event) => setSort(event.target.value)}
             >
-              重试上次导入
-            </button>
-          )}
-          <input
-            hidden
-            ref={importFile}
-            type="file"
-            aria-label="导入项目 ZIP"
-            accept=".zip,application/zip"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              e.target.value = '';
-              if (!file) return;
-              importing.current = { file, key: crypto.randomUUID() };
-              void act(async () => {
-                const project = await projectApi.import(
-                  file,
-                  me.csrf_token,
-                  importing.current!.key,
-                );
-                importing.current = undefined;
-                navigate(`/canvas/${project.project.id}`);
-              });
-            }}
-          />
-        </div>
+              <option value="updated">最近更新</option>
+              <option value="name">名称</option>
+              <option value="version">修订号</option>
+            </select>
+            <div
+              className="canvas-library-view"
+              role="group"
+              aria-label="画布视图"
+            >
+              <button
+                aria-pressed={view === 'grid'}
+                onClick={() => setView('grid')}
+              >
+                <LayoutGrid size={15} />
+                网格
+              </button>
+              <button
+                aria-pressed={view === 'list'}
+                onClick={() => setView('list')}
+              >
+                <List size={15} />
+                列表
+              </button>
+            </div>
+          </div>
+        </>
       )}
       {error && <p role="alert">{error}</p>}
       {query.isError && (
@@ -128,18 +239,29 @@ export function ProjectGrid({
           </button>
         </p>
       )}
-      <div className="workspace-projects live-projects">
+      <div
+        className={`workspace-projects live-projects ${home ? '' : 'canvas-library-grid'}`}
+        data-view={view}
+      >
         <Link className="project-card create-card" to="/canvas/new">
           <Plus size={23} />
-          <strong>创建新项目</strong>
+          <strong>{home ? '创建新项目' : '新建空白画布'}</strong>
           <small>从一个想法开始，无限延伸</small>
         </Link>
-        {query.data?.items.slice(0, home ? 2 : 25).map((p) => (
+        {visible.map((p) => (
           <article key={p.id} className="project-card live-project-card">
-            <Link to={`/canvas/${p.id}`} className="live-project-link">
-              <div className="live-project-art">
-                <GalleryHorizontal size={32} strokeWidth={1} />
-              </div>
+            <Link
+              to={`/canvas/${p.id}`}
+              className="live-project-link"
+              aria-label={`打开 ${p.name}`}
+            >
+              {home ? (
+                <div className="live-project-art">
+                  <GalleryHorizontal size={32} strokeWidth={1} />
+                </div>
+              ) : (
+                <ProjectPreview project={p} userId={me.user.id} />
+              )}
               {home ? (
                 <div className="home-project-caption">
                   <div>
@@ -158,20 +280,24 @@ export function ProjectGrid({
                   <span className="home-project-version">v{p.revision}</span>
                 </div>
               ) : (
-                <>
-                  <strong>
-                    {p.name}
-                    <ArrowRight size={14} />
-                  </strong>
-                  <small>
-                    更新于 {new Date(p.updated_at).toLocaleString('zh-CN')} · v
-                    {p.revision}
-                  </small>
-                </>
+                <div className="canvas-library-meta">
+                  <strong title={p.name}>{p.name}</strong>
+                  <div>
+                    <time
+                      dateTime={p.updated_at}
+                      title={new Date(p.updated_at).toLocaleString('zh-CN')}
+                    >
+                      {updatedLabel(p.updated_at)}
+                    </time>
+                    <span className="canvas-library-version">
+                      v{p.revision}
+                    </span>
+                  </div>
+                </div>
               )}
             </Link>
             {!home && (
-              <div className="gen-actions">
+              <div className="gen-actions canvas-library-actions">
                 <button
                   className="icon-btn"
                   aria-label={`重命名 ${p.name}`}
@@ -182,6 +308,7 @@ export function ProjectGrid({
                   }}
                 >
                   <Pencil size={14} />
+                  <span>重命名</span>
                 </button>
                 <button
                   className="icon-btn"
@@ -199,6 +326,7 @@ export function ProjectGrid({
                   }
                 >
                   <Copy size={14} />
+                  <span>复制</span>
                 </button>
                 <button
                   className="icon-btn"
@@ -207,6 +335,7 @@ export function ProjectGrid({
                   onClick={() => setAction({ type: 'delete', project: p })}
                 >
                   <Trash2 size={14} />
+                  <span>删除</span>
                 </button>
               </div>
             )}
@@ -223,31 +352,37 @@ export function ProjectGrid({
               <span />
             </div>
           ) : (
-            <p role="status">正在加载项目…</p>
+            <div className="canvas-library-loading" role="status">
+              正在加载项目…
+            </div>
           ))}
-        {!query.isPending && query.data?.items.length === 0 && (
+        {!query.isPending && !query.isError && visible.length === 0 && (
           <div className="workspace-empty">
             <GalleryHorizontal size={30} strokeWidth={1.2} />
-            <h3>留一片空间，给下一个好想法</h3>
-            <p>创建画布，连接文字、参考图与生成结果。</p>
+            <h3>
+              {filter.trim() ? '没有匹配的画布' : '留一片空间，给下一个好想法'}
+            </h3>
+            <p>
+              {filter.trim()
+                ? '试试其他名称，或加载更多画布后继续筛选。'
+                : '创建画布，连接文字、参考图与生成结果。'}
+            </p>
+            {filter.trim() && (
+              <button className="text-action" onClick={() => setFilter('')}>
+                清除筛选
+              </button>
+            )}
           </div>
         )}
       </div>
-      {!home && (
-        <div className="gen-actions">
+      {!home && query.hasNextPage && (
+        <div className="canvas-library-more">
           <button
             className="btn"
-            disabled={!before || query.isFetching}
-            onClick={() => setBefore(undefined)}
+            disabled={query.isFetching}
+            onClick={() => void query.fetchNextPage()}
           >
-            返回首批
-          </button>
-          <button
-            className="btn"
-            disabled={!query.data?.next_cursor || query.isFetching}
-            onClick={() => setBefore(query.data?.next_cursor || undefined)}
-          >
-            下一批项目
+            {query.isFetchingNextPage ? '正在加载…' : '加载更多画布'}
           </button>
         </div>
       )}
@@ -322,20 +457,7 @@ export function ProjectGrid({
 }
 export default function ProjectsPage(props: CanvasProps) {
   return (
-    <main className="page-padding dashboard-page">
-      <div className="page-title-row">
-        <div>
-          <div className="eyebrow">INFINITE CANVAS</div>
-          <h1>我的创作画布</h1>
-          <p className="page-subtitle">
-            把想法、参考与生成结果，连接成你的下一件作品。
-          </p>
-        </div>
-        <Link className="btn btn-dark" to="/canvas/new">
-          <Plus size={16} />
-          新建画布
-        </Link>
-      </div>
+    <main className="canvas-library-page">
       <ProjectGrid {...props} />
     </main>
   );
