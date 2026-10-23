@@ -53,6 +53,12 @@ const personal = [
   { path: '/settings', label: '账号设置', icon: Settings, ready: true },
 ];
 const admin = [
+  {
+    path: '/admin/plans',
+    label: '套餐与订单',
+    icon: CircleDollarSign,
+    ready: true,
+  },
   { path: '/admin', label: '运营总览', icon: ChartColumn },
   { path: '/admin/users', label: '用户管理', icon: Users },
   {

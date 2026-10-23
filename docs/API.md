@@ -106,7 +106,7 @@ M4 不开放用户生成/任务/quote/SSE 接口，不修改钱包余额；这�
 
 任务视图不返回账号 ID、租约令牌、真实模型名、上游任务 ID 或地址。价格和参数快照不可修改，终态不可再更新；同请求键异参 422 IDEMPOTENCY_CONFLICT，余额不足 402，活跃任务超限 429 TOO_MANY_ACTIVE_JOBS，免费层越级 403 RESOLUTION_NOT_ALLOWED，黑名单 422 CONTENT_POLICY。
 
-任务由 API 内持久 worker 执行：60 秒租约/20 秒续期，过期回收带令牌栅栏，三次尝试预算；无账号容量每两秒重试，五分钟失败释放。生成媒体先暂存，发布/按张结算/余量释放/终态/事件同事务；视频 ID 已持久化后不重复提交。SSE 与真实生成页面 `/generate` 已接入，当前全部使用 FREE 层级，订阅层级由 M8 实现。
+任务由 API 内持久 worker 执行：60 秒租约/20 秒续期，过期回收带令牌栅栏，三次尝试预算；无账号容量每两秒重试，五分钟失败释放。生成媒体先暂存，发布/按张结算/余量释放/终态/事件同事务；视频 ID 已持久化后不重复提交。SSE 与真实生成页面 `/generate` 已接入，M8 起按当前有效订阅快照决定并发和分辨率，未订阅/已到期为 FREE。
 
 
 `GET /generation/limits` 返回 tier、max_resolution、max_active_jobs、video_enabled。`GET /events?after=SEQ` 返回 SSE `job.updated`，id 为数据库 seq，JSON 为 GenerationEvent；Last-Event-ID 优先于 after。只重放本人记录，输出链接重新签名；未来游标收敛到本人最新事件。每用户最多三个 SSE 连接（超出 429 SSE_CONNECTION_LIMIT），10 秒心跳，持续复核会话及 MFA；失效断流。客户端应在 SSE 不可用时轮询任务接口，重连携带最后成功处理的游标。
@@ -138,3 +138,27 @@ SSE `delta` 为 `{turn_id,text}`，`intent` 为六类枚举字符串，`action` 
 每人最多一条 RUNNING 回复，创建与 HOLD 同事务；完整结束后消息/动作/审计/SETTLE 同事务，失败或断流 RELEASE。默认每条 1 积分，可配置 0。终态和输入不可改写，原始消息/摘要只存本人数据库。回复每两秒复核登录/MFA、账号状态、取消和租约，240 秒总时限，过期租约后台恢复，绝不自动重发不明供应商请求。对话不执行 SSH、工具、文件或生成任务。
 
 代理需关闭该 POST SSE 响应缓冲，支持至少 240 秒长连接；10 秒 keepalive，前端通过 fetch 流读取。输出最大 64 KiB、上游整个 SSE 2 MiB；缺少 stop/DONE、工具调用和截断视为失败，不按完成收费。上下文压缩保存早期摘要并保留最近六条原文，窗口与输出使用保守估算，预算不足返回 CONTEXT_LIMIT，保留原始消息供核对。
+
+
+### M8 套餐、订单与已付款周期
+
+| 方法 | 路径（前缀 /api/v1） | 行为 |
+| --- | --- | --- |
+| GET | /plans | 登录用户读取已上架套餐 |
+| GET | /subscription | 当前权益、周期结束时间、排期数量；同步已付款周期 |
+| POST | /orders | plan_id + plan_revision，UUID Idempotency-Key；返回订单与人工付款说明 |
+| GET | /orders?before=UUID | 本人订单，创建时间倒序，每页 30 条 |
+| GET | /orders/{id} | 本人订单及付款说明，跨用户 404 |
+| POST | /orders/{id}/cancel | 只取消本人 PENDING，重复取消幂等 |
+| GET / POST | /admin/plans | 管理员读取全部套餐 / 创建 |
+| PATCH | /admin/plans/{id} | revision + details；下架用 active=false，不删除历史 |
+| GET | /admin/orders?before=UUID | 管理员查看订单，时间倒序分页 |
+| POST | /admin/orders/{id}/mark-paid | 原 amount_cents、currency、trade_no、reason；UUID Idempotency-Key |
+| GET | /admin/orders/{id}/refund-quote | 未用积分对应可退金额及用户预占数 |
+| POST | /admin/orders/{id}/refund | expected_credits、confirm_external_refund=true、reason；UUID Idempotency-Key |
+
+所有业务接口需真实会话；写请求需 CSRF/可信 Origin，管理员接口还需有效 MFA。金额全为整数分。ManualProvider 不提供匿名回调；服务端确认支付的金额/币种须与冻结快照一致，人工凭证全局唯一。订单 PENDING→PAID→FULFILLED 为同事务，CANCELLED 和 REFUNDED 不可回退；数据库保护订单价格、归属、快照与支付凭证不可改写。
+
+409 BILLING_CONFLICT 表示套餐修订、状态或退款份额已变化，需要重新读取确认；409 DUPLICATE_TRADE 为凭证重复；422 PAYMENT_MISMATCH 为金额/币种不符；409 ORDER_CREDITS_HELD 为存在任务预占。相同幂等键必须保留相同正文；重复收款确认只返回已有结果，不再次发积分。
+
+订阅一次购买一个已付款周期，随后购买的周期排队；每日后台扫描及钱包/订阅/生成/素材请求同步推进。完全错过的已结束周期中，不结转的过期积分不补发，可结转的已付款积分补发一次，不自动扣费。生成 limits/quote/create 使用实时权益；新素材到期时间取当时 retention_days。退款先由管理员线下完成再登记，按 FIFO 记录的本订单未消费积分比例计算并回收，预占存在时阻止；退款登记、余额、周期状态、审计同事务。退款不会自动转账，兑换码继续使用 M2 接口。

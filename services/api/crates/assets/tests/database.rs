@@ -189,3 +189,72 @@ async fn audit_failure_keeps_asset_hidden_and_retention_recovers_interrupted_upl
         0
     );
 }
+
+#[sqlx::test(migrations = "../../migrations")]
+#[ignore = "Requires isolated PostgreSQL"]
+async fn new_media_uses_paid_retention_without_rewriting_existing_expirations(db: PgPool) {
+    let owner = user(&db).await;
+    let admin = user(&db).await;
+    sqlx::query("INSERT INTO wallets(user_id) VALUES($1),($2)")
+        .bind(owner)
+        .bind(admin)
+        .execute(&db)
+        .await
+        .unwrap();
+    let s = AssetService::new(
+        db.clone(),
+        Storage::memory(),
+        MediaSigner::from_base64(&STANDARD.encode([3u8; 32])).unwrap(),
+    );
+    let old = s
+        .upload_image(owner, "free.png", "image/png", png())
+        .await
+        .unwrap();
+    let billing = atelier_wallet::BillingService::new(db.clone());
+    let p:atelier_wallet::PlanInput=serde_json::from_value(serde_json::json!({"name":"Longer retention","kind":"MONTHLY","description":"Fixture","price_cents":100,"currency":"CNY","credits":10,"period_days":30,"rollover":true,"concurrency_limit":3,"max_resolution":"4K","retention_days":180,"active":true})).unwrap();
+    let p = billing.create_plan(admin, &p).await.unwrap();
+    let o = billing
+        .create_order(
+            owner,
+            Uuid::new_v4(),
+            &atelier_wallet::OrderInput {
+                plan_id: p.id,
+                plan_revision: 1,
+            },
+        )
+        .await
+        .unwrap();
+    billing
+        .mark_paid(
+            admin,
+            o.id,
+            Uuid::new_v4(),
+            &atelier_wallet::PaidInput {
+                amount_cents: 100,
+                currency: "CNY".into(),
+                trade_no: "asset-retention".into(),
+                reason: "Paid fixture".into(),
+            },
+        )
+        .await
+        .unwrap();
+    let new = s
+        .upload_image(owner, "subscriber.png", "image/png", png())
+        .await
+        .unwrap();
+    assert!((new.expires_at - chrono::Utc::now()).num_days() >= 179);
+    assert_eq!(
+        s.get(owner, old.id).await.unwrap().expires_at,
+        old.expires_at
+    );
+    sqlx::query("UPDATE subscriptions SET starts_at=now()-interval '31 days',current_period_end=now()-interval '1 day' WHERE order_id=$1").bind(o.id).execute(&db).await.unwrap();
+    let expired = s
+        .upload_image(owner, "free-again.png", "image/png", png())
+        .await
+        .unwrap();
+    assert!((expired.expires_at - chrono::Utc::now()).num_days() < 180);
+    assert_eq!(
+        s.get(owner, new.id).await.unwrap().expires_at,
+        new.expires_at
+    );
+}

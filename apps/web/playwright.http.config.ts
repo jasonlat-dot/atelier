@@ -4,6 +4,7 @@ export default defineConfig({
   testMatch: [
     'session-settings.spec.ts',
     'wallet.spec.ts',
+    'billing.spec.ts',
     'workspace.spec.ts',
     'assets.spec.ts',
     'upstream.spec.ts',

@@ -180,7 +180,7 @@ impl BillingService {
         owner: Option<Uuid>,
         before: Option<Uuid>,
     ) -> Result<OrderPage, BillingError> {
-        let mut items:Vec<OrderView>=sqlx::query_as("SELECT * FROM orders WHERE ($1::uuid IS NULL OR user_id=$1) AND ($2::uuid IS NULL OR id<$2) ORDER BY id DESC LIMIT 31")
+        let mut items:Vec<OrderView>=sqlx::query_as("SELECT * FROM orders WHERE ($1::uuid IS NULL OR user_id=$1) AND ($2::uuid IS NULL OR (created_at,id)<(SELECT created_at,id FROM orders WHERE id=$2 AND ($1::uuid IS NULL OR user_id=$1))) ORDER BY created_at DESC,id DESC LIMIT 31")
             .bind(owner).bind(before).fetch_all(&self.pool).await?;
         let more = items.len() > 30;
         items.truncate(30);
@@ -433,7 +433,7 @@ impl BillingService {
         })
     }
     pub async fn maintain(&self) -> Result<(), BillingError> {
-        let owners:Vec<Uuid>=sqlx::query_scalar("SELECT DISTINCT s.user_id FROM subscriptions s JOIN users u ON u.id=s.user_id WHERE u.status='ACTIVE' AND ((s.status='SCHEDULED' AND s.starts_at<=clock_timestamp()) OR (s.status='ACTIVE' AND s.current_period_end<=clock_timestamp()) OR (s.status='EXPIRED' AND EXISTS(SELECT 1 FROM wallet_credit_lots b WHERE b.ledger_id=s.grant_ledger_id AND b.remaining>0) AND NOT (SELECT (plan_snapshot->>'rollover')::boolean FROM orders WHERE id=s.order_id))) ORDER BY s.user_id").fetch_all(&self.pool).await?;
+        let owners:Vec<Uuid>=sqlx::query_scalar("SELECT DISTINCT s.user_id FROM subscriptions s JOIN users u ON u.id=s.user_id JOIN orders o ON o.id=s.order_id WHERE u.status='ACTIVE' AND o.status='FULFILLED' AND ((s.status='SCHEDULED' AND s.starts_at<=clock_timestamp()) OR (s.status='ACTIVE' AND s.current_period_end<=clock_timestamp()) OR (s.status='EXPIRED' AND (((o.plan_snapshot->>'rollover')::boolean AND s.grant_ledger_id IS NULL) OR (NOT (o.plan_snapshot->>'rollover')::boolean AND EXISTS(SELECT 1 FROM wallet_credit_lots b WHERE b.ledger_id=s.grant_ledger_id AND b.remaining>0))))) ORDER BY s.user_id").fetch_all(&self.pool).await?;
         for owner in owners {
             let mut tx = self.pool.begin().await?;
             lock_owner(&mut tx, owner).await?;
@@ -606,6 +606,25 @@ async fn settle_periods(db: &mut PgConnection, owner: Uuid) -> Result<(), Billin
         let order_id: Uuid = row.get("order_id");
         let p: PlanInput = decode(row.get("plan_snapshot"))?;
         if row.get::<bool, _>("ended") {
+            // A missed maintenance window must not destroy paid, non-expiring credits.
+            if p.rollover && row.get::<Option<i64>, _>("grant_ledger_id").is_none() {
+                let order = get_order(db, order_id).await?;
+                let ledger = grant_order(db, &order, p.credits).await?;
+                sqlx::query("UPDATE subscriptions SET grant_ledger_id=$2 WHERE id=$1")
+                    .bind(id)
+                    .bind(ledger)
+                    .execute(&mut *db)
+                    .await?;
+                audit(
+                    db,
+                    Some(row.get("confirmed_by")),
+                    "SUBSCRIPTION_PERIOD_GRANTED",
+                    order_id,
+                    Value::Null,
+                    json!({"ledger_id":ledger,"catch_up":true}),
+                )
+                .await?;
+            }
             if row.get::<String, _>("status") != "EXPIRED" {
                 audit(
                     db,

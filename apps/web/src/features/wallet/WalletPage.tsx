@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useWalletSummaryUpdate } from '../workspace/WorkspaceShell';
 import { Link } from 'react-router-dom';
+import BillingPanel from '../billing/BillingPanel';
 import { type Me, SessionError } from '../auth/sessionApi';
 import { walletApi, type Summary, type Entry } from './walletApi';
 
@@ -26,6 +27,20 @@ export default function WalletPage({
   onReload: () => void;
   home?: boolean;
 }) {
+  const [tab, setTab] = useState<'ledger' | 'plans' | 'orders'>('ledger');
+  const tabs = (
+    <nav className="billing-tabs" aria-label="积分与订阅导航">
+      <button aria-pressed={tab === 'ledger'} onClick={() => setTab('ledger')}>
+        积分账本
+      </button>
+      <button aria-pressed={tab === 'plans'} onClick={() => setTab('plans')}>
+        套餐与订阅
+      </button>
+      <button aria-pressed={tab === 'orders'} onClick={() => setTab('orders')}>
+        我的订单
+      </button>
+    </nav>
+  );
   const updateSummary = useWalletSummaryUpdate();
   const Container = home ? 'section' : 'main';
   const [summary, setSummary] = useState<Summary>();
@@ -145,6 +160,25 @@ export default function WalletPage({
       setBusy(false);
     }
   };
+  if (!home && tab !== 'ledger')
+    return (
+      <main className="account-shell wallet-page">
+        <header>
+          <div className="eyebrow">ATELIER / MEMBERSHIP</div>
+          <h1>积分与订阅</h1>
+          <p>为每一次创作，准备恰好的额度。</p>
+        </header>
+        {tabs}
+        <BillingPanel
+          me={me}
+          onExpired={onExpired}
+          onReload={onReload}
+          mode={tab}
+          onOrders={() => setTab('orders')}
+          onWalletChanged={() => void load()}
+        />
+      </main>
+    );
   return (
     <Container
       className={home ? 'dashboard-wallet' : 'account-shell wallet-page'}
@@ -156,6 +190,7 @@ export default function WalletPage({
           <p>每一笔获得与使用，都有记录。</p>
         </header>
       )}
+      {!home && tabs}
       {loading && !summary && <p role="status">正在读取积分…</p>}
       {summary && (
         <>

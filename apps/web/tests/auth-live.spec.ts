@@ -158,6 +158,7 @@ test('real database and Redis login reaches workspace, survives reload and revok
 test('bootstrap administrator binds real encrypted TOTP and cannot replay the accepted code', async ({
   page,
 }) => {
+  test.setTimeout(120000);
   await google(page, 'admin');
   await expect(
     page.getByRole('heading', { name: '管理员身份验证' }),
@@ -345,10 +346,13 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   await page.getByRole('button', { name: '视频', exact: true }).click();
   await page.getByLabel('画面描述').fill('Live gentle ocean waves');
   await page.getByRole('button', { name: '生成视频', exact: true }).click();
+  // The previous image may still say "complete" while the new POST is in flight.
+  await expect(page.locator('.gen-settlement')).toContainText('已结算 4', {
+    timeout: 30000,
+  });
   await expect(page.locator('.gen-status')).toHaveText('生成完成', {
     timeout: 30000,
   });
-  await expect(page.locator('.gen-settlement')).toContainText('已结算 4');
   await page.getByRole('button', { name: '预览结果 1' }).click();
   const generatedVideo = page.getByRole('dialog').locator('video');
   await expect
@@ -705,4 +709,102 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   ).json();
   expect(interruptedWallet.balance).toBe(chatBalance - 1);
   expect(interruptedWallet.held).toBe(0);
+  // M8 uses this real MFA session and isolated database for the manual payment flow.
+  const beforePurchase = interruptedWallet.balance;
+  await page.getByRole('link', { name: '套餐与订单', exact: true }).click();
+  await page.getByRole('button', { name: '新增套餐', exact: true }).click();
+  await page.getByLabel('套餐名称', { exact: true }).fill('Live Studio');
+  await page.getByLabel('类型', { exact: true }).selectOption('MONTHLY');
+  await page.getByLabel('价格（分）', { exact: true }).fill('1900');
+  await page.getByLabel('发放积分', { exact: true }).fill('100');
+  await page.getByLabel('上架，允许用户创建新订单', { exact: true }).check();
+  await page.getByRole('button', { name: '保存套餐', exact: true }).click();
+  await expect(page.getByText('套餐已保存', { exact: true })).toBeVisible();
+  await page.getByRole('link', { name: '积分与订阅', exact: true }).click();
+  await page.getByRole('button', { name: '套餐与订阅', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Live Studio', exact: true }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: test.info().outputPath('m8-plans.png'),
+    fullPage: true,
+  });
+  await page.getByRole('button', { name: '选择套餐', exact: true }).click();
+  const checkoutResponse = page.waitForResponse(
+    (r) =>
+      r.url().endsWith('/api/v1/orders') && r.request().method() === 'POST',
+  );
+  await page.getByRole('button', { name: '确认创建订单', exact: true }).click();
+  const checkout = await (await checkoutResponse).json();
+  const billingOrder = checkout.order.id;
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByRole('button', { name: '我的订单', exact: true }).click();
+  await expect(page.getByText('待付款', { exact: true })).toBeVisible();
+  await page.getByRole('link', { name: '套餐与订单', exact: true }).click();
+  await page.getByRole('button', { name: '订单管理', exact: true }).click();
+  await page.getByRole('button', { name: '确认到账', exact: true }).click();
+  await page
+    .getByLabel('收款凭证号', { exact: true })
+    .fill('live-manual-receipt');
+  await page
+    .getByLabel('处理说明', { exact: true })
+    .fill('隔离验收，模拟已核对线下到账');
+  await page.getByRole('checkbox').check();
+  await page
+    .getByRole('button', { name: '确认到账并发放权益', exact: true })
+    .click();
+  await expect(page.getByText('已发放', { exact: true })).toBeVisible();
+  const paidWallet = await (await page.request.get('/api/v1/wallet')).json();
+  expect(paidWallet.balance).toBe(beforePurchase + 100);
+  const paidLimits = await (
+    await page.request.get('/api/v1/generation/limits')
+  ).json();
+  expect(paidLimits.max_resolution).toBe('4K');
+  expect(paidLimits.max_active_jobs).toBe(3);
+  expect(
+    (
+      await page.request.post(
+        `/api/v1/admin/orders/${billingOrder}/mark-paid`,
+        {
+          headers: { ...headers, 'Idempotency-Key': crypto.randomUUID() },
+          data: {
+            amount_cents: 1900,
+            currency: 'CNY',
+            trade_no: 'live-manual-receipt',
+            reason: '重复确认验收',
+          },
+        },
+      )
+    ).ok(),
+  ).toBe(true);
+  expect(
+    (await (await page.request.get('/api/v1/wallet')).json()).balance,
+  ).toBe(paidWallet.balance);
+  await page.getByRole('link', { name: '积分与订阅', exact: true }).click();
+  await page.getByRole('button', { name: '套餐与订阅', exact: true }).click();
+  await expect(
+    page.getByRole('region', { name: '当前订阅权益' }),
+  ).toContainText('Live Studio');
+  await page.screenshot({
+    path: test.info().outputPath('m8-active-subscription.png'),
+    fullPage: true,
+  });
+  await page.getByRole('link', { name: '套餐与订单', exact: true }).click();
+  await page.getByRole('button', { name: '订单管理', exact: true }).click();
+  await page.getByRole('button', { name: '办理退款', exact: true }).click();
+  await expect(page.getByRole('dialog')).toContainText('19.00');
+  await page
+    .getByLabel('处理说明', { exact: true })
+    .fill('隔离验收，模拟已完成线下全额退款');
+  await page.getByRole('checkbox').check();
+  await page
+    .getByRole('button', { name: '登记退款并回收权益', exact: true })
+    .click();
+  await expect(page.getByText('已退款', { exact: true })).toBeVisible();
+  expect(
+    (await (await page.request.get('/api/v1/wallet')).json()).balance,
+  ).toBe(beforePurchase);
+  expect(
+    (await (await page.request.get('/api/v1/subscription')).json()).tier,
+  ).toBe('FREE');
 });

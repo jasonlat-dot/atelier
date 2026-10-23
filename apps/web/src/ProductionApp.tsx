@@ -15,6 +15,7 @@ import SettingsPage from './features/settings/SettingsPage';
 import LoginPage from './features/auth/LoginPage';
 import MfaPage from './features/auth/MfaPage';
 import WalletPage from './features/wallet/WalletPage';
+import AdminBillingPage from './features/billing/AdminBillingPage';
 import AdminCreditsPage from './features/wallet/AdminCreditsPage';
 import AdminAccountsPage from './features/upstream/AdminAccountsPage';
 import AdminModelsPage from './features/upstream/AdminModelsPage';
@@ -199,6 +200,12 @@ export default function ProductionApp() {
             path="/wallet"
             element={
               <WalletPage me={me} onExpired={expired} onReload={reload} />
+            }
+          />
+          <Route
+            path="/admin/plans"
+            element={
+              <AdminBillingPage me={me} onExpired={expired} onReload={reload} />
             }
           />
           <Route
