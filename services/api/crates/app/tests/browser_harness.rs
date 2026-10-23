@@ -129,6 +129,22 @@ async fn browser_harness(db: sqlx::PgPool) {
                     axum::Json(serde_json::json!({"data":[{"id":"fixture-private-model"}]}))
                 }),
             )
+            .route("/v1/chat/completions",axum::routing::post(|headers:axum::http::HeaderMap,axum::Json(body):axum::Json<serde_json::Value>|async move {
+                use axum::response::IntoResponse;
+                assert_eq!(headers[axum::http::header::AUTHORIZATION],"Bearer synthetic-browser-secret");assert_eq!(body["model"],"fixture-private-model");assert_eq!(body["stream"],true);
+                let messages=body["messages"].as_array().unwrap();let text=messages.last().unwrap()["content"].as_str().unwrap();
+                if text.contains("fixture fail"){return (axum::http::StatusCode::BAD_GATEWAY,axum::Json(serde_json::json!({"error":{"message":"private fixture failure"}}))).into_response();}
+                let reply=if messages[0]["content"].as_str().unwrap().starts_with("Summarize creative") {serde_json::json!({"summary":"Continue the creative ocean project, retaining all earlier decisions.","facts":[]}).to_string()}else{"## 海岸创作建议\n\n先确定主体、光线与构图，再到画布确认生成。\n\n```text\nocean, soft light, quiet coast\n```".into()};
+                let first=serde_json::json!({"choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}).to_string();
+                let content=serde_json::json!({"choices":[{"index":0,"delta":{"content":reply},"finish_reason":null}]}).to_string();
+                let finish=serde_json::json!({"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}).to_string();
+                let slow=text.contains("fixture slow");
+                let mut chunks=vec![format!("data: {first}\n\n"),format!("data: {content}\n\n"),format!("data: {finish}\n\ndata: [DONE]\n\n")];
+                if text.contains("fixture truncated") {chunks.pop();}
+                let stream=futures_util::stream::unfold((chunks,0),move|(chunks,index)|async move{if index>=chunks.len(){return None;}
+                    if slow && index==2 {tokio::time::sleep(std::time::Duration::from_secs(10)).await;}else{tokio::time::sleep(std::time::Duration::from_millis(30)).await;}Some((Ok::<_,std::convert::Infallible>(chunks[index].clone()),(chunks,index+1)))});
+                ([(axum::http::header::CONTENT_TYPE,"text/event-stream")],axum::body::Body::from_stream(stream)).into_response()
+            }))
             .route("/v1/images/generations", axum::routing::post(|headers: axum::http::HeaderMap, axum::Json(body): axum::Json<serde_json::Value>| async move {
                 assert_eq!(headers[axum::http::header::AUTHORIZATION], "Bearer synthetic-browser-secret");
                 assert_eq!(body["model"], "fixture-private-model");

@@ -941,8 +941,8 @@ function PriceEditor({
     >
       <p className="up-note">
         基础价格 ×
-        分辨率倍率。图片按张，视频按秒，对话按条；图片编辑附加费在倍率计算后按张增加。未启用模型可留空，0
-        仅适用于对话。这里维护配置，不扣取用户积分。
+        分辨率倍率。图片按张，视频按秒；图片编辑附加费在倍率计算后按张增加。未启用模型可留空，0
+        仅适用于对话模型。对话实际按全站统一的每条积分收费，发送前会显示当前价格。这里维护模型启用所需的定价配置，不扣取用户积分。
       </p>
       <section className="surface-block up-pricing-section">
         <div className="surface-title">

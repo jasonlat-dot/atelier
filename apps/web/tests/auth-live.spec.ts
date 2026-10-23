@@ -541,4 +541,162 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   expect(
     (await (await page.request.get('/api/v1/wallet')).json()).balance,
   ).toBe(beforeBalance);
+  // M7: actual SSE transport, durable messages, cancel/failure release, and draft-only actions.
+  expect(
+    (await page.request.post('/api/v1/wallet/checkin', { headers })).ok(),
+  ).toBe(true);
+  let chatResponse = await page.request.post('/api/v1/admin/models', {
+    headers,
+    data: {
+      id: 'live-chat',
+      display_name: 'Live Chat',
+      kind: 'chat',
+      upstream_model: 'fixture-private-model',
+      enabled: false,
+      sort_order: 0,
+      capabilities: {
+        qualities: ['message'],
+        ratios: [],
+        resolutions: ['text'],
+        max_n: 1,
+        max_refs: 0,
+      },
+    },
+  });
+  expect(chatResponse.status()).toBe(201);
+  let chatModel = await chatResponse.json();
+  chatResponse = await page.request.put(
+    '/api/v1/admin/models/live-chat/accounts',
+    {
+      headers,
+      data: {
+        revision: chatModel.revision,
+        account_ids: [],
+        group_tags: ['default'],
+      },
+    },
+  );
+  expect(chatResponse.ok()).toBe(true);
+  chatModel = await chatResponse.json();
+  const chatPricing = await (
+    await page.request.get('/api/v1/admin/pricing')
+  ).json();
+  chatPricing.rules.push({
+    model_id: 'live-chat',
+    quality: 'message',
+    base_credits: 1,
+    edit_surcharge: 0,
+  });
+  expect(
+    (
+      await page.request.put('/api/v1/admin/pricing', {
+        headers,
+        data: chatPricing,
+      })
+    ).ok(),
+  ).toBe(true);
+  expect(
+    (
+      await page.request.patch('/api/v1/admin/models', {
+        headers,
+        data: {
+          id: 'live-chat',
+          display_name: 'Live Chat',
+          kind: 'chat',
+          enabled: true,
+          sort_order: 0,
+          revision: chatModel.revision,
+          capabilities: chatModel.capabilities,
+        },
+      })
+    ).ok(),
+  ).toBe(true);
+  await page.getByRole('link', { name: 'AI 智能对话', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: '从一个想法，聊到下一件作品' }),
+  ).toBeVisible();
+  const chatBalance = (await (await page.request.get('/api/v1/wallet')).json())
+    .balance;
+  await page.getByLabel('对话内容').fill('生成一张海岸海报');
+  await page.getByRole('button', { name: '发送', exact: true }).click();
+  await expect(
+    page.getByText('回复已保存，本次 1 积分。', { exact: true }),
+  ).toBeVisible({ timeout: 20000 });
+  await expect(
+    page.getByRole('heading', { name: '海岸创作建议' }),
+  ).toBeVisible();
+  const conversationId = new URL(page.url()).pathname.split('/').pop()!;
+  expect(
+    (await (await page.request.get('/api/v1/wallet')).json()).balance,
+  ).toBe(chatBalance - 1);
+  await page.reload();
+  await expect(
+    page.getByRole('heading', { name: '海岸创作建议' }),
+  ).toBeVisible();
+  const generationCount = (
+    await (await page.request.get('/api/v1/generation/jobs?limit=100')).json()
+  ).items.length;
+  await page.getByRole('link', { name: '在画布中生成', exact: true }).click();
+  await expect(page.getByLabel('创意描述')).toHaveValue('生成一张海岸海报');
+  expect(
+    (await (await page.request.get('/api/v1/generation/jobs?limit=100')).json())
+      .items.length,
+  ).toBe(generationCount);
+  expect(
+    (await (await page.request.get('/api/v1/wallet')).json()).balance,
+  ).toBe(chatBalance - 1);
+  await page.getByRole('link', { name: 'AI 智能对话', exact: true }).click();
+  await page
+    .getByRole('link', { name: '生成一张海岸海报', exact: true })
+    .click();
+  await page.getByLabel('对话内容').fill('fixture slow 继续讨论海岸视觉');
+  await page.getByRole('button', { name: '发送', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '海岸创作建议' })).toHaveCount(
+    2,
+  );
+  await page.getByRole('button', { name: '停止回复', exact: true }).click();
+  await expect
+    .poll(
+      async () => {
+        const view = await (
+          await page.request.get(`/api/v1/chat/conversations/${conversationId}`)
+        ).json();
+        return view.turns.at(-1).status;
+      },
+      { timeout: 10000 },
+    )
+    .toBe('CANCELLED');
+  expect(
+    (await (await page.request.get('/api/v1/wallet')).json()).balance,
+  ).toBe(chatBalance - 1);
+  await expect(page.getByLabel('对话内容')).toBeEnabled();
+  await page.getByLabel('对话内容').fill('fixture fail');
+  await page.getByRole('button', { name: '发送', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText(
+    '回复未完成，未扣积分，请稍后重试。',
+    { timeout: 15000 },
+  );
+  const chatWallet = await (await page.request.get('/api/v1/wallet')).json();
+  expect(chatWallet.balance).toBe(chatBalance - 1);
+  expect(chatWallet.held).toBe(0);
+  await page.getByLabel('对话内容').fill('fixture truncated');
+  await page.getByRole('button', { name: '发送', exact: true }).click();
+  await expect
+    .poll(
+      async () => {
+        const view = await (
+          await page.request.get(`/api/v1/chat/conversations/${conversationId}`)
+        ).json();
+        return view.turns.filter(
+          (t: { status: string }) => t.status === 'FAILED',
+        ).length;
+      },
+      { timeout: 15000 },
+    )
+    .toBe(2);
+  const interruptedWallet = await (
+    await page.request.get('/api/v1/wallet')
+  ).json();
+  expect(interruptedWallet.balance).toBe(chatBalance - 1);
+  expect(interruptedWallet.held).toBe(0);
 });

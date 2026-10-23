@@ -99,7 +99,7 @@ M4 不开放用户生成/任务/quote/SSE 接口，不修改钱包余额；这�
 | 方法与路径 | 行为 |
 | --- | --- |
 | POST /generation/quote | QuoteInput：model_id、quality、ratio、resolution、n、ref_count、可选 seconds；返回 kind、cost/cost_per_output、实际 size 和版本。仅展示，无授权效力 |
-| POST /generation/jobs | JobInput：模型/提示词/参数、本人 READY 图片 references；UUID Idempotency-Key 必填；服务端重算并原子 HOLD/建任务/事件，202 JobReceipt。当前拒绝非空 project_id/node_id（项目尚未实现） |
+| POST /generation/jobs | JobInput：模型/提示词/参数、本人 READY 图片 references；UUID Idempotency-Key 必填；服务端重算并原子 HOLD/建任务/事件，202 JobReceipt。支持成对 project_id/node_id，冻结前校验项目与节点归属 |
 | GET /generation/jobs?before=UUID&status=…&limit=25 | 本人的任务游标列表，limit 1–100，返回 JobPage |
 | GET /generation/jobs/{id} | 本人任务详情和新签名输出链接；跨用户/不存在 404 |
 | POST /generation/jobs/{id}/cancel | 排队/路由中直接原子取消与全额释放；运行/存储中写取消标记，由 worker 停止并释放；终态重复调用只返回当前结果，不重复扣款/释放 |
@@ -112,10 +112,29 @@ M4 不开放用户生成/任务/quote/SSE 接口，不修改钱包余额；这�
 `GET /generation/limits` 返回 tier、max_resolution、max_active_jobs、video_enabled。`GET /events?after=SEQ` 返回 SSE `job.updated`，id 为数据库 seq，JSON 为 GenerationEvent；Last-Event-ID 优先于 after。只重放本人记录，输出链接重新签名；未来游标收敛到本人最新事件。每用户最多三个 SSE 连接（超出 429 SSE_CONNECTION_LIMIT），10 秒心跳，持续复核会话及 MFA；失效断流。客户端应在 SSE 不可用时轮询任务接口，重连携带最后成功处理的游标。
 
 
-### M6 项目与画布（接口基础已接通，画布 UI 进行中）
+### M6 项目与画布（已接通）
 
 `GET/POST /api/v1/projects` 列表/创建（创建要求 UUID `Idempotency-Key`）；`GET/PATCH/DELETE /api/v1/projects/{id}` 读取/重命名/软删除；`PUT /api/v1/projects/{id}/graph` 保存图。所有写请求复用会话、Origin、CSRF；重命名/删除/保存要求 `If-Match: "<revision>"`，缺少返回 428，旧版本 409 `REVISION_CONFLICT`。跨账号统一 404。
 
 `POST /projects/{id}/duplicate` 同样要求创建幂等键；`GET /projects/{id}/snapshots` 最近 50 版；`POST /projects/{id}/snapshots/{snapshot}/restore` 带当前 `If-Match`，恢复为新版本。项目读取中的 `assets` 为最新可用素材视图，失效素材不返回 URL；图中只保留素材 ID。`GET /assets/{id}/projects` 返回当前用户引用此素材的项目。
 
 生成输入现支持成对 `project_id/node_id`；服务端核对本人有效项目中的 generate 节点后才冻结积分。`GET /generation/jobs?project_id=<uuid>` 查询该项目的本人任务，`JobView` 返回关联字段；独立生成兼容空关联。
+
+
+### M7 本人会话与 SSE
+
+均以 `/api/v1` 为前缀，要求登录；管理员需要最近 MFA，写操作检查同源/CSRF，Redis 每用户每分钟最多 30 次。没有管理员绕过本人归属的接口。
+
+| 方法与路径 | 行为 |
+| --- | --- |
+| GET /chat/config | 公开 chat 模型 ID/名称、统一每条积分、窗口/输出预算；不返回账号、原始模型名或密钥 |
+| GET/POST /chat/conversations | 本人列表（25 条，before 游标）/创建；创建 UUID Idempotency-Key 必填，最多 1000 个未删除会话 |
+| GET/PATCH/DELETE /chat/conversations/{id} | 本人会话和最近 50 轮/改名/软删除；before 为轮 UUID，删除停止活动回复，跨用户/已删除 404 |
+| POST /chat/conversations/{id}/messages | SendMessage: model_id、content（1–4000 字符）；UUID Idempotency-Key 必填，返回 SSE |
+| POST /chat/turns/{id}/cancel | 标记本人活动回复取消，已结束重复调用不改写结果 |
+
+SSE `delta` 为 `{turn_id,text}`，`intent` 为六类枚举字符串，`action` 为 `{type:"open_canvas",draft:{prompt,quality,ratio,resolution,n}}`，`done` 为持久 ChatTurn，`error` 为 `{turn_id,code}`。没有 SSE id 重连重放；网络不明需保留原键和正文重新 POST，成功历史重放不再请求上游或扣款。相同键异参 409，进行中 CHAT_BUSY，已失败键不能重用。可读取会话核对持久状态。
+
+每人最多一条 RUNNING 回复，创建与 HOLD 同事务；完整结束后消息/动作/审计/SETTLE 同事务，失败或断流 RELEASE。默认每条 1 积分，可配置 0。终态和输入不可改写，原始消息/摘要只存本人数据库。回复每两秒复核登录/MFA、账号状态、取消和租约，240 秒总时限，过期租约后台恢复，绝不自动重发不明供应商请求。对话不执行 SSH、工具、文件或生成任务。
+
+代理需关闭该 POST SSE 响应缓冲，支持至少 240 秒长连接；10 秒 keepalive，前端通过 fetch 流读取。输出最大 64 KiB、上游整个 SSE 2 MiB；缺少 stop/DONE、工具调用和截断视为失败，不按完成收费。上下文压缩保存早期摘要并保留最近六条原文，窗口与输出使用保守估算，预算不足返回 CONTEXT_LIMIT，保留原始消息供核对。

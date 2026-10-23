@@ -249,6 +249,10 @@ impl ChatService {
             .map_err(|_| ChatError::Store)?;
         let config = self.config().await?;
         let mut tx = self.owner_tx(owner).await?;
+        let exists:Option<Uuid>=sqlx::query_scalar("SELECT id FROM conversations WHERE owner_id=$1 AND id=$2 AND deleted_at IS NULL FOR UPDATE").bind(owner).bind(conversation).fetch_optional(&mut *tx).await?;
+        if exists.is_none() {
+            return Err(ChatError::NotFound);
+        }
         let old: Option<(Uuid, Vec<u8>, String)> = sqlx::query_as(
             "SELECT id,request_hash,status FROM chat_turns WHERE owner_id=$1 AND request_key=$2",
         )
@@ -269,10 +273,6 @@ impl ChatService {
             }
             tx.commit().await?;
             return Ok(Start::Replay(Box::new(self.turn(owner, id).await?)));
-        }
-        let exists:Option<Uuid>=sqlx::query_scalar("SELECT id FROM conversations WHERE owner_id=$1 AND id=$2 AND deleted_at IS NULL FOR UPDATE").bind(owner).bind(conversation).fetch_optional(&mut *tx).await?;
-        if exists.is_none() {
-            return Err(ChatError::NotFound);
         }
         if intent == Intent::Unsafe
             || atelier_generation::content_is_blocked(&mut tx, owner, &input.content)
@@ -332,13 +332,13 @@ impl ChatService {
     }
     pub async fn cancel(&self, owner: Uuid, id: Uuid) -> Result<(), ChatError> {
         let changed =
-            sqlx::query("UPDATE chat_turns SET cancel_requested=true WHERE owner_id=$1 AND id=$2")
+            sqlx::query("UPDATE chat_turns SET cancel_requested=true WHERE owner_id=$1 AND id=$2 AND status='RUNNING'")
                 .bind(owner)
                 .bind(id)
                 .execute(&self.db)
                 .await?;
         if changed.rows_affected() != 1 {
-            return Err(ChatError::NotFound);
+            self.turn(owner, id).await?;
         }
         Ok(())
     }

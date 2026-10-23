@@ -62,9 +62,6 @@ export default function HomePage(props: {
                 <div className="quick-icon">
                   <Icon size={19} />
                 </div>
-                {name === 'AI 对话' && (
-                  <span className="feature-pending">即将开放</span>
-                )}
               </div>
               <strong>
                 {name}
@@ -73,12 +70,19 @@ export default function HomePage(props: {
               <p>{description}</p>
             </>
           );
-          return name !== 'AI 对话' ? (
-            <Link to={name === '素材库' ? '/assets' : '/canvas'} key={name}>
+          return (
+            <Link
+              to={
+                name === '素材库'
+                  ? '/assets'
+                  : name === 'AI 对话'
+                    ? '/chat'
+                    : '/canvas'
+              }
+              key={name}
+            >
               {content}
             </Link>
-          ) : (
-            <article key={name}>{content}</article>
           );
         })}
       </div>

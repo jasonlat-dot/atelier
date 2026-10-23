@@ -363,12 +363,12 @@ impl ChatService {
         } else {
             None
         };
-        sqlx::query("UPDATE chat_turns SET status=$3,action=$4,estimated_tokens=$5,error_code=$6,finished_at=clock_timestamp() WHERE id=$1 AND token=$2").bind(id).bind(token).bind(actual).bind(action).bind(estimated.max(0)).bind(if success{None}else{Some(if code.is_empty(){"CANCELLED"}else{code})}).execute(&mut *tx).await?;
         sqlx::query("UPDATE chat_messages SET content=$2 WHERE turn_id=$1 AND role='assistant'")
             .bind(id)
             .bind(reply)
             .execute(&mut *tx)
             .await?;
+        sqlx::query("UPDATE chat_turns SET status=$3,action=$4,estimated_tokens=$5,error_code=$6,finished_at=clock_timestamp() WHERE id=$1 AND token=$2").bind(id).bind(token).bind(actual).bind(action).bind(estimated.max(0)).bind(if success{None}else{Some(if code.is_empty(){"CANCELLED"}else{code})}).execute(&mut *tx).await?;
         sqlx::query("UPDATE conversations SET updated_at=clock_timestamp() WHERE id=$1")
             .bind(conversation)
             .execute(&mut *tx)

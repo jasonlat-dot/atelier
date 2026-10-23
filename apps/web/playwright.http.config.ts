@@ -9,6 +9,7 @@ export default defineConfig({
     'upstream.spec.ts',
     'generation.spec.ts',
     'canvas.spec.ts',
+    'chat.spec.ts',
   ],
   workers: 1,
   use: {

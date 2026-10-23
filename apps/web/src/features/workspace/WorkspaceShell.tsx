@@ -38,7 +38,7 @@ export const useWalletSummaryUpdate = () => useContext(BalanceContext);
 const creation = [
   { path: '/', label: '工作台', icon: LayoutDashboard, ready: true },
   { path: '/generate', label: '图片与视频生成', icon: Sparkles, ready: true },
-  { path: '/chat', label: 'AI 智能对话', icon: MessageSquare },
+  { path: '/chat', label: 'AI 智能对话', icon: MessageSquare, ready: true },
   {
     path: '/canvas',
     label: '无限创作画布',
@@ -253,7 +253,9 @@ export default function WorkspaceShell({
                   (item) =>
                     item.path === location.pathname ||
                     (item.path === '/canvas' &&
-                      location.pathname.startsWith('/canvas/')),
+                      location.pathname.startsWith('/canvas/')) ||
+                    (item.path === '/chat' &&
+                      location.pathname.startsWith('/chat/')),
                 )?.label || '工作台'}
               </strong>
             </div>

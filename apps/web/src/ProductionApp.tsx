@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  lazy,
+  Suspense,
+} from 'react';
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import { sessionApi, SessionError, type Me } from './features/auth/sessionApi';
 import WorkspaceShell from './features/workspace/WorkspaceShell';
@@ -15,6 +22,7 @@ import GenerationPage from './features/generation/GenerationPage';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import LiveCanvasPage from './features/canvas/LiveCanvasPage';
 import ProjectsPage from './features/canvas/ProjectsPage';
+const LiveChatPage = lazy(() => import('./features/chat/LiveChatPage'));
 
 type AuthState =
   | { status: 'loading' }
@@ -125,6 +133,20 @@ export default function ProductionApp() {
     <QueryClientProvider client={queries}>
       <WorkspaceShell me={me} onExpired={expired} onReload={reload}>
         <Routes>
+          <Route
+            path="/chat/:id?"
+            element={
+              <Suspense
+                fallback={
+                  <main className="page-padding">
+                    <p role="status">正在加载对话…</p>
+                  </main>
+                }
+              >
+                <LiveChatPage me={me} onExpired={expired} onReload={reload} />
+              </Suspense>
+            }
+          />
           <Route
             path="/canvas"
             element={

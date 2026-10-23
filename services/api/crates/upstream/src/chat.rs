@@ -114,66 +114,81 @@ pub(crate) fn stream(lease: RouteLease, response: GuardedResponse) -> TokenStrea
             bytes: 0,
         },
         |mut state| async move {
-            loop {
-                if !state.lease.as_ref().is_some_and(RouteLease::is_valid) {
-                    return Err(CoreError::Unavailable);
-                }
-                if let Some(frame) = state.pending.pop_front() {
-                    if frame == "[DONE]" {
-                        if !state.finished || !state.has_text {
-                            return Err(CoreError::Invalid);
-                        }
-                        state
-                            .lease
-                            .take()
-                            .ok_or(CoreError::Unavailable)?
-                            .finish_success(1, "chat")
-                            .await
-                            .map_err(|_| CoreError::Unavailable)?;
-                        return Ok(None);
-                    }
-                    let data: Value =
-                        serde_json::from_str(&frame).map_err(|_| CoreError::Invalid)?;
-                    if !data["error"].is_null() {
+            let result = async {
+                loop {
+                    if !state.lease.as_ref().is_some_and(RouteLease::is_valid) {
                         return Err(CoreError::Unavailable);
                     }
-                    let choices = data["choices"].as_array().ok_or(CoreError::Invalid)?;
-                    if choices.is_empty() && state.finished && data["usage"].is_object() {
-                        continue;
-                    }
-                    if choices.len() != 1 || choices[0]["index"].as_u64() != Some(0) {
-                        return Err(CoreError::Invalid);
-                    }
-                    let choice = &choices[0];
-                    let delta = &choice["delta"];
-                    if !delta["tool_calls"].is_null()
-                        || !delta["function_call"].is_null()
-                        || !delta["refusal"].is_null()
-                    {
-                        return Err(CoreError::Invalid);
-                    }
-                    if !choice["finish_reason"].is_null() {
-                        if choice["finish_reason"] != "stop" {
+                    if let Some(frame) = state.pending.pop_front() {
+                        if frame == "[DONE]" {
+                            if !state.finished || !state.has_text {
+                                return Err(CoreError::Invalid);
+                            }
+                            state
+                                .lease
+                                .take()
+                                .ok_or(CoreError::Unavailable)?
+                                .finish_success(1, "chat")
+                                .await
+                                .map_err(|_| CoreError::Unavailable)?;
+                            return Ok(None);
+                        }
+                        let data: Value =
+                            serde_json::from_str(&frame).map_err(|_| CoreError::Invalid)?;
+                        if !data["error"].is_null() {
+                            return Err(CoreError::Unavailable);
+                        }
+                        let choices = data["choices"].as_array().ok_or(CoreError::Invalid)?;
+                        if choices.is_empty() && state.finished && data["usage"].is_object() {
+                            continue;
+                        }
+                        if choices.len() != 1 || choices[0]["index"].as_u64() != Some(0) {
                             return Err(CoreError::Invalid);
                         }
-                        state.finished = true;
-                    }
-                    if let Some(text) = delta["content"].as_str().filter(|s| !s.is_empty()) {
-                        state.bytes += text.len();
-                        if state.bytes > 65536 {
+                        let choice = &choices[0];
+                        let delta = &choice["delta"];
+                        if !delta["tool_calls"].is_null()
+                            || !delta["function_call"].is_null()
+                            || !delta["refusal"].is_null()
+                        {
                             return Err(CoreError::Invalid);
                         }
-                        state.has_text = true;
-                        return Ok(Some((text.to_owned(), state)));
+                        if !choice["finish_reason"].is_null() {
+                            if choice["finish_reason"] != "stop" {
+                                return Err(CoreError::Invalid);
+                            }
+                            state.finished = true;
+                        }
+                        if let Some(text) = delta["content"].as_str().filter(|s| !s.is_empty()) {
+                            state.bytes += text.len();
+                            if state.bytes > 65536 {
+                                return Err(CoreError::Invalid);
+                            }
+                            state.has_text = true;
+                            return Ok(Some(text.to_owned()));
+                        }
+                    } else {
+                        let chunk = state
+                            .response
+                            .chunk()
+                            .await
+                            .map_err(|_| CoreError::Unavailable)?
+                            .ok_or(CoreError::Invalid)?;
+                        state.pending.extend(state.parser.feed(&chunk)?);
                     }
-                } else {
-                    let chunk = state
-                        .response
-                        .chunk()
-                        .await
-                        .map_err(|_| CoreError::Unavailable)?
-                        .ok_or(CoreError::Invalid)?;
-                    state.pending.extend(state.parser.feed(&chunk)?);
+                }
+            }
+            .await;
+            match result {
+                Ok(Some(text)) => Ok(Some((text, state))),
+                Ok(None) => Ok(None),
+                Err(error) => {
+                    if let Some(lease) = state.lease.take() {
+                        let _ = lease
+                            .finish_failure(crate::ProviderFailure::network(), "chat")
+                            .await;
+                    }
+                    Err(error)
                 }
             }
         },

@@ -152,6 +152,19 @@ async fn successful_reply_charges_once_replays_and_actions_never_create_generati
         s.start(other, c, Uuid::new_v4(), input()).await,
         Err(ChatError::NotFound)
     ));
+    assert!(sqlx::query("UPDATE chat_turns SET cost=0 WHERE id=$1")
+        .bind(turn.id)
+        .execute(&db)
+        .await
+        .is_err());
+    assert!(
+        sqlx::query("UPDATE chat_messages SET content='changed' WHERE turn_id=$1")
+            .bind(turn.id)
+            .execute(&db)
+            .await
+            .is_err()
+    );
+    s.cancel(owner, turn.id).await.unwrap(); // Finished cancellation is harmless and does not mutate.
     let view = s.get(owner, c, None).await.unwrap();
     assert_eq!(view.turns.len(), 1);
     assert!(view.estimated_tokens > 0);
@@ -167,6 +180,11 @@ async fn successful_reply_charges_once_replays_and_actions_never_create_generati
         )
         .await,
         Err(ChatError::Conflict)
+    ));
+    s.delete(owner, c).await.unwrap();
+    assert!(matches!(
+        s.start(owner, c, key, input()).await,
+        Err(ChatError::NotFound)
     ));
 }
 #[sqlx::test(migrations = "../../migrations")]
@@ -371,4 +389,53 @@ async fn context_compacts_at_threshold_and_continues_with_original_user_facts(db
         .messages
         .iter()
         .any(|m| m.content.contains("Historical conversation evidence"))));
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+#[ignore = "Requires isolated PostgreSQL"]
+async fn revoked_session_and_completion_audit_failure_release_without_settlement(db: PgPool) {
+    let owner = user(&db).await;
+    let s = service(&db, false, false).await;
+    let c = conversation(&s, owner).await;
+    let Start::Running { turn, token } = s.start(owner, c, Uuid::new_v4(), input()).await.unwrap()
+    else {
+        panic!()
+    };
+    let (tx, mut rx) = tokio::sync::mpsc::channel(8);
+    s.reply(
+        owner,
+        turn,
+        token,
+        tx,
+        Arc::new(|| Box::pin(async { false })),
+    )
+    .await;
+    while rx.recv().await.is_some() {}
+    assert_eq!(s.turn(owner, turn).await.unwrap().status, "CANCELLED");
+    let wallet = WalletService::new(db.clone());
+    assert_eq!(wallet.summary(owner).await.unwrap().balance, 20);
+    assert_eq!(wallet.summary(owner).await.unwrap().held, 0);
+    sqlx::query("CREATE FUNCTION fail_chat_complete() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='chat.complete' THEN RAISE EXCEPTION 'test completion audit failure'; END IF; RETURN NEW; END $$").execute(&db).await.unwrap();
+    sqlx::query("CREATE TRIGGER fail_chat_complete BEFORE INSERT ON audit_logs FOR EACH ROW EXECUTE FUNCTION fail_chat_complete()").execute(&db).await.unwrap();
+    let events = run(&s, owner, c, Uuid::new_v4()).await;
+    assert!(matches!(events.last().unwrap(), ChatEvent::Error(_)));
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            if wallet.summary(owner).await.unwrap().held == 0 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(wallet.summary(owner).await.unwrap().balance, 20);
+    assert!(wallet.reconcile().await.unwrap().is_empty());
+    assert!(s
+        .get(owner, c, None)
+        .await
+        .unwrap()
+        .turns
+        .iter()
+        .all(|t| t.status != "SUCCEEDED"));
 }
