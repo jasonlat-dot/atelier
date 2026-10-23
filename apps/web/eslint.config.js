@@ -8,6 +8,8 @@ export default tseslint.config(
       'src/lib/generated/**',
       'playwright-report/**',
       'test-results/**',
+      // Design-tool exports include their own vendor runtime; application code lives in src/.
+      'public/ui-register/**',
     ],
   },
   js.configs.recommended,

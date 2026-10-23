@@ -1,15 +1,15 @@
 import {
-  ArrowRight,
   FolderOpen,
   GalleryHorizontal,
   MessageSquare,
   Plus,
-  Sparkles,
 } from 'lucide-react';
+import { useState } from 'react';
 import type { Me } from '../auth/sessionApi';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import WalletPage from '../wallet/WalletPage';
 import { ProjectGrid } from '../canvas/ProjectsPage';
+import './HomePage.css';
 
 const shortcuts = [
   {
@@ -33,8 +33,10 @@ export default function HomePage(props: {
   onExpired: () => void;
   onReload: () => void;
 }) {
+  const [prompt, setPrompt] = useState('');
+  const navigate = useNavigate();
   return (
-    <main className="page-padding dashboard-page">
+    <main className="page-padding dashboard-page workspace-home">
       <div className="page-title-row">
         <div>
           <div className="eyebrow">CREATIVE WORKSPACE</div>
@@ -43,17 +45,35 @@ export default function HomePage(props: {
             从一个想法开始，连接图片、视频与文字，完成你的下一次创作。
           </p>
         </div>
-        <div className="gen-actions">
-          <Link className="btn btn-dark" to="/generate">
-            <Sparkles size={16} />
-            开始生成
-          </Link>
+      </div>
+      <form
+        className="home-composer"
+        aria-label="开始创作"
+        onSubmit={(event) => {
+          event.preventDefault();
+          navigate('/generate', { state: { workspacePrompt: prompt.trim() } });
+        }}
+      >
+        <label className="home-prompt">
+          <span className="home-visually-hidden">描述你想创作的内容</span>
+          <input
+            value={prompt}
+            maxLength={4000}
+            onChange={(event) => setPrompt(event.target.value)}
+            placeholder="描述你想创作的内容，例如：一支雨夜城市的 15 秒短片…"
+            autoComplete="off"
+          />
+        </label>
+        <div className="home-composer-actions">
           <Link className="btn" to="/canvas/new">
             <Plus size={16} />
             新建画布
           </Link>
+          <button className="btn btn-dark" type="submit">
+            开始生成
+          </button>
         </div>
-      </div>
+      </form>
       <div className="quick-cards">
         {shortcuts.map(({ name, description, icon: Icon }) => {
           const content = (
@@ -63,10 +83,7 @@ export default function HomePage(props: {
                   <Icon size={19} />
                 </div>
               </div>
-              <strong>
-                {name}
-                <ArrowRight size={16} />
-              </strong>
+              <strong>{name}</strong>
               <p>{description}</p>
             </>
           );
@@ -89,7 +106,7 @@ export default function HomePage(props: {
       <div className="section-head">
         <h2>最近的创作项目</h2>
         <span className="muted">
-          <Link to="/canvas">查看全部画布</Link>
+          <Link to="/canvas">查看全部画布 →</Link>
         </span>
       </div>
       <ProjectGrid {...props} home />

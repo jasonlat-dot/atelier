@@ -14,7 +14,6 @@ import {
   ChartColumn,
   ChevronRight,
   CircleDollarSign,
-  Command,
   FolderOpen,
   GalleryHorizontal,
   LayoutDashboard,
@@ -53,14 +52,14 @@ const personal = [
   { path: '/settings', label: '账号设置', icon: Settings, ready: true },
 ];
 const admin = [
+  { path: '/admin', label: '运营总览', icon: ChartColumn, ready: true },
+  { path: '/admin/users', label: '用户管理', icon: Users, ready: true },
   {
     path: '/admin/plans',
     label: '套餐与订单',
     icon: CircleDollarSign,
     ready: true,
   },
-  { path: '/admin', label: '运营总览', icon: ChartColumn, ready: true },
-  { path: '/admin/users', label: '用户管理', icon: Users, ready: true },
   { path: '/admin/jobs', label: '任务管理', icon: Sparkles, ready: true },
   {
     path: '/admin/policy',
@@ -101,11 +100,16 @@ export default function WorkspaceShell({
   onReload: () => void;
   children: ReactNode;
 }) {
-  const [open, setOpen] = useState(() => window.innerWidth > 720);
+  const [open, setOpen] = useState(() => window.innerWidth > 900);
   const [summary, setSummary] = useState<Summary>();
   const [failed, setFailed] = useState(false);
   const version = useRef(0);
   const location = useLocation();
+  const adminMore = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    if (admin.slice(3).some((item) => item.path === location.pathname))
+      adminMore.current?.setAttribute('open', '');
+  }, [location.pathname]);
   const update = useCallback((value: Summary) => {
     ++version.current;
     setSummary(value);
@@ -133,7 +137,7 @@ export default function WorkspaceShell({
     return () => abort.abort();
   }, [me.user.id, onExpired, onReload, update]);
   const closeOnMobile = () => {
-    if (window.innerWidth <= 720) setOpen(false);
+    if (window.innerWidth <= 900) setOpen(false);
   };
   const groups = [
     ['创作空间', creation],
@@ -169,7 +173,13 @@ export default function WorkspaceShell({
         >
           <div className="brand">
             <div className="brand-mark">
-              <Command size={19} />
+              <img
+                src="/assets/favicon.svg"
+                width="36"
+                height="36"
+                alt=""
+                aria-hidden="true"
+              />
             </div>
             <div>
               <strong>Atelier</strong>
@@ -191,31 +201,56 @@ export default function WorkspaceShell({
             {groups.map(([label, items]) => (
               <section key={label}>
                 <div className="nav-group">{label}</div>
-                {items.map((item) =>
-                  item.ready ? (
-                    <NavLink
-                      key={item.path}
-                      end
-                      to={item.path}
-                      className={({ isActive }) =>
-                        `nav-link ${isActive ? 'active' : ''}`
-                      }
-                      onClick={closeOnMobile}
-                    >
-                      <item.icon size={16} />
-                      <span>{item.label}</span>
-                    </NavLink>
-                  ) : (
-                    <span
-                      key={item.path}
-                      className="nav-link nav-pending"
-                      aria-disabled="true"
-                    >
-                      <item.icon size={16} />
-                      <span>{item.label}</span>
-                      <small>待开放</small>
-                    </span>
-                  ),
+                {items
+                  .slice(0, label === '运营管理' ? 3 : items.length)
+                  .map((item) =>
+                    item.ready ? (
+                      <NavLink
+                        key={item.path}
+                        end
+                        to={item.path}
+                        className={({ isActive }) =>
+                          `nav-link ${isActive ? 'active' : ''}`
+                        }
+                        onClick={closeOnMobile}
+                      >
+                        <item.icon size={16} />
+                        <span>{item.label}</span>
+                      </NavLink>
+                    ) : (
+                      <span
+                        key={item.path}
+                        className="nav-link nav-pending"
+                        aria-disabled="true"
+                      >
+                        <item.icon size={16} />
+                        <span>{item.label}</span>
+                        <small>待开放</small>
+                      </span>
+                    ),
+                  )}
+                {label === '运营管理' && items.length > 3 && (
+                  <details className="workspace-more" ref={adminMore}>
+                    <summary aria-label="更多管理功能">
+                      更多 {items.length - 3} 项<ChevronRight size={14} />
+                    </summary>
+                    <div>
+                      {items.slice(3).map((item) => (
+                        <NavLink
+                          key={item.path}
+                          end
+                          to={item.path}
+                          className={({ isActive }) =>
+                            `nav-link ${isActive ? 'active' : ''}`
+                          }
+                          onClick={closeOnMobile}
+                        >
+                          <item.icon size={16} />
+                          <span>{item.label}</span>
+                        </NavLink>
+                      ))}
+                    </div>
+                  </details>
                 )}
               </section>
             ))}

@@ -6,7 +6,7 @@ import {
   useState,
   type FormEvent,
 } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import {
   Check,
   ChevronLeft,
@@ -108,11 +108,20 @@ function normalize(
 }
 export default function GenerationPage(props: Props) {
   const { me, onExpired, onReload } = props;
+  const location = useLocation();
   const updateWallet = useWalletSummaryUpdate();
   const [catalog, setCatalog] = useState<Schema['CatalogModel'][]>([]);
   const [limits, setLimits] = useState<Schema['GenerationLimits']>();
   const [wallet, setWallet] = useState<Summary>();
-  const [form, setForm] = useState<Form>(initial);
+  const [form, setForm] = useState<Form>(() => {
+    const draft = (location.state as { workspacePrompt?: unknown } | null)
+      ?.workspacePrompt;
+    return {
+      ...initial,
+      prompt:
+        typeof draft === 'string' && draft.length <= 4000 ? draft.trim() : '',
+    };
+  });
   const [jobs, setJobs] = useState<Job[]>([]);
   const [selected, setSelected] = useState<Job>();
   const selectedId = useRef<string>();

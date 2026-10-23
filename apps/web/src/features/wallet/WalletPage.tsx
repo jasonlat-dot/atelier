@@ -206,24 +206,42 @@ export default function WalletPage({
             )}
           </section>
           <section className="surface-block account-section checkin-row">
-            <div>
-              <h2>每日签到</h2>
-              <p>
-                连续 {summary.streak} 天 ·{' '}
-                {summary.checked_in_today ? '明日' : '本次'}可得{' '}
-                {summary.next_reward} 积分
-              </p>
-              <small>
-                {summary.local_date} · {summary.timezone} 日界
-              </small>
+            <div className="checkin-heading">
+              <div>
+                <h2>每日签到</h2>
+                <p>
+                  连续 {summary.streak} 天 ·{' '}
+                  {summary.checked_in_today ? '明日' : '本次'}可得{' '}
+                  {summary.next_reward} 积分
+                </p>
+                <small>
+                  {summary.local_date} · {summary.timezone} 日界
+                </small>
+              </div>
+              <button
+                className="btn btn-dark"
+                disabled={busy || loading || summary.checked_in_today}
+                onClick={() => void mutate('checkin')}
+              >
+                {summary.checked_in_today ? '今日已签到' : '领取今日积分'}
+              </button>
             </div>
-            <button
-              className="btn btn-dark"
-              disabled={busy || loading || summary.checked_in_today}
-              onClick={() => void mutate('checkin')}
-            >
-              {summary.checked_in_today ? '今日已签到' : '领取今日积分'}
-            </button>
+            {home && (
+              <div
+                className="home-checkin-progress"
+                role="img"
+                aria-label={`已连续签到 ${summary.streak} 天`}
+              >
+                {Array.from({ length: 7 }, (_, i) => (
+                  <span
+                    key={i}
+                    className={
+                      i < Math.min(summary.streak, 7) ? 'is-complete' : ''
+                    }
+                  />
+                ))}
+              </div>
+            )}
           </section>
           {!home && (
             <>
@@ -306,25 +324,27 @@ export default function WalletPage({
               </section>
             </>
           )}
-          {home && (
-            <Link className="text-action" to="/wallet">
-              查看完整积分账本 →
-            </Link>
-          )}
         </>
       )}
       {message && <p role="status">{message}</p>}
       {error && <p role="alert">{error}</p>}
-      <button
-        className="text-action"
-        disabled={busy || loading}
-        onClick={() => {
-          setError('');
-          void load();
-        }}
-      >
-        刷新积分
-      </button>
+      <div className={home ? 'home-wallet-actions' : undefined}>
+        {home && summary && (
+          <Link className="text-action" to="/wallet">
+            查看完整积分账本 →
+          </Link>
+        )}
+        <button
+          className="text-action"
+          disabled={busy || loading}
+          onClick={() => {
+            setError('');
+            void load();
+          }}
+        >
+          刷新积分
+        </button>
+      </div>
     </Container>
   );
 }

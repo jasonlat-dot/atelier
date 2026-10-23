@@ -134,62 +134,97 @@ export function ProjectGrid({
           <strong>创建新项目</strong>
           <small>从一个想法开始，无限延伸</small>
         </Link>
-        {query.data?.items.slice(0, home ? 5 : 25).map((p) => (
+        {query.data?.items.slice(0, home ? 2 : 25).map((p) => (
           <article key={p.id} className="project-card live-project-card">
             <Link to={`/canvas/${p.id}`} className="live-project-link">
               <div className="live-project-art">
                 <GalleryHorizontal size={32} strokeWidth={1} />
               </div>
-              <strong>
-                {p.name}
-                <ArrowRight size={14} />
-              </strong>
-              <small>
-                更新于 {new Date(p.updated_at).toLocaleString('zh-CN')} · v
-                {p.revision}
-              </small>
+              {home ? (
+                <div className="home-project-caption">
+                  <div>
+                    <strong>{p.name}</strong>
+                    <small>
+                      更新于{' '}
+                      {new Date(p.updated_at).toLocaleString('zh-CN', {
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: false,
+                      })}
+                    </small>
+                  </div>
+                  <span className="home-project-version">v{p.revision}</span>
+                </div>
+              ) : (
+                <>
+                  <strong>
+                    {p.name}
+                    <ArrowRight size={14} />
+                  </strong>
+                  <small>
+                    更新于 {new Date(p.updated_at).toLocaleString('zh-CN')} · v
+                    {p.revision}
+                  </small>
+                </>
+              )}
             </Link>
-            <div className="gen-actions">
-              <button
-                className="icon-btn"
-                aria-label={`重命名 ${p.name}`}
-                disabled={busy}
-                onClick={() => {
-                  setName(p.name);
-                  setAction({ type: 'rename', project: p });
-                }}
-              >
-                <Pencil size={14} />
-              </button>
-              <button
-                className="icon-btn"
-                aria-label={`复制 ${p.name}`}
-                disabled={busy}
-                onClick={() =>
-                  void act(async () => {
-                    const copy = await projectApi.duplicate(
-                      p.id,
-                      me.csrf_token,
-                      crypto.randomUUID(),
-                    );
-                    navigate(`/canvas/${copy.project.id}`);
-                  })
-                }
-              >
-                <Copy size={14} />
-              </button>
-              <button
-                className="icon-btn"
-                aria-label={`删除 ${p.name}`}
-                disabled={busy}
-                onClick={() => setAction({ type: 'delete', project: p })}
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
+            {!home && (
+              <div className="gen-actions">
+                <button
+                  className="icon-btn"
+                  aria-label={`重命名 ${p.name}`}
+                  disabled={busy}
+                  onClick={() => {
+                    setName(p.name);
+                    setAction({ type: 'rename', project: p });
+                  }}
+                >
+                  <Pencil size={14} />
+                </button>
+                <button
+                  className="icon-btn"
+                  aria-label={`复制 ${p.name}`}
+                  disabled={busy}
+                  onClick={() =>
+                    void act(async () => {
+                      const copy = await projectApi.duplicate(
+                        p.id,
+                        me.csrf_token,
+                        crypto.randomUUID(),
+                      );
+                      navigate(`/canvas/${copy.project.id}`);
+                    })
+                  }
+                >
+                  <Copy size={14} />
+                </button>
+                <button
+                  className="icon-btn"
+                  aria-label={`删除 ${p.name}`}
+                  disabled={busy}
+                  onClick={() => setAction({ type: 'delete', project: p })}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            )}
           </article>
         ))}
-        {query.isPending && <p role="status">正在加载项目…</p>}
+        {query.isPending &&
+          (home ? (
+            <div
+              className="home-project-loading"
+              role="status"
+              aria-label="正在加载项目"
+            >
+              <span />
+              <span />
+            </div>
+          ) : (
+            <p role="status">正在加载项目…</p>
+          ))}
         {!query.isPending && query.data?.items.length === 0 && (
           <div className="workspace-empty">
             <GalleryHorizontal size={30} strokeWidth={1.2} />

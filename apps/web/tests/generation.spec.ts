@@ -228,6 +228,21 @@ async function fixture(
   await expect(page.getByRole('heading', { name: '生成工作台' })).toBeVisible();
   return { writes, state };
 }
+test('home composer carries a private draft into generation without submitting a paid job', async ({
+  page,
+}) => {
+  const { writes } = await fixture(page);
+  await page.route(/\/api\/v1\/projects(?:\?|$)/, (r) =>
+    r.fulfill({ json: { items: [], next_cursor: null } }),
+  );
+  await page.goto('/');
+  await page.getByLabel('描述你想创作的内容').fill('雨夜城市里的电影海报');
+  await page.getByRole('button', { name: '开始生成', exact: true }).click();
+  await expect(page).toHaveURL(/\/generate$/);
+  await expect(page.getByLabel('画面描述')).toHaveValue('雨夜城市里的电影海报');
+  expect(writes).toHaveLength(0);
+});
+
 test('authoritative quote, tier and model capabilities drive an idempotent submission and cancellation', async ({
   page,
 }) => {

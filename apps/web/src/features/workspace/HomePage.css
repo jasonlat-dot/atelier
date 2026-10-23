@@ -1,0 +1,477 @@
+.live-workspace .workspace-home {
+  padding: 40px 48px 56px;
+  max-width: 1336px;
+  margin: 0 auto;
+  background: #f6f5f1;
+  color: #16181d;
+}
+.workspace-home .page-title-row {
+  margin-bottom: 0;
+}
+.workspace-home .eyebrow {
+  color: #c2410c;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  margin-bottom: 8px;
+}
+.workspace-home .page-title-row h1 {
+  font-size: 36px;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  margin: 0 0 8px;
+  text-wrap: balance;
+}
+.workspace-home .page-subtitle {
+  font-size: 15px;
+  color: #5b6068;
+  line-height: 1.65;
+}
+.home-composer {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 28px;
+  background: #fff;
+  border: 1px solid #e6e3db;
+  border-radius: 16px;
+  padding: 18px 20px;
+}
+.home-prompt {
+  flex: 1;
+  min-width: 240px;
+  display: block;
+}
+.home-prompt input {
+  height: 48px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 2px;
+  width: 100%;
+  min-width: 0;
+  background: transparent;
+  font-size: 16px;
+  color: #16181d;
+  box-sizing: border-box;
+}
+.home-prompt input::placeholder {
+  color: #858783;
+}
+.home-composer-actions {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+.workspace-home .home-composer .btn {
+  height: 44px;
+  padding: 0 20px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  background: #fff;
+  border-color: #d9d6cc;
+  color: #16181d;
+  white-space: nowrap;
+}
+.workspace-home .home-composer .btn-dark {
+  border: 0;
+  background: #16181d;
+  color: #fff;
+  font-weight: 600;
+  padding: 0 22px;
+}
+.workspace-home .quick-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+.workspace-home .quick-cards > a {
+  padding: 22px;
+  background: #fff;
+  border: 1px solid #e6e3db;
+  border-radius: 16px;
+  min-width: 0;
+  transition:
+    background 0.18s,
+    border-color 0.18s,
+    transform 0.18s;
+}
+.workspace-home .quick-cards > a:hover {
+  background: #fdfbf7;
+  border-color: #cfcbbf;
+  box-shadow: none;
+  transform: translateY(-2px);
+}
+.workspace-home .quick-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: #f4e6dd;
+  color: #c2410c;
+}
+.workspace-home .quick-cards > a strong {
+  display: block;
+  font-size: 16px;
+  font-weight: 600;
+  margin: 16px 0 6px;
+}
+.workspace-home .quick-cards > a p {
+  font-size: 13px;
+  line-height: 1.6;
+  color: #5b6068;
+  margin: 0;
+}
+.workspace-home .section-head {
+  margin: 40px 0 16px;
+  align-items: baseline;
+  gap: 16px;
+}
+.workspace-home .section-head h2 {
+  font-size: 18px;
+  line-height: 1.5;
+  letter-spacing: 0;
+  font-weight: 600;
+  margin: 0;
+}
+.workspace-home .section-head .muted {
+  font-size: 13px;
+  color: #5b6068;
+}
+.workspace-home .live-projects {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 0;
+}
+.workspace-home .live-projects .project-card {
+  min-height: 216px;
+  height: auto;
+  border-radius: 16px;
+  border-color: #e6e3db;
+  box-shadow: none;
+}
+.workspace-home .live-projects .create-card {
+  background: transparent;
+  border: 1.5px dashed #cfcbbf;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 24px 16px;
+  text-align: center;
+}
+.workspace-home .create-card > svg {
+  border: 1px solid #e0ddd4;
+  border-radius: 50%;
+  background: #fff;
+  box-sizing: content-box;
+  padding: 10px;
+  width: 20px;
+  height: 20px;
+  margin-bottom: 6px;
+  color: #16181d;
+}
+.workspace-home .create-card strong {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+}
+.workspace-home .create-card small {
+  font-size: 12px;
+  color: #6b6f76;
+  margin: 0;
+  line-height: 1.7;
+}
+.workspace-home .live-project-card {
+  padding: 10px;
+  background: #fff;
+}
+.workspace-home .live-project-link {
+  height: 100%;
+  padding-bottom: 0;
+}
+.workspace-home .live-project-art {
+  height: 128px;
+  border-radius: 12px;
+  background-color: #f0eee8;
+  background-image: radial-gradient(#d5d2c8 1px, transparent 1px);
+  background-size: 14px 14px;
+  color: #a9a598;
+}
+.workspace-home .home-project-caption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 6px 6px;
+}
+.home-project-caption > div {
+  min-width: 0;
+}
+.home-project-caption strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-project-caption small {
+  display: block;
+  font-size: 12px;
+  color: #6b6f76;
+  margin-top: 3px;
+}
+.home-project-version {
+  font-size: 11px;
+  font-weight: 600;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: #f0eee8;
+  padding: 4px 9px;
+  color: #3f434a;
+}
+.workspace-home .workspace-empty {
+  grid-column: span 2;
+  min-height: 216px;
+  border: 1px solid #e6e3db;
+  border-radius: 16px;
+  color: #959183;
+  background: #fbfaf7;
+}
+.workspace-home .workspace-empty h3 {
+  color: #5b6068;
+}
+.home-project-loading {
+  grid-column: span 2;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.home-project-loading > span {
+  min-height: 216px;
+  border: 1px solid #e6e3db;
+  border-radius: 16px;
+  background: linear-gradient(#f0eee8 128px, #fff 128px);
+}
+.workspace-home .dashboard-wallet {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.workspace-home .dashboard-wallet .wallet-hero,
+.workspace-home .dashboard-wallet .account-section {
+  padding: 24px;
+  background: #fff;
+  border: 1px solid #e6e3db;
+  border-radius: 16px;
+  color: #16181d;
+  margin: 0;
+  min-width: 0;
+}
+.workspace-home .wallet-hero > span {
+  font-size: 13px;
+  color: #5b6068;
+}
+.workspace-home .wallet-hero strong {
+  font-size: 44px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 4px 0 10px;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.workspace-home .wallet-hero p {
+  font-size: 12px;
+  color: #6b6f76;
+  margin: 0;
+  line-height: 1.8;
+}
+.checkin-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+}
+.workspace-home .checkin-row {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  justify-content: flex-start;
+  align-items: stretch;
+}
+.workspace-home .checkin-row h2 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+.workspace-home .checkin-row p {
+  font-size: 13px;
+  color: #5b6068;
+  margin: 0;
+  line-height: 1.7;
+}
+.workspace-home .checkin-row small {
+  display: none;
+}
+.workspace-home .checkin-row .btn {
+  height: 40px;
+  padding: 0 18px;
+  font-size: 13px;
+  border-radius: 10px;
+  flex-shrink: 0;
+  background: #16181d;
+  border: 0;
+}
+.workspace-home .checkin-row .btn:disabled {
+  background: #e6e3db;
+  color: #5b6068;
+  opacity: 1;
+}
+.home-checkin-progress {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+.home-checkin-progress > span {
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background: #e6e3db;
+}
+.home-checkin-progress > span.is-complete {
+  background: #c2410c;
+}
+.workspace-home .home-wallet-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  grid-column: 1/-1;
+}
+.workspace-home .home-wallet-actions .text-action {
+  color: #6b6f76;
+  font-size: 12px;
+  padding: 0;
+  background: none;
+  border: 0;
+}
+.home-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+.workspace-home a:focus-visible,
+.workspace-home button:focus-visible,
+.workspace-home input:focus-visible {
+  outline: 2px solid #c2410c;
+  outline-offset: 4px;
+}
+@media (max-width: 1100px) {
+  .live-workspace .workspace-home {
+    padding: 32px;
+  }
+  .workspace-home .quick-cards > a {
+    padding: 18px;
+  }
+  .home-composer-actions {
+    gap: 10px;
+  }
+  .workspace-home .page-title-row h1 {
+    font-size: 32px;
+  }
+  .home-project-caption small {
+    font-size: 11px;
+  }
+}
+@media (max-width: 900px) {
+  .workspace-home .quick-cards,
+  .workspace-home .live-projects {
+    grid-template-columns: 1fr;
+  }
+  .workspace-home .dashboard-wallet {
+    grid-template-columns: 1fr;
+  }
+  .workspace-home .workspace-empty,
+  .home-project-loading {
+    grid-column: 1;
+  }
+  .home-project-loading {
+    grid-template-columns: 1fr;
+  }
+  .workspace-home .live-projects .project-card {
+    min-height: 216px;
+  }
+  .workspace-home .quick-cards > a {
+    padding: 22px;
+  }
+  .workspace-home .section-head .muted {
+    font-size: 12px;
+  }
+}
+@media (max-width: 600px) {
+  .live-workspace .workspace-home {
+    padding: 26px 20px 40px;
+  }
+  .workspace-home .page-title-row h1 {
+    font-size: 28px;
+  }
+  .workspace-home .page-subtitle {
+    font-size: 14px;
+  }
+  .home-composer {
+    padding: 14px;
+    gap: 12px;
+    margin-top: 22px;
+  }
+  .home-prompt {
+    min-width: 100%;
+  }
+  .home-prompt input {
+    font-size: 14px;
+  }
+  .home-composer-actions {
+    width: 100%;
+  }
+  .home-composer-actions > * {
+    flex: 1;
+    min-width: 0;
+  }
+  .workspace-home .home-composer .btn {
+    padding: 0 12px;
+    font-size: 13px;
+  }
+  .workspace-home .section-head {
+    align-items: flex-start;
+    margin-top: 30px;
+  }
+  .workspace-home .section-head h2 {
+    font-size: 17px;
+  }
+  .workspace-home .section-head > .muted {
+    max-width: 130px;
+    text-align: right;
+    font-size: 11px;
+  }
+  .workspace-home .checkin-heading {
+    flex-wrap: wrap;
+  }
+  .workspace-home .dashboard-wallet .wallet-hero,
+  .workspace-home .dashboard-wallet .account-section {
+    padding: 22px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace-home .quick-cards > a {
+    transition: none;
+    transform: none;
+  }
+}

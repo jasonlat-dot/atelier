@@ -190,6 +190,7 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   });
   expect(replay.status()).toBe(401);
   expect((await replay.json()).error.code).toBe('MFA_INVALID');
+  await page.getByLabel('更多管理功能').click();
   await page.getByRole('link', { name: '上游账号池', exact: true }).click();
   await page.getByRole('button', { name: '新增账号', exact: true }).click();
   const dialog = page.getByRole('dialog');
@@ -858,6 +859,12 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
     page.getByRole('button', { name: '禁用账号', exact: true }),
   ).toBeVisible();
   await page.getByRole('button', { name: '关闭弹窗', exact: true }).click();
+  if (
+    !(await page
+      .getByRole('link', { name: '平台设置', exact: true })
+      .isVisible())
+  )
+    await page.getByLabel('更多管理功能').click();
   await page.getByRole('link', { name: '平台设置', exact: true }).click();
   await page.getByRole('radio', { name: '仅限邀请', exact: false }).check();
   await page.getByRole('button', { name: '核对并保存', exact: true }).click();

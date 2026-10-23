@@ -1,6 +1,15 @@
 import { test, expect, type Page } from '@playwright/test';
 
-async function workspace(page: Page, role = 'USER') {
+async function workspace(
+  page: Page,
+  role = 'USER',
+  projects: {
+    id: string;
+    name: string;
+    revision: number;
+    updated_at: string;
+  }[] = [],
+) {
   let balance = 20;
   let checked = false;
   const requests: string[] = [];
@@ -23,7 +32,7 @@ async function workspace(page: Page, role = 'USER') {
         },
       });
     if (path === '/api/v1/projects')
-      return route.fulfill({ json: { items: [], next_cursor: null } });
+      return route.fulfill({ json: { items: projects, next_cursor: null } });
     if (path === '/api/v1/wallet')
       return route.fulfill({
         json: {
@@ -119,6 +128,8 @@ test('administrator sees operational navigation and reaches the existing credits
   await workspace(page, 'SUPER_ADMIN');
   await page.goto('/');
   await expect(page.getByText('运营管理', { exact: true })).toBeVisible();
+  await expect(page.locator('a[href="/admin/credits"]')).toBeHidden();
+  await page.getByLabel('更多管理功能').click();
   await page.getByRole('link', { name: '积分管理', exact: true }).click();
   await expect(
     page.getByRole('heading', { name: '积分管理', exact: true }),
@@ -127,6 +138,68 @@ test('administrator sees operational navigation and reaches the existing credits
   await expect(
     page.getByRole('link', { name: '积分管理', exact: true }),
   ).toHaveAttribute('aria-current', 'page');
+});
+
+test('reference home layout uses server projects and compact navigation on desktop and mobile', async ({
+  page,
+}) => {
+  await workspace(page, 'SUPER_ADMIN', [
+    {
+      id: '11111111-1111-4111-8111-111111111111',
+      name: '海岸创作画布',
+      revision: 45,
+      updated_at: '2026-10-23T08:33:00Z',
+    },
+    {
+      id: '22222222-2222-4222-8222-222222222222',
+      name: '雨夜城市',
+      revision: 34,
+      updated_at: '2026-10-23T07:11:00Z',
+    },
+  ]);
+  await page.setViewportSize({ width: 1440, height: 1180 });
+  await page.goto('/');
+  await expect(page.getByText('海岸创作画布', { exact: true })).toBeVisible();
+  await expect(page.getByText('v45', { exact: true })).toBeVisible();
+  await expect(
+    page
+      .getByRole('region', { name: '钱包余额' })
+      .getByText('20', { exact: true }),
+  ).toBeVisible();
+  const cards = page.locator('.workspace-home .live-projects');
+  expect(
+    await cards.evaluate(
+      (el) => getComputedStyle(el).gridTemplateColumns.split(' ').length,
+    ),
+  ).toBe(3);
+  await expect(page.getByLabel('更多管理功能')).toBeVisible();
+  await expect(page.locator('a[href="/admin/accounts"]')).toBeHidden();
+  await page.screenshot({
+    path: test.info().outputPath('workspace-reference-desktop.png'),
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.reload();
+  await expect(
+    page.getByRole('button', { name: '展开折叠边栏' }),
+  ).toHaveAttribute('aria-expanded', 'false');
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    )
+    .toBe(true);
+  await expect(page.getByLabel('描述你想创作的内容')).toBeVisible();
+  await page.getByRole('button', { name: '领取今日积分' }).click();
+  await expect(
+    page.getByRole('img', { name: '已连续签到 1 天' }),
+  ).toBeVisible();
+  await page.locator('.app-content').evaluate((el) => el.scrollTo(0, 0));
+  await page.screenshot({
+    path: test.info().outputPath('workspace-reference-mobile.png'),
+    fullPage: true,
+  });
 });
 
 test('small screens scroll and navigation closes after selecting a real page', async ({
