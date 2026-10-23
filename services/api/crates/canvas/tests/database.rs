@@ -225,3 +225,62 @@ async fn snapshot_retention_and_audit_failure_are_transactional(db: PgPool) {
         52
     );
 }
+
+#[sqlx::test(migrations = "../../migrations")]
+#[ignore = "Requires isolated PostgreSQL"]
+async fn project_zip_roundtrip_reowns_media_and_import_retry_returns_one_project(db: PgPool) {
+    let owner = user(&db).await;
+    let other = user(&db).await;
+    let (service, assets) = services(&db);
+    let png = include_bytes!("../../app/tests/fixtures/reference.png");
+    let asset = assets
+        .upload_image(owner, "Reference.png", "image/png", png.to_vec())
+        .await
+        .unwrap();
+    let mut graph = text_graph("Portable");
+    graph.nodes.push(serde_json::from_value(serde_json::json!({"id":"media","type":"image","data":{"assetId":asset.id,"naturalW":16,"naturalH":12},"position":{"x":100,"y":100},"size":{"width":240,"height":240}})).unwrap());
+    let source = service
+        .create(
+            owner,
+            Uuid::new_v4(),
+            CreateProject {
+                name: "Portable".into(),
+                graph,
+            },
+        )
+        .await
+        .unwrap();
+    assert!(matches!(
+        service.export(other, source.project.id).await,
+        Err(CanvasError::NotFound)
+    ));
+    let zip = service.export(owner, source.project.id).await.unwrap();
+    let key = Uuid::new_v4();
+    let imported = service
+        .import(other, key, zip.clone(), service.archive_slot().unwrap())
+        .await
+        .unwrap();
+    assert_ne!(source.project.id, imported.project.id);
+    assert_ne!(asset.id, imported.graph.asset_ids()[0]);
+    assert_eq!(imported.assets.len(), 1);
+    assert!(assets.get(owner, imported.assets[0].id).await.is_err());
+    let retry = service
+        .import(other, key, zip.clone(), service.archive_slot().unwrap())
+        .await
+        .unwrap();
+    assert_eq!(retry.project.id, imported.project.id);
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM assets WHERE owner_id=$1")
+        .bind(other)
+        .fetch_one(&db)
+        .await
+        .unwrap();
+    assert_eq!(count, 1);
+    let mut changed = zip;
+    changed.push(1);
+    assert!(matches!(
+        service
+            .import(other, key, changed, service.archive_slot().unwrap())
+            .await,
+        Err(CanvasError::Validation)
+    ));
+}

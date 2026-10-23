@@ -187,6 +187,9 @@ impl CanvasGraph {
         ids
     }
     pub fn validate(&self) -> Result<(), CanvasError> {
+        if self.asset_ids().len() > 500 {
+            return Err(CanvasError::Validation);
+        }
         if self.version != 1
             || self.nodes.len() > 500
             || self.edges.len() > 1000

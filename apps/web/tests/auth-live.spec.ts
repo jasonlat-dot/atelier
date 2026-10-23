@@ -361,4 +361,184 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   ).toBe(6);
   await page.reload();
   await expect(page.locator('.gen-status')).toHaveText('生成完成');
+  // M6: one full canvas flow through the actual PG/Redis API and fake paid provider.
+  test.setTimeout(120000);
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  const canvasPricing = await (
+    await page.request.get('/api/v1/admin/pricing')
+  ).json();
+  for (const rule of canvasPricing.rules)
+    if (rule.model_id === 'live-image') rule.base_credits = 1;
+  expect(
+    (
+      await page.request.put('/api/v1/admin/pricing', {
+        headers,
+        data: canvasPricing,
+      })
+    ).ok(),
+  ).toBe(true);
+  const managedModels = await (
+    await page.request.get('/api/v1/admin/models')
+  ).json();
+  const imageConfig = managedModels.find(
+    (m: { id: string }) => m.id === 'live-image',
+  );
+  expect(
+    (
+      await page.request.patch('/api/v1/admin/models', {
+        headers,
+        data: {
+          id: imageConfig.id,
+          display_name: imageConfig.display_name,
+          kind: imageConfig.kind,
+          enabled: true,
+          sort_order: 0,
+          revision: imageConfig.revision,
+          capabilities: {
+            ...imageConfig.capabilities,
+            supports_edit: true,
+            max_refs: 4,
+          },
+        },
+      })
+    ).ok(),
+  ).toBe(true);
+  await page.getByRole('link', { name: '无限创作画布', exact: true }).click();
+  await page.getByRole('link', { name: '新建画布', exact: true }).click();
+  await expect(page).toHaveURL(/\/canvas\/[0-9a-f-]{36}$/);
+  const canvasId = new URL(page.url()).pathname.split('/').pop()!;
+  await page.getByRole('button', { name: '添加文字节点', exact: true }).click();
+  await page.getByLabel('节点文字').fill('A calm canvas ocean');
+  await page.getByLabel('画布上传文件').setInputFiles({
+    name: 'Canvas reference.png',
+    mimeType: 'image/png',
+    buffer: readFileSync(
+      new URL(
+        '../../../services/api/crates/app/tests/fixtures/reference.png',
+        import.meta.url,
+      ),
+    ),
+  });
+  await expect(
+    page.getByText('素材已上传并加入画布。', { exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: '添加生成节点', exact: true }).click();
+  const graphState = async () =>
+    await (await page.request.get(`/api/v1/projects/${canvasId}`)).json();
+  await expect
+    .poll(async () => (await graphState()).graph.nodes.length)
+    .toBe(3);
+  const firstGraph = (await graphState()).graph;
+  const textId = firstGraph.nodes.find(
+    (n: { type: string }) => n.type === 'text',
+  ).id;
+  const imageId = firstGraph.nodes.find(
+    (n: { type: string }) => n.type === 'image',
+  ).id;
+  const generatorId = firstGraph.nodes.find(
+    (n: { type: string }) => n.type === 'generate',
+  ).id;
+  const linkNodes = async (source: string, target: string) => {
+    const a = page.locator(
+        `.react-flow__node[data-id="${source}"] .react-flow__handle.source`,
+      ),
+      b = page.locator(
+        `.react-flow__node[data-id="${target}"] .react-flow__handle.target`,
+      );
+    await a.dragTo(b);
+  };
+  await page.getByRole('button', { name: '适应画布', exact: true }).click();
+  await linkNodes(textId, generatorId);
+  await linkNodes(imageId, generatorId);
+  await page
+    .locator(`.react-flow__node[data-id="${generatorId}"] .graph-head`)
+    .click();
+  await page
+    .getByRole('button', { name: '生成并连接结果', exact: true })
+    .click();
+  await expect
+    .poll(
+      async () =>
+        (await graphState()).graph.edges.filter(
+          (e: { role: string }) => e.role === 'result',
+        ).length,
+      { timeout: 30000 },
+    )
+    .toBe(1);
+  await page.reload();
+  await expect(page.getByText('已保存', { exact: true })).toBeVisible();
+  expect((await graphState()).graph.nodes.length).toBe(4);
+  await page.getByRole('button', { name: '添加文字节点', exact: true }).click();
+  await page.getByRole('button', { name: '撤销', exact: true }).click();
+  await page.getByRole('button', { name: '重做', exact: true }).click();
+  await page.getByRole('button', { name: '视频生成', exact: true }).click();
+  await page.getByLabel('创意描述').fill('Canvas video waves');
+  await page
+    .getByRole('button', { name: '生成并加入画布', exact: true })
+    .click();
+  await expect
+    .poll(
+      async () =>
+        (await graphState()).graph.nodes.filter(
+          (n: { type: string }) => n.type === 'video',
+        ).length,
+      { timeout: 30000 },
+    )
+    .toBe(1);
+  await page.getByRole('button', { name: '适应画布', exact: true }).click();
+  const videoNode = (await graphState()).graph.nodes.find(
+    (n: { type: string }) => n.type === 'video',
+  );
+  await page
+    .locator(`.react-flow__node[data-id="${videoNode.id}"] .live-node-media`)
+    .click();
+  await expect
+    .poll(
+      () =>
+        page
+          .getByRole('dialog')
+          .locator('video')
+          .evaluate((el) => el.readyState),
+      { timeout: 15000 },
+    )
+    .toBeGreaterThanOrEqual(2);
+  await page.keyboard.press('Escape');
+  const downloaded = page.waitForEvent('download');
+  await page.getByRole('button', { name: '导出项目 ZIP', exact: true }).click();
+  const download = await downloaded;
+  const stream = await download.createReadStream();
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
+  const archive = Buffer.concat(chunks);
+  expect(archive.subarray(0, 2).toString()).toBe('PK');
+  const beforeBalance = (
+    await (await page.request.get('/api/v1/wallet')).json()
+  ).balance;
+  await page
+    .getByRole('link', { name: '无限创作画布', exact: true })
+    .first()
+    .click();
+  await page.getByLabel('导入项目 ZIP', { exact: true }).setInputFiles({
+    name: 'canvas.zip',
+    mimeType: 'application/zip',
+    buffer: archive,
+  });
+  await expect(page).toHaveURL(/\/canvas\/[0-9a-f-]{36}$/);
+  const importedId = new URL(page.url()).pathname.split('/').pop()!;
+  expect(importedId).not.toBe(canvasId);
+  const imported = await (
+    await page.request.get(`/api/v1/projects/${importedId}`)
+  ).json();
+  expect(imported.graph.nodes.length).toBeGreaterThanOrEqual(6);
+  expect(
+    imported.graph.nodes
+      .filter(
+        (n: { type: string; data: { jobId?: string } }) =>
+          n.type === 'generate',
+      )
+      .every((n: { data: { jobId?: string } }) => !n.data.jobId),
+  ).toBe(true);
+  expect(
+    (await (await page.request.get('/api/v1/wallet')).json()).balance,
+  ).toBe(beforeBalance);
 });

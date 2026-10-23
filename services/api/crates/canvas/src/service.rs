@@ -9,8 +9,9 @@ use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct CanvasService {
-    db: PgPool,
-    assets: AssetService,
+    pub(crate) db: PgPool,
+    pub(crate) assets: AssetService,
+    pub(crate) archives: std::sync::Arc<tokio::sync::Semaphore>,
 }
 #[derive(Serialize, ToSchema, sqlx::FromRow)]
 pub struct ProjectInfo {
@@ -127,7 +128,11 @@ async fn snapshot(
 }
 impl CanvasService {
     pub fn new(db: PgPool, assets: AssetService) -> Self {
-        Self { db, assets }
+        Self {
+            db,
+            assets,
+            archives: std::sync::Arc::new(tokio::sync::Semaphore::new(1)),
+        }
     }
     async fn transaction(
         &self,
@@ -194,6 +199,9 @@ impl CanvasService {
         .fetch_optional(&self.db)
         .await?
         .ok_or(CanvasError::NotFound)?;
+        self.view(owner, row).await
+    }
+    async fn view(&self, owner: Uuid, row: Record) -> Result<ProjectView, CanvasError> {
         let graph = row.graph()?;
         let assets = self.assets.canvas_views(owner, &graph.asset_ids()).await?;
         Ok(ProjectView {
@@ -206,15 +214,26 @@ impl CanvasService {
         &self,
         owner: Uuid,
         key: Uuid,
+        input: CreateProject,
+    ) -> Result<ProjectView, CanvasError> {
+        self.create_hashed(owner, key, input, None).await
+    }
+    pub(crate) async fn create_hashed(
+        &self,
+        owner: Uuid,
+        key: Uuid,
         mut input: CreateProject,
+        request_hash: Option<Vec<u8>>,
     ) -> Result<ProjectView, CanvasError> {
         if key.is_nil() {
             return Err(CanvasError::Validation);
         }
         input.name = name(&input.name)?;
         input.graph.validate()?;
-        let hash = Sha256::digest(serde_json::to_vec(&input).map_err(|_| CanvasError::Validation)?)
-            .to_vec();
+        let hash = request_hash.unwrap_or(
+            Sha256::digest(serde_json::to_vec(&input).map_err(|_| CanvasError::Validation)?)
+                .to_vec(),
+        );
         let mut tx = self.transaction(owner).await?;
         let previous: Option<(Uuid, Vec<u8>)> = sqlx::query_as(
             "SELECT project_id,request_hash FROM project_requests WHERE owner_id=$1 AND key=$2",
@@ -253,8 +272,13 @@ impl CanvasService {
         snapshot(&mut tx, id, 0, &graph).await?;
         sqlx::query("INSERT INTO project_requests(owner_id,key,request_hash,project_id) VALUES($1,$2,$3,$4)").bind(owner).bind(key).bind(hash).bind(id).execute(&mut *tx).await?;
         audit(&mut tx, owner, id, "project.create", 0).await?;
+        let row: Record = sqlx::query_as("SELECT * FROM projects WHERE id=$1 AND owner_id=$2")
+            .bind(id)
+            .bind(owner)
+            .fetch_one(&mut *tx)
+            .await?;
         tx.commit().await?;
-        self.get(owner, id).await
+        self.view(owner, row).await
     }
     pub async fn save(
         &self,
@@ -267,8 +291,13 @@ impl CanvasService {
         let mut tx = self.transaction(owner).await?;
         Self::locked(&mut tx, owner, id, revision).await?;
         Self::save_locked(&mut tx, owner, id, revision, &graph).await?;
+        let row: Record = sqlx::query_as("SELECT * FROM projects WHERE id=$1 AND owner_id=$2")
+            .bind(id)
+            .bind(owner)
+            .fetch_one(&mut *tx)
+            .await?;
         tx.commit().await?;
-        self.get(owner, id).await
+        self.view(owner, row).await
     }
     async fn save_locked(
         tx: &mut PgConnection,
@@ -297,8 +326,13 @@ impl CanvasService {
         sqlx::query("UPDATE projects SET name=$2,revision=revision+1,updated_at=clock_timestamp() WHERE id=$1").bind(id).bind(new_name).execute(&mut *tx).await?;
         snapshot(&mut tx, id, revision + 1, &row.graph).await?;
         audit(&mut tx, owner, id, "project.rename", revision + 1).await?;
+        let row: Record = sqlx::query_as("SELECT * FROM projects WHERE id=$1 AND owner_id=$2")
+            .bind(id)
+            .bind(owner)
+            .fetch_one(&mut *tx)
+            .await?;
         tx.commit().await?;
-        self.get(owner, id).await
+        self.view(owner, row).await
     }
     pub async fn delete(&self, owner: Uuid, id: Uuid, revision: i64) -> Result<(), CanvasError> {
         let mut tx = self.transaction(owner).await?;
@@ -323,7 +357,14 @@ impl CanvasService {
         id: Uuid,
         key: Uuid,
     ) -> Result<ProjectView, CanvasError> {
-        let old = self.get(owner, id).await?;
+        let mut old = self.get(owner, id).await?;
+        for node in &mut old.graph.nodes {
+            if let NodeContent::Generate(data) = &mut node.content {
+                data.job_id = None;
+                data.status = Some("IDLE".into());
+                data.error = None;
+            }
+        }
         let name: String = format!(
             "{} 副本",
             old.project.name.chars().take(97).collect::<String>()
@@ -365,8 +406,13 @@ impl CanvasService {
         let graph: CanvasGraph = serde_json::from_value(value).map_err(|_| CanvasError::Store)?;
         graph.validate()?;
         Self::save_locked(&mut tx, owner, id, revision, &graph).await?;
+        let row: Record = sqlx::query_as("SELECT * FROM projects WHERE id=$1 AND owner_id=$2")
+            .bind(id)
+            .bind(owner)
+            .fetch_one(&mut *tx)
+            .await?;
         tx.commit().await?;
-        self.get(owner, id).await
+        self.view(owner, row).await
     }
     pub async fn references(
         &self,

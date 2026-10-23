@@ -16,9 +16,9 @@ uuid.workspace = true
 utoipa.workspace = true
 thiserror.workspace = true
 sha2.workspace = true
-
-[dev-dependencies]
 tokio.workspace = true
+zip = { version = "9.0.5", default-features = false, features = ["deflate-flate2"] }
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 
 [lints]
 workspace = true

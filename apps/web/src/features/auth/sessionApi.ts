@@ -18,10 +18,12 @@ export async function request<T>(
   body?: unknown,
   signal?: AbortSignal,
   idempotencyKey?: string,
+  revision?: number,
 ): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (csrf) headers['X-CSRF-Token'] = csrf;
   if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
+  if (revision !== undefined) headers['If-Match'] = `"${revision}"`;
   const form = body instanceof FormData;
   if (body !== undefined && !form) headers['Content-Type'] = 'application/json';
   const response = await fetch(`/api/v1${path}`, {

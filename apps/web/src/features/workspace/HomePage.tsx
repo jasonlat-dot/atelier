@@ -9,6 +9,7 @@ import {
 import type { Me } from '../auth/sessionApi';
 import { Link } from 'react-router-dom';
 import WalletPage from '../wallet/WalletPage';
+import { ProjectGrid } from '../canvas/ProjectsPage';
 
 const shortcuts = [
   {
@@ -47,10 +48,10 @@ export default function HomePage(props: {
             <Sparkles size={16} />
             开始生成
           </Link>
-          <button className="btn" disabled title="画布创作即将开放">
+          <Link className="btn" to="/canvas/new">
             <Plus size={16} />
             新建画布
-          </button>
+          </Link>
         </div>
       </div>
       <div className="quick-cards">
@@ -61,7 +62,7 @@ export default function HomePage(props: {
                 <div className="quick-icon">
                   <Icon size={19} />
                 </div>
-                {name !== '素材库' && (
+                {name === 'AI 对话' && (
                   <span className="feature-pending">即将开放</span>
                 )}
               </div>
@@ -72,8 +73,8 @@ export default function HomePage(props: {
               <p>{description}</p>
             </>
           );
-          return name === '素材库' ? (
-            <Link to="/assets" key={name}>
+          return name !== 'AI 对话' ? (
+            <Link to={name === '素材库' ? '/assets' : '/canvas'} key={name}>
               {content}
             </Link>
           ) : (
@@ -83,20 +84,11 @@ export default function HomePage(props: {
       </div>
       <div className="section-head">
         <h2>最近的创作项目</h2>
-        <span className="muted">你的灵感，即将在这里展开</span>
+        <span className="muted">
+          <Link to="/canvas">查看全部画布</Link>
+        </span>
       </div>
-      <div className="workspace-projects">
-        <button className="project-card create-card" disabled>
-          <Plus size={23} />
-          <strong>创建新项目</strong>
-          <small>画布功能开放后，从这里开始</small>
-        </button>
-        <div className="workspace-empty">
-          <GalleryHorizontal size={30} strokeWidth={1.2} />
-          <h3>留一片空间，给下一个好想法</h3>
-          <p>画布创作正在准备中。你可以先生成图片与视频，或签到积累积分。</p>
-        </div>
-      </div>
+      <ProjectGrid {...props} home />
       <div className="section-head">
         <h2>我的积分与每日签到</h2>
         <span className="muted">每天积累一点创作的可能</span>

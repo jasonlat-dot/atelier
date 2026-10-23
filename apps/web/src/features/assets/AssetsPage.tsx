@@ -48,6 +48,30 @@ export default function AssetsPage({
   const [message, setMessage] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
   const [deleting, setDeleting] = useState<string[]>();
+  const [references, setReferences] = useState<{
+    names: string[];
+    loading: boolean;
+    failed: boolean;
+  }>({ names: [], loading: false, failed: false });
+  useEffect(() => {
+    if (!deleting) return;
+    const abort = new AbortController();
+    setReferences({ names: [], loading: true, failed: false });
+    void Promise.all(deleting.map((id) => assetsApi.projects(id, abort.signal)))
+      .then((items) => {
+        if (!abort.signal.aborted)
+          setReferences({
+            names: [...new Set(items.flat().map((p) => p.name))],
+            loading: false,
+            failed: false,
+          });
+      })
+      .catch(() => {
+        if (!abort.signal.aborted)
+          setReferences({ names: [], loading: false, failed: true });
+      });
+    return () => abort.abort();
+  }, [deleting]);
   const [preview, setPreview] = useState<Asset>();
   const [dragging, setDragging] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -423,7 +447,15 @@ export default function AssetsPage({
       ) : (
         <div className="asset-grid">
           {items.map((asset) => (
-            <article className="asset-card" key={asset.id}>
+            <article
+              className="asset-card"
+              key={asset.id}
+              draggable={asset.state === 'READY'}
+              onDragStart={(e) => {
+                e.dataTransfer.setData('application/atelier-asset', asset.id);
+                e.dataTransfer.effectAllowed = 'copy';
+              }}
+            >
               <div className="asset-cover">
                 <label className="asset-select">
                   <input
@@ -553,6 +585,15 @@ export default function AssetsPage({
           onClose={() => setDeleting(undefined)}
         >
           <p>删除后，素材及其预览链接将立即无法访问。此操作无法撤销。</p>
+          <p className="muted">
+            {references.loading
+              ? '正在检查画布引用…'
+              : references.failed
+                ? '暂时无法读取引用情况；删除后，引用此素材的画布会显示失效占位。'
+                : references.names.length
+                  ? `此素材正被 ${references.names.length} 个画布使用：${references.names.join('、')}。删除后，这些画布的对应节点将显示素材失效。`
+                  : '删除后，历史画布中保留的引用也会显示素材失效。'}
+          </p>
           <div className="asset-dialog-actions">
             <button
               className="btn btn-light"

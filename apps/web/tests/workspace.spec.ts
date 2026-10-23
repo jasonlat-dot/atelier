@@ -22,6 +22,8 @@ async function workspace(page: Page, role = 'USER') {
           mfa_required: false,
         },
       });
+    if (path === '/api/v1/projects')
+      return route.fulfill({ json: { items: [], next_cursor: null } });
     if (path === '/api/v1/wallet')
       return route.fulfill({
         json: {
@@ -79,9 +81,9 @@ test('production workspace preserves prototype shell and synchronizes real walle
     page.getByRole('heading', { name: '最近的创作项目' }),
   ).toBeVisible();
   await expect(
-    page.getByRole('button', { name: '新建画布', exact: true }),
-  ).toBeDisabled();
-  await expect(page.getByText('即将开放', { exact: true })).toHaveCount(2);
+    page.getByRole('link', { name: '新建画布', exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText('即将开放', { exact: true })).toHaveCount(1);
   await expect(page.getByText('MOCK DEMO')).toHaveCount(0);
   await expect(page.getByText('切换演示账号')).toHaveCount(0);
   await expect(
@@ -105,9 +107,9 @@ test('production workspace preserves prototype shell and synchronizes real walle
   ).toHaveAttribute('aria-current', 'page');
   await page.getByRole('link', { name: '账号设置', exact: true }).click();
   await expect(page.getByLabel('显示名')).toHaveValue('Workspace');
-  expect(
-    requests.some((path) => /projects|generation|assets|\/admin/.test(path)),
-  ).toBe(false);
+  expect(requests.some((path) => /generation|assets|\/admin/.test(path))).toBe(
+    false,
+  );
   expect(errors).toEqual([]);
 });
 

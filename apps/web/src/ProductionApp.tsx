@@ -12,6 +12,9 @@ import AdminCreditsPage from './features/wallet/AdminCreditsPage';
 import AdminAccountsPage from './features/upstream/AdminAccountsPage';
 import AdminModelsPage from './features/upstream/AdminModelsPage';
 import GenerationPage from './features/generation/GenerationPage';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import LiveCanvasPage from './features/canvas/LiveCanvasPage';
+import ProjectsPage from './features/canvas/ProjectsPage';
 
 type AuthState =
   | { status: 'loading' }
@@ -19,6 +22,14 @@ type AuthState =
   | { status: 'error' }
   | { status: 'authenticated'; me: Me };
 export default function ProductionApp() {
+  const [queries] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: { retry: false, refetchOnWindowFocus: false },
+        },
+      }),
+  );
   const navigate = useNavigate();
   const [state, setState] = useState<AuthState>({ status: 'loading' });
   const generation = useRef(0);
@@ -42,9 +53,10 @@ export default function ProductionApp() {
     }
   }, []);
   const expired = useCallback(() => {
+    queries.clear();
     ++generation.current;
     setState({ status: 'anonymous' });
-  }, []);
+  }, [queries]);
   const changed = useCallback(
     (me: Me) => setState({ status: 'authenticated', me }),
     [],
@@ -110,71 +122,93 @@ export default function ProductionApp() {
       />
     );
   return (
-    <WorkspaceShell me={me} onExpired={expired} onReload={reload}>
-      <Routes>
-        <Route
-          path="/generate"
-          element={
-            <GenerationPage me={me} onExpired={expired} onReload={reload} />
-          }
-        />
-        <Route
-          path="/admin/accounts"
-          element={
-            <AdminAccountsPage me={me} onExpired={expired} onReload={reload} />
-          }
-        />
-        <Route
-          path="/admin/providers"
-          element={<Navigate to="/admin/accounts" replace />}
-        />
-        <Route
-          path="/admin/models"
-          element={
-            <AdminModelsPage me={me} onExpired={expired} onReload={reload} />
-          }
-        />
-        <Route
-          path="/assets"
-          element={<AssetsPage me={me} onExpired={expired} onReload={reload} />}
-        />
-        <Route
-          path="/"
-          element={<HomePage me={me} onExpired={expired} onReload={reload} />}
-        />
-        <Route
-          path="/wallet"
-          element={<WalletPage me={me} onExpired={expired} onReload={reload} />}
-        />
-        <Route
-          path="/admin/credits"
-          element={
-            <AdminCreditsPage me={me} onExpired={expired} onReload={reload} />
-          }
-        />
-        <Route
-          path="/settings"
-          element={
-            <SettingsPage
-              me={me}
-              onChange={changed}
-              onExpired={expired}
-              onReload={reload}
-            />
-          }
-        />
-        <Route
-          path="/admin/*"
-          element={
-            <main className="account-shell">
-              <h1>
-                {me.user.role === 'USER' ? '无权访问' : '管理功能正在准备中'}
-              </h1>
-            </main>
-          }
-        />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </WorkspaceShell>
+    <QueryClientProvider client={queries}>
+      <WorkspaceShell me={me} onExpired={expired} onReload={reload}>
+        <Routes>
+          <Route
+            path="/canvas"
+            element={
+              <ProjectsPage me={me} onExpired={expired} onReload={reload} />
+            }
+          />
+          <Route
+            path="/canvas/:id"
+            element={
+              <LiveCanvasPage me={me} onExpired={expired} onReload={reload} />
+            }
+          />
+          <Route
+            path="/generate"
+            element={
+              <GenerationPage me={me} onExpired={expired} onReload={reload} />
+            }
+          />
+          <Route
+            path="/admin/accounts"
+            element={
+              <AdminAccountsPage
+                me={me}
+                onExpired={expired}
+                onReload={reload}
+              />
+            }
+          />
+          <Route
+            path="/admin/providers"
+            element={<Navigate to="/admin/accounts" replace />}
+          />
+          <Route
+            path="/admin/models"
+            element={
+              <AdminModelsPage me={me} onExpired={expired} onReload={reload} />
+            }
+          />
+          <Route
+            path="/assets"
+            element={
+              <AssetsPage me={me} onExpired={expired} onReload={reload} />
+            }
+          />
+          <Route
+            path="/"
+            element={<HomePage me={me} onExpired={expired} onReload={reload} />}
+          />
+          <Route
+            path="/wallet"
+            element={
+              <WalletPage me={me} onExpired={expired} onReload={reload} />
+            }
+          />
+          <Route
+            path="/admin/credits"
+            element={
+              <AdminCreditsPage me={me} onExpired={expired} onReload={reload} />
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <SettingsPage
+                me={me}
+                onChange={changed}
+                onExpired={expired}
+                onReload={reload}
+              />
+            }
+          />
+          <Route
+            path="/admin/*"
+            element={
+              <main className="account-shell">
+                <h1>
+                  {me.user.role === 'USER' ? '无权访问' : '管理功能正在准备中'}
+                </h1>
+              </main>
+            }
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </WorkspaceShell>
+    </QueryClientProvider>
   );
 }

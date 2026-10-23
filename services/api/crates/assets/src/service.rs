@@ -29,6 +29,17 @@ pub struct MediaData {
     pub partial: bool,
 }
 impl AssetService {
+    pub async fn export_bytes(&self, owner: Uuid, id: Uuid) -> Result<Vec<u8>, AssetError> {
+        let row = self.record(owner, id).await?;
+        if row.state != "READY" || row.bytes <= 0 || row.bytes > crate::MAX_VIDEO_BYTES as i64 {
+            return Err(AssetError::Validation);
+        }
+        Ok(self
+            .storage
+            .get(&row.object_key, 0..row.bytes as u64)
+            .await?
+            .to_vec())
+    }
     /// Canvas references retain ownership even after a media item expires or is deleted.
     /// This lets other graph edits remain saveable while the UI shows missing-media nodes.
     pub async fn validate_canvas_assets(

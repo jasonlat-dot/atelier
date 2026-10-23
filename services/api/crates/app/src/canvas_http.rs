@@ -14,6 +14,54 @@ use uuid::Uuid;
 fn service(s: &AppState) -> Result<&CanvasService, ApiError> {
     s.canvas.as_ref().ok_or_else(|| CanvasError::Store.into())
 }
+#[utoipa::path(get,path="/api/v1/projects/{id}/export",params(("id"=Uuid,Path)),security(("session"=[])),responses((status=200,body=String,content_type="application/zip"),(status=401,body=ErrorResponse),(status=404,body=ErrorResponse),(status=413,body=ErrorResponse),(status=429,body=ErrorResponse)))]
+pub async fn export(
+    State(s): State<AppState>,
+    AuthUser(actor): AuthUser,
+    path: Result<Path<Uuid>, PathRejection>,
+) -> Result<impl axum::response::IntoResponse, ApiError> {
+    let Path(id) = path.map_err(|_| invalid())?;
+    let bytes = service(&s)?.export(actor.user().id, id).await?;
+    Ok((
+        [
+            ("Content-Type", "application/zip"),
+            (
+                "Content-Disposition",
+                "attachment; filename=atelier-project.zip",
+            ),
+        ],
+        bytes,
+    ))
+}
+#[utoipa::path(post,path="/api/v1/projects/import",request_body(content=String,content_type="application/zip"),params(("Idempotency-Key"=Uuid,Header)),security(("session"=[],"csrf"=[])),responses((status=201,body=ProjectView),(status=401,body=ErrorResponse),(status=403,body=ErrorResponse),(status=413,body=ErrorResponse),(status=422,body=ErrorResponse),(status=429,body=ErrorResponse)))]
+pub async fn import(
+    State(s): State<AppState>,
+    AuthUser(actor): AuthUser,
+    request: axum::extract::Request,
+) -> Result<(StatusCode, Json<ProjectView>), ApiError> {
+    let key = key(request.headers())?;
+    if request
+        .headers()
+        .get("Content-Type")
+        .and_then(|v| v.to_str().ok())
+        != Some("application/zip")
+    {
+        return Err(invalid());
+    }
+    let service = service(&s)?;
+    let slot = service.archive_slot()?;
+    let bytes = axum::body::to_bytes(request.into_body(), MAX_ARCHIVE_BYTES)
+        .await
+        .map_err(|_| ApiError::from(CanvasError::TooLarge))?;
+    Ok((
+        StatusCode::CREATED,
+        Json(
+            service
+                .import(actor.user().id, key, bytes.to_vec(), slot)
+                .await?,
+        ),
+    ))
+}
 fn invalid() -> ApiError {
     CanvasError::Validation.into()
 }

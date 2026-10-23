@@ -8,6 +8,7 @@ export default defineConfig({
     'assets.spec.ts',
     'upstream.spec.ts',
     'generation.spec.ts',
+    'canvas.spec.ts',
   ],
   workers: 1,
   use: {

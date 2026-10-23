@@ -128,7 +128,7 @@ async fn revoke_device(
 
 #[derive(OpenApi)]
 #[openapi(
-    paths(crate::canvas_http::list,crate::canvas_http::create,crate::canvas_http::get_one,crate::canvas_http::save,crate::canvas_http::rename,crate::canvas_http::delete_one,crate::canvas_http::duplicate,crate::canvas_http::snapshots,crate::canvas_http::restore,crate::canvas_http::references,crate::generation_http::events,crate::generation_http::limits,crate::generation_http::quote,crate::generation_http::create,crate::generation_http::list,crate::generation_http::get_one,crate::generation_http::cancel,crate::upstream_http::accounts,crate::upstream_http::account,crate::upstream_http::create_account,crate::upstream_http::update_account,crate::upstream_http::delete_account,crate::upstream_http::import_accounts,crate::upstream_http::probe,crate::upstream_http::refresh_quota,crate::upstream_http::stats,crate::upstream_http::models,crate::upstream_http::create_model,crate::upstream_http::update_model,crate::upstream_http::bindings,crate::upstream_http::pricing,crate::upstream_http::save_pricing,crate::upstream_http::catalog,crate::assets_http::list,crate::assets_http::get_one,crate::assets_http::limits,crate::assets_http::upload,crate::assets_http::delete_one,crate::assets_http::delete_many,crate::assets_http::media,crate::wallet_http::summary,crate::wallet_http::ledger,crate::wallet_http::checkin,crate::wallet_http::redeem,crate::wallet_http::adjust,crate::wallet_http::create_codes,crate::wallet_http::codes,health, me, rename, logout, devices, revoke_device,crate::login_http::google_start,crate::login_http::google_callback,crate::login_http::public_config,crate::login_http::mfa_setup,crate::login_http::mfa_verify),
+    paths(crate::canvas_http::export,crate::canvas_http::import,crate::canvas_http::list,crate::canvas_http::create,crate::canvas_http::get_one,crate::canvas_http::save,crate::canvas_http::rename,crate::canvas_http::delete_one,crate::canvas_http::duplicate,crate::canvas_http::snapshots,crate::canvas_http::restore,crate::canvas_http::references,crate::generation_http::events,crate::generation_http::limits,crate::generation_http::quote,crate::generation_http::create,crate::generation_http::list,crate::generation_http::get_one,crate::generation_http::cancel,crate::upstream_http::accounts,crate::upstream_http::account,crate::upstream_http::create_account,crate::upstream_http::update_account,crate::upstream_http::delete_account,crate::upstream_http::import_accounts,crate::upstream_http::probe,crate::upstream_http::refresh_quota,crate::upstream_http::stats,crate::upstream_http::models,crate::upstream_http::create_model,crate::upstream_http::update_model,crate::upstream_http::bindings,crate::upstream_http::pricing,crate::upstream_http::save_pricing,crate::upstream_http::catalog,crate::assets_http::list,crate::assets_http::get_one,crate::assets_http::limits,crate::assets_http::upload,crate::assets_http::delete_one,crate::assets_http::delete_many,crate::assets_http::media,crate::wallet_http::summary,crate::wallet_http::ledger,crate::wallet_http::checkin,crate::wallet_http::redeem,crate::wallet_http::adjust,crate::wallet_http::create_codes,crate::wallet_http::codes,health, me, rename, logout, devices, revoke_device,crate::login_http::google_start,crate::login_http::google_callback,crate::login_http::public_config,crate::login_http::mfa_setup,crate::login_http::mfa_verify),
     modifiers(&CookieSecurity),
     components(schemas(
 atelier_canvas::ProjectInfo,atelier_canvas::ProjectPage,atelier_canvas::ProjectView,atelier_canvas::CreateProject,atelier_canvas::RenameProject,atelier_canvas::ProjectSnapshot,atelier_canvas::ProjectReference,atelier_canvas::CanvasGraph,atelier_canvas::CanvasNode,atelier_canvas::NodeContent,atelier_canvas::CanvasEdge,atelier_canvas::Point,atelier_canvas::NodeSize,atelier_canvas::Viewport,atelier_canvas::Background,atelier_canvas::EdgeRole,atelier_canvas::TextData,atelier_canvas::ImageData,atelier_canvas::VideoData,atelier_canvas::GenerateData,atelier_canvas::GenMeta,
@@ -157,6 +157,16 @@ pub fn openapi() -> utoipa::openapi::OpenApi {
 
 pub fn router(state: AppState) -> Router {
     let protected = Router::new()
+        .route(
+            "/api/v1/projects/import",
+            post(crate::canvas_http::import)
+                .layer(axum::extract::DefaultBodyLimit::disable())
+                .fallback(protected_missing),
+        )
+        .route(
+            "/api/v1/projects/{id}/export",
+            get(crate::canvas_http::export).fallback(protected_missing),
+        )
         .route(
             "/api/v1/projects",
             get(crate::canvas_http::list)

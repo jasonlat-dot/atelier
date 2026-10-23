@@ -39,7 +39,12 @@ const creation = [
   { path: '/', label: '工作台', icon: LayoutDashboard, ready: true },
   { path: '/generate', label: '图片与视频生成', icon: Sparkles, ready: true },
   { path: '/chat', label: 'AI 智能对话', icon: MessageSquare },
-  { path: '/canvas', label: '无限创作画布', icon: GalleryHorizontal },
+  {
+    path: '/canvas',
+    label: '无限创作画布',
+    icon: GalleryHorizontal,
+    ready: true,
+  },
   { path: '/assets', label: '我的素材库', icon: FolderOpen, ready: true },
 ];
 const personal = [
@@ -152,10 +157,10 @@ export default function WorkspaceShell({
               <X size={17} />
             </button>
           </div>
-          <button className="new-space" disabled title="创作空间即将开放">
+          <Link className="new-space" to="/canvas/new" onClick={closeOnMobile}>
             <Plus size={16} />
             新建创作空间
-          </button>
+          </Link>
           <nav className="navigation" aria-label="主导航">
             {groups.map(([label, items]) => (
               <section key={label}>
@@ -245,7 +250,10 @@ export default function WorkspaceShell({
               <span>/</span>
               <strong>
                 {[...creation, ...personal, ...admin].find(
-                  (item) => item.path === location.pathname,
+                  (item) =>
+                    item.path === location.pathname ||
+                    (item.path === '/canvas' &&
+                      location.pathname.startsWith('/canvas/')),
                 )?.label || '工作台'}
               </strong>
             </div>

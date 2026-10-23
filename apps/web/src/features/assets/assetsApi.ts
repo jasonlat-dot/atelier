@@ -5,6 +5,14 @@ export type AssetPage = components['schemas']['AssetPage'];
 export type AssetLimits = components['schemas']['AssetLimits'];
 export type Filters = { kind: string; source: string; search: string };
 export const assetsApi = {
+  projects: (id: string, signal?: AbortSignal) =>
+    request<components['schemas']['ProjectReference'][]>(
+      `/assets/${id}/projects`,
+      'GET',
+      undefined,
+      undefined,
+      signal,
+    ),
   limits: (signal?: AbortSignal) =>
     request<AssetLimits>('/assets/limits', 'GET', undefined, undefined, signal),
   list: (filters: Filters, before?: string, signal?: AbortSignal) => {

@@ -9,12 +9,14 @@ export default function ReferencePicker({
   onSelect,
   onClose,
   onError,
+  media = false,
 }: {
   selected: Asset[];
   max: number;
   onSelect: (assets: Asset[]) => void;
   onClose: () => void;
   onError: (error: unknown) => string;
+  media?: boolean;
 }) {
   const [items, setItems] = useState<Asset[]>([]);
   const [picked, setPicked] = useState(selected);
@@ -26,7 +28,11 @@ export default function ReferencePicker({
   useEffect(() => {
     const abort = new AbortController();
     void assetsApi
-      .list({ kind: 'image', source: '', search: '' }, before, abort.signal)
+      .list(
+        { kind: media ? '' : 'image', source: '', search: '' },
+        before,
+        abort.signal,
+      )
       .then((page) => {
         if (!abort.signal.aborted) {
           setItems(page.items.filter((a) => a.state === 'READY'));
@@ -41,11 +47,15 @@ export default function ReferencePicker({
         if (!abort.signal.aborted) setBusy(false);
       });
     return () => abort.abort();
-  }, [before, retry, onError]);
+  }, [before, retry, onError, media]);
   return (
-    <AssetDialog title="选择参考图片" onClose={onClose}>
+    <AssetDialog
+      title={media ? '添加素材到画布' : '选择参考图片'}
+      onClose={onClose}
+    >
       <p className="muted">
-        从素材库选择最多 {max} 张图片，已选 {picked.length} 张。
+        从素材库选择最多 {max} {media ? '个素材' : '张图片'}，已选{' '}
+        {picked.length} 个。
       </p>
       {error && (
         <p role="alert">
@@ -123,7 +133,7 @@ export default function ReferencePicker({
             onClose();
           }}
         >
-          使用所选图片
+          {media ? '添加所选素材' : '使用所选图片'}
         </button>
       </div>
     </AssetDialog>
