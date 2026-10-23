@@ -3,7 +3,11 @@ import {
   Download,
   FolderOpen,
   Image as ImageIcon,
+  Info,
+  LayoutGrid,
+  List,
   Plus,
+  RefreshCw,
   Search,
   Trash2,
   UploadCloud,
@@ -40,6 +44,8 @@ export default function AssetsPage({
     search: '',
   });
   const [draft, setDraft] = useState('');
+  const [view, setView] = useState<'grid' | 'list'>('grid');
+  const [sort, setSort] = useState('date');
   const [limits, setLimits] = useState<AssetLimits>();
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -75,6 +81,8 @@ export default function AssetsPage({
   const [preview, setPreview] = useState<Asset>();
   const [dragging, setDragging] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const searchInput = useRef<HTMLInputElement>(null);
+  const rules = useRef<HTMLDetailsElement>(null);
   const lock = useRef(false);
   const generation = useRef(0);
   const uploadAbort = useRef<AbortController>();
@@ -158,6 +166,40 @@ export default function AssetsPage({
     return () => clearTimeout(timeout);
   }, [draft]);
   useEffect(() => () => uploadAbort.current?.abort(), []);
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || document.querySelector('dialog[open]'))
+        return;
+      const target = event.target as HTMLElement;
+      const editing = target.closest(
+        'input, textarea, select, [contenteditable="true"]',
+      );
+      if (
+        event.key === '/' &&
+        !editing &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey
+      ) {
+        event.preventDefault();
+        searchInput.current?.focus();
+      }
+      if (event.key === 'Escape') {
+        if (rules.current) rules.current.open = false;
+        if (!editing && !lock.current) setSelected([]);
+      }
+    };
+    const closeRules = (event: PointerEvent) => {
+      if (rules.current && !rules.current.contains(event.target as Node))
+        rules.current.open = false;
+    };
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('pointerdown', closeRules);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('pointerdown', closeRules);
+    };
+  }, []);
   useEffect(() => {
     // Signed previews expire; periodically fetch fresh links while this page is open.
     const interval = setInterval(
@@ -275,9 +317,15 @@ export default function AssetsPage({
     void load();
     if (!limits) void loadLimits();
   };
+  const visibleItems = [...items].sort((a, b) => {
+    if (sort === 'name')
+      return a.name.localeCompare(b.name, 'zh-CN') || a.id.localeCompare(b.id);
+    if (sort === 'size') return b.bytes - a.bytes || a.id.localeCompare(b.id);
+    return b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id);
+  });
   return (
     <main
-      className={`page-padding assets-page ${dragging ? 'assets-dragging' : ''}`}
+      className={`page-padding assets-page ${selected.length ? 'assets-selecting' : ''} ${dragging ? 'assets-dragging' : ''}`}
       onDragOver={(event) => {
         if (event.dataTransfer.types.includes('Files')) {
           event.preventDefault();
@@ -294,22 +342,50 @@ export default function AssetsPage({
         void upload(Array.from(event.dataTransfer.files));
       }}
     >
-      <div className="page-title-row">
+      <div className="page-title-row assets-page-head">
         <div>
-          <div className="eyebrow">LIBRARY</div>
           <h1>我的素材库</h1>
           <p className="page-subtitle">
             在同一空间里管理图片、视频和生成结果。
           </p>
         </div>
-        <button
-          className="btn btn-dark"
-          disabled={busy || !limits}
-          onClick={() => fileInput.current?.click()}
-        >
-          <Plus size={15} />
-          上传素材
-        </button>
+        <div className="assets-head-actions">
+          <details className="assets-rules" ref={rules}>
+            <summary>
+              <Info size={15} />
+              上传规则
+            </summary>
+            <div className="assets-rules-content">
+              {limits ? (
+                <>
+                  <p>
+                    图片：PNG、JPEG、WebP，单张不超过{' '}
+                    {size(limits.image_max_bytes)}。
+                  </p>
+                  <p>
+                    {limits.video_enabled
+                      ? `视频：MP4、WebM，不超过 ${size(limits.video_max_bytes)}、${limits.max_video_seconds} 秒，上传后自动转码。`
+                      : '视频处理服务尚未启用，当前可上传图片。'}
+                  </p>
+                </>
+              ) : (
+                <p>上传限制正在读取；读取失败时请刷新重试。</p>
+              )}
+              <p>
+                每次最多上传 10
+                个文件，也可以直接拖入页面。保留期限请在素材预览中查看。
+              </p>
+            </div>
+          </details>
+          <button
+            className="btn btn-dark"
+            disabled={busy || !limits}
+            onClick={() => fileInput.current?.click()}
+          >
+            <Plus size={15} />
+            上传素材
+          </button>
+        </div>
       </div>
       <input
         ref={fileInput}
@@ -332,7 +408,7 @@ export default function AssetsPage({
       <div className="assets-toolbar">
         <div className="filter-tabs" role="group" aria-label="素材类型">
           {[
-            ['', '全部素材'],
+            ['', '全部'],
             ['image', '图片'],
             ['video', '视频'],
           ].map(([value, label]) => (
@@ -351,9 +427,10 @@ export default function AssetsPage({
         <div className="assets-search">
           <Search size={15} />
           <input
+            ref={searchInput}
             aria-label="搜索素材"
             type="search"
-            placeholder="搜索素材名称"
+            placeholder="搜索素材名称（按 / 聚焦）"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
           />
@@ -373,9 +450,39 @@ export default function AssetsPage({
           <option value="upload">上传的素材</option>
           <option value="generated">生成的素材</option>
         </select>
+        <select
+          className="input"
+          aria-label="素材排序"
+          aria-describedby={cursor ? 'assets-sort-scope' : undefined}
+          value={sort}
+          onChange={(event) => setSort(event.target.value)}
+        >
+          <option value="date">最近添加</option>
+          <option value="name">名称</option>
+          <option value="size">文件大小（大到小）</option>
+        </select>
+        <div className="assets-view-switch" role="group" aria-label="素材视图">
+          <button
+            aria-label="网格视图"
+            title="网格视图"
+            aria-pressed={view === 'grid'}
+            onClick={() => setView('grid')}
+          >
+            <LayoutGrid size={16} />
+            <span>网格</span>
+          </button>
+          <button
+            aria-label="列表视图"
+            title="列表视图"
+            aria-pressed={view === 'list'}
+            onClick={() => setView('list')}
+          >
+            <List size={16} />
+            <span>列表</span>
+          </button>
+        </div>
       </div>
       <div className="assets-list-summary">
-        <span>{loading ? '正在读取素材…' : `共 ${total} 个素材`}</span>
         <div>
           {items.length > 0 && (
             <label>
@@ -392,6 +499,12 @@ export default function AssetsPage({
               选择本页
             </label>
           )}
+          <span>{loading ? '正在读取素材…' : `共 ${total} 个素材`}</span>
+          {cursor && (
+            <span id="assets-sort-scope">
+              已加载 {items.length} 个，排序应用于已加载素材
+            </span>
+          )}
           {selected.length > 0 && (
             <button
               className="text-action asset-delete-action"
@@ -402,14 +515,24 @@ export default function AssetsPage({
               删除已选（{selected.length}）
             </button>
           )}
-          <button
-            className="text-action"
-            disabled={busy || loading}
-            onClick={refresh}
-          >
-            刷新列表
-          </button>
+          {selected.length > 0 && (
+            <button
+              className="text-action"
+              disabled={busy}
+              onClick={() => setSelected([])}
+            >
+              取消选择
+            </button>
+          )}
         </div>
+        <button
+          className="text-action"
+          disabled={busy || loading}
+          onClick={refresh}
+        >
+          <RefreshCw size={14} />
+          刷新列表
+        </button>
       </div>
       {message && (
         <p className="assets-message" role="status">
@@ -437,18 +560,19 @@ export default function AssetsPage({
       {loading && !items.length ? (
         <div
           className="asset-grid assets-skeleton"
+          data-view={view}
           aria-label="正在加载素材"
           aria-busy="true"
         >
-          {[0, 1, 2, 3].map((index) => (
+          {[0, 1, 2, 3, 4, 5].map((index) => (
             <div key={index} />
           ))}
         </div>
       ) : (
-        <div className="asset-grid">
-          {items.map((asset) => (
+        <div className="asset-grid" data-view={view} aria-busy={loading}>
+          {visibleItems.map((asset) => (
             <article
-              className="asset-card"
+              className={`asset-card ${selected.includes(asset.id) ? 'asset-card-selected' : ''}`}
               key={asset.id}
               draggable={asset.state === 'READY'}
               onDragStart={(e) => {
@@ -489,40 +613,55 @@ export default function AssetsPage({
                       <ImageIcon size={26} />
                       {asset.state === 'FAILED'
                         ? '处理失败，请重新上传'
-                        : '正在处理…'}
+                        : asset.state === 'READY'
+                          ? '暂无缩略图，点击预览'
+                          : '正在处理…'}
                     </span>
                   )}
                 </button>
                 <span className="asset-type">
                   {asset.kind === 'video' ? '视频' : '图片'}
                 </span>
+                {asset.kind === 'video' && !!asset.duration_ms && (
+                  <span className="asset-duration">
+                    {(asset.duration_ms / 1000).toFixed(1)} 秒
+                  </span>
+                )}
+                <button
+                  className="asset-card-delete"
+                  aria-label={`删除 ${asset.name}`}
+                  title="删除素材"
+                  disabled={busy}
+                  onClick={() => setDeleting([asset.id])}
+                >
+                  <Trash2 size={15} />
+                </button>
               </div>
               <div className="asset-info">
                 <strong title={asset.name}>{asset.name}</strong>
-                <span>
+                <span className="asset-dimensions">
                   {asset.width && asset.height
                     ? `${asset.width} × ${asset.height} · `
                     : ''}
                   {asset.state === 'FAILED'
                     ? '未生成可用文件'
                     : size(asset.bytes)}
-                  {asset.duration_ms
-                    ? ` · ${(asset.duration_ms / 1000).toFixed(1)} 秒`
-                    : ''}
                 </span>
                 <div className="asset-card-footer">
-                  <small>
-                    {asset.source === 'upload' ? '已上传' : '生成结果'} ·{' '}
-                    {new Date(asset.created_at).toLocaleDateString('zh-CN')}
-                  </small>
-                  <button
-                    className="icon-btn"
-                    aria-label={`删除 ${asset.name}`}
-                    disabled={busy}
-                    onClick={() => setDeleting([asset.id])}
+                  <small
+                    className={`asset-source ${asset.source === 'generated' ? 'asset-source-generated' : ''}`}
                   >
-                    <Trash2 size={15} />
-                  </button>
+                    {asset.source === 'upload' ? '已上传' : '生成结果'}
+                  </small>
+                  <time
+                    dateTime={asset.created_at}
+                    title={new Date(asset.created_at).toLocaleString('zh-CN')}
+                  >
+                    {new Date(asset.created_at).toLocaleDateString('zh-CN', {
+                      month: 'long',
+                      day: 'numeric',
+                    })}
+                  </time>
                 </div>
               </div>
             </article>
@@ -542,6 +681,17 @@ export default function AssetsPage({
               ? '试试其他名称、类型或来源。'
               : '选择本地文件上传，或将图片拖到这个页面。'}
           </p>
+          {(filters.search || filters.source || filters.kind) && (
+            <button
+              className="btn btn-light"
+              onClick={() => {
+                setDraft('');
+                setFilters({ kind: '', source: '', search: '' });
+              }}
+            >
+              清除筛选
+            </button>
+          )}
           {!filters.search && !filters.source && !filters.kind && (
             <button
               className="btn btn-light"
@@ -565,13 +715,6 @@ export default function AssetsPage({
           </button>
         </div>
       )}
-      <p className="assets-help">
-        图片支持 PNG、JPEG、WebP，单张不超过 20 MB。
-        {limits?.video_enabled
-          ? '视频支持 MP4、WebM，不超过 200 MB、60 秒，上传后自动转码。'
-          : '视频处理服务尚未启用，当前可上传图片。'}
-        素材默认保留 30 天。
-      </p>
       {dragging && (
         <div className="assets-drop-indicator">
           <UploadCloud size={38} />
