@@ -78,6 +78,45 @@ pub(crate) async fn update(
         .await?;
     Ok(())
 }
+// Allocation is authoritative only for reversals/expiry. All sources share one balance.
+pub(crate) async fn allocate(
+    db: &mut PgConnection,
+    entry: &Journal,
+    ledger: i64,
+) -> Result<(), WalletError> {
+    if entry.balance > 0 {
+        sqlx::query("INSERT INTO wallet_credit_lots(user_id,ledger_id,credits,remaining) VALUES($1,$2,$3,$3)")
+            .bind(entry.owner).bind(ledger).bind(entry.balance).execute(db).await?;
+    } else if entry.balance < 0 {
+        let target = if matches!(
+            entry.ref_type.as_deref(),
+            Some("order_refund" | "subscription_expiry")
+        ) {
+            entry.reference.as_deref()
+        } else {
+            None
+        };
+        let rows = sqlx::query("SELECT b.id,b.remaining FROM wallet_credit_lots b LEFT JOIN credit_ledger l ON l.id=b.ledger_id WHERE b.user_id=$1 AND b.remaining>0 AND ($2::text IS NULL OR (l.ref_type='order' AND l.ref_id=$2)) ORDER BY b.id FOR UPDATE OF b")
+            .bind(entry.owner).bind(target).fetch_all(&mut *db).await?;
+        let mut left = entry.balance.checked_neg().ok_or(WalletError::Validation)?;
+        for row in rows {
+            let amount = left.min(row.get("remaining"));
+            sqlx::query("UPDATE wallet_credit_lots SET remaining=remaining-$2 WHERE id=$1")
+                .bind(row.get::<i64, _>("id"))
+                .bind(amount)
+                .execute(&mut *db)
+                .await?;
+            left -= amount;
+            if left == 0 {
+                break;
+            }
+        }
+        if left != 0 {
+            return Err(WalletError::Store);
+        }
+    }
+    Ok(())
+}
 pub(crate) async fn outstanding(
     db: &mut PgConnection,
     owner: Uuid,

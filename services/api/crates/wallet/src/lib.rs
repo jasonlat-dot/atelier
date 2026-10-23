@@ -1,7 +1,11 @@
 //! The only module permitted to write wallet balances.
+mod billing;
+mod billing_types;
 mod postgres;
 mod service;
 mod views;
+pub use billing::{BillingService, ManualProvider, PaymentProvider};
+pub use billing_types::*;
 pub use service::{Operation, WalletError, WalletService};
 pub use views::*;
 

@@ -122,20 +122,15 @@ impl GenerationService {
                 .await?;
         Ok(requested.min(latest))
     }
-    pub async fn limits(&self) -> Result<GenerationLimits, GenerationError> {
-        let settings:serde_json::Value=sqlx::query_scalar("SELECT jsonb_object_agg(key,value) FROM system_settings WHERE key IN ('free_max_resolution','max_active_jobs_free')").fetch_one(&self.db).await?;
-        let resolution = settings["free_max_resolution"]
-            .as_str()
-            .filter(|s| ["1K", "2K", "4K"].contains(s))
-            .ok_or(GenerationError::Store)?;
-        let jobs = settings["max_active_jobs_free"]
-            .as_i64()
-            .filter(|n| (1..=64).contains(n))
-            .ok_or(GenerationError::Store)?;
+    pub async fn limits(&self, owner: Uuid) -> Result<GenerationLimits, GenerationError> {
+        let tier = atelier_wallet::BillingService::new(self.db.clone())
+            .entitlements(owner)
+            .await
+            .map_err(|_| GenerationError::Store)?;
         Ok(GenerationLimits {
-            tier: "FREE".into(),
-            max_resolution: resolution.into(),
-            max_active_jobs: jobs,
+            tier: tier.tier,
+            max_resolution: tier.max_resolution,
+            max_active_jobs: tier.max_active_jobs,
             video_enabled: self.assets.video_enabled(),
         })
     }

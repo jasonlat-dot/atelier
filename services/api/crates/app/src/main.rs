@@ -107,6 +107,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         expose_openapi: config.expose_openapi,
     };
     let listener = tokio::net::TcpListener::bind(config.bind_address).await?;
+    let billing_maintenance =
+        tokio::spawn(atelier_wallet::BillingService::new(db.clone()).maintenance_loop());
     let reconciliation =
         tokio::spawn(atelier_wallet::WalletService::new(db.clone()).reconciliation_loop());
     let chat_recovery =
@@ -123,6 +125,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .with_graceful_shutdown(shutdown())
     .await?;
+    billing_maintenance.abort();
     reconciliation.abort();
     chat_recovery.abort();
     media_maintenance.abort();

@@ -128,9 +128,9 @@ pub async fn cancel(
 #[utoipa::path(get,path="/api/v1/generation/limits",security(("session"=[])),responses((status=200,body=GenerationLimits),(status=401,body=ErrorResponse),(status=403,body=ErrorResponse),(status=503,body=ErrorResponse)))]
 pub async fn limits(
     State(s): State<AppState>,
-    _actor: AuthUser,
+    AuthUser(actor): AuthUser,
 ) -> Result<Json<GenerationLimits>, ApiError> {
-    Ok(Json(service(&s)?.limits().await?))
+    Ok(Json(service(&s)?.limits(actor.user().id).await?))
 }
 
 #[derive(Deserialize, utoipa::IntoParams)]

@@ -38,6 +38,9 @@ pub async fn summary(
     State(state): State<AppState>,
     AuthUser(actor): AuthUser,
 ) -> Result<Json<WalletSummary>, ApiError> {
+    BillingService::new(state.db.clone())
+        .entitlements(actor.user().id)
+        .await?;
     Ok(Json(service(&state).summary(actor.user().id).await?))
 }
 #[derive(Deserialize, utoipa::IntoParams)]

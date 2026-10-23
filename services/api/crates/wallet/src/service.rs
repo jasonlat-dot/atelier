@@ -411,7 +411,7 @@ fn positive(amount: i64) -> Result<(), WalletError> {
         Err(WalletError::Validation)
     }
 }
-async fn write(
+pub(crate) async fn write(
     db: &mut PgConnection,
     key: &str,
     mut entry: repo::Journal,
@@ -443,6 +443,7 @@ async fn write(
         return Err(WalletError::Insufficient);
     }
     let id = repo::append(db, key, &entry).await?;
+    repo::allocate(db, &entry, id).await?;
     repo::update(db, entry.owner, next_balance, next_held).await?;
     Ok(CreditReceipt {
         ledger_id: id,

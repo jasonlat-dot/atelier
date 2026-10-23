@@ -264,3 +264,63 @@ async fn moderation_reference_ownership_and_event_failure_never_leave_a_hold(db:
             .unwrap();
     assert_eq!(rows, 0);
 }
+
+#[sqlx::test(migrations = "../../migrations")]
+#[ignore = "Requires isolated PostgreSQL"]
+async fn paid_subscription_enforces_live_resolution_concurrency_and_expiry(db: PgPool) {
+    model(&db).await;
+    let user = owner(&db).await;
+    let admin = owner(&db).await;
+    let s = service(&db);
+    let mut i = input();
+    i.resolution = "4K".into();
+    i.n = 1;
+    assert!(matches!(
+        s.quote(user, &i.quote()).await,
+        Err(GenerationError::Tier)
+    ));
+    let billing = atelier_wallet::BillingService::new(db.clone());
+    let p:atelier_wallet::PlanInput=serde_json::from_value(serde_json::json!({"name":"Pro","kind":"MONTHLY","description":"paid fixture","price_cents":1000,"currency":"CNY","credits":100,"period_days":30,"rollover":true,"concurrency_limit":3,"max_resolution":"4K","retention_days":180,"active":true})).unwrap();
+    let plan = billing.create_plan(admin, &p).await.unwrap();
+    let order = billing
+        .create_order(
+            user,
+            Uuid::new_v4(),
+            &atelier_wallet::OrderInput {
+                plan_id: plan.id,
+                plan_revision: 1,
+            },
+        )
+        .await
+        .unwrap();
+    billing
+        .mark_paid(
+            admin,
+            order.id,
+            Uuid::new_v4(),
+            &atelier_wallet::PaidInput {
+                amount_cents: 1000,
+                currency: "CNY".into(),
+                trade_no: "sub-generation".into(),
+                reason: "test receipt".into(),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(s.limits(user).await.unwrap().max_resolution, "4K");
+    s.quote(user, &i.quote()).await.unwrap();
+    let a = s.create(user, Uuid::new_v4(), i.clone()).await.unwrap().job;
+    s.create(user, Uuid::new_v4(), i.clone()).await.unwrap();
+    s.create(user, Uuid::new_v4(), i.clone()).await.unwrap();
+    assert!(matches!(
+        s.create(user, Uuid::new_v4(), i.clone()).await,
+        Err(GenerationError::ActiveLimit)
+    ));
+    sqlx::query("UPDATE subscriptions SET starts_at=now()-interval '31 days',current_period_end=now()-interval '1 day' WHERE order_id=$1").bind(order.id).execute(&db).await.unwrap();
+    assert_eq!(s.limits(user).await.unwrap().tier, "FREE");
+    assert!(matches!(
+        s.quote(user, &i.quote()).await,
+        Err(GenerationError::Tier)
+    ));
+    s.cancel(user, a.id).await.unwrap();
+}

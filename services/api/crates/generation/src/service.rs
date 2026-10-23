@@ -47,7 +47,10 @@ impl GenerationService {
         if !active {
             return Err(GenerationError::NotFound);
         }
-        let q = price(&mut tx, input).await?;
+        let tier = atelier_wallet::BillingService::entitlements_in_transaction(&mut tx, owner)
+            .await
+            .map_err(|_| GenerationError::Store)?;
+        let q = price(&mut tx, input, &tier.max_resolution).await?;
         tx.commit().await?;
         Ok(q)
     }
@@ -115,19 +118,14 @@ impl GenerationService {
             tx.commit().await?;
             return Err(GenerationError::ContentPolicy);
         }
-        let quote = price(&mut tx, &input.quote()).await?;
+        let tier = atelier_wallet::BillingService::entitlements_in_transaction(&mut tx, owner)
+            .await
+            .map_err(|_| GenerationError::Store)?;
+        let quote = price(&mut tx, &input.quote(), &tier.max_resolution).await?;
         if quote.kind == "video" && !self.assets.video_enabled() {
             return Err(GenerationError::Model);
         }
-        let limit: serde_json::Value = sqlx::query_scalar(
-            "SELECT value FROM system_settings WHERE key='max_active_jobs_free'",
-        )
-        .fetch_one(&mut *tx)
-        .await?;
-        let limit = limit
-            .as_i64()
-            .filter(|n| (1..=64).contains(n))
-            .ok_or(GenerationError::Store)?;
+        let limit = tier.max_active_jobs;
         let count: i64 = sqlx::query_scalar(
             "SELECT count(*) FROM generation_jobs WHERE owner_id=$1 AND finished_at IS NULL",
         )
@@ -340,7 +338,11 @@ pub(crate) async fn terminal_failure(
     }
     event(tx, owner, id).await
 }
-async fn price(tx: &mut PgConnection, i: &QuoteInput) -> Result<Quote, GenerationError> {
+async fn price(
+    tx: &mut PgConnection,
+    i: &QuoteInput,
+    max_resolution: &str,
+) -> Result<Quote, GenerationError> {
     if i.model_id.len() > 64
         || i.quality.len() > 16
         || i.ratio.len() > 8
@@ -383,17 +385,13 @@ async fn price(tx: &mut PgConnection, i: &QuoteInput) -> Result<Quote, Generatio
         return Err(GenerationError::Validation);
     }
     if kind == "image" {
-        let free: serde_json::Value =
-            sqlx::query_scalar("SELECT value FROM system_settings WHERE key='free_max_resolution'")
-                .fetch_one(&mut *tx)
-                .await?;
         let level = |s: &str| match s {
             "1K" => 1,
             "2K" => 2,
             "4K" => 3,
             _ => 0,
         };
-        if level(&i.resolution) > level(free.as_str().ok_or(GenerationError::Store)?) {
+        if level(&i.resolution) > level(max_resolution) {
             return Err(GenerationError::Tier);
         }
     }

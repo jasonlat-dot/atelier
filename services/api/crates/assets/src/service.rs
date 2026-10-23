@@ -136,16 +136,11 @@ impl AssetService {
         {
             return Err(AssetError::Quota);
         }
-        let retention: serde_json::Value = sqlx::query_scalar(
-            "SELECT value FROM system_settings WHERE key='asset_retention_days_free'",
-        )
-        .fetch_one(&mut *tx)
-        .await?;
-        let retention = retention
-            .as_i64()
-            .filter(|n| (1..=3650).contains(n))
-            .ok_or(AssetError::Store)?;
-        Ok((tx, retention as i32))
+        let retention = atelier_wallet::BillingService::entitlements_in_transaction(&mut tx, owner)
+            .await
+            .map_err(|_| AssetError::Store)?
+            .retention_days;
+        Ok((tx, retention))
     }
     pub async fn upload_image(
         &self,

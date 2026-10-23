@@ -1,5 +1,6 @@
 pub mod assets_http;
 pub mod auth_http;
+pub mod billing_http;
 pub mod canvas_http;
 pub mod chat_http;
 pub mod config;

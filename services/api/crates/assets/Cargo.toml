@@ -9,6 +9,7 @@ workspace = true
 
 [dependencies]
 atelier-common.workspace = true
+atelier-wallet.workspace = true
 axum.workspace = true
 tokio.workspace = true
 serde.workspace = true

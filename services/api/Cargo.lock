@@ -134,6 +134,7 @@ name = "atelier-assets"
 version = "0.1.0"
 dependencies = [
  "atelier-common",
+ "atelier-wallet",
  "axum",
  "base64 0.22.1",
  "bytes",
