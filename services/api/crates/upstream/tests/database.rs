@@ -19,7 +19,7 @@ fn service(db: &PgPool) -> UpstreamService {
     )
 }
 fn account(name: &str) -> AccountInput {
-    serde_json::from_value(serde_json::json!({"name":name,"base_url":"https://8.8.8.8/v1","secret":"synthetic-upstream-secret-key","group_tag":"test-pool","priority":10,"weight":1,"concurrency_limit":2,"quota_total":100,"quota_remaining":100,"enabled":true})).unwrap()
+    serde_json::from_value(serde_json::json!({"name":name,"base_url":"http://8.8.8.8:8080/v1","secret":"synthetic-upstream-secret-key","group_tag":"test-pool","priority":10,"weight":1,"concurrency_limit":2,"quota_total":100,"quota_remaining":100,"enabled":true})).unwrap()
 }
 fn model(enabled: bool, revision: Option<i64>) -> ModelInput {
     serde_json::from_value(serde_json::json!({"id":"public-image","kind":"image","display_name":"Creative image","upstream_model":"server-only-provider-model","enabled":enabled,"capabilities":{"qualities":["low","high"],"ratios":["1:1","16:9"],"resolutions":["1K","4K"],"max_n":4,"max_refs":4,"supports_edit":true},"sort_order":10,"revision":revision})).unwrap()

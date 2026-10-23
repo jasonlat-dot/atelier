@@ -2,7 +2,7 @@
 
 按根目录《Atelier AI 创作平台 · 产品与工程开发规格书（AI 开发版）》逐里程碑开发。
 当前状态以 [docs/PROGRESS.md](docs/PROGRESS.md) 为准；假设见 [docs/DECISIONS.md](docs/DECISIONS.md)。
-原始原型保存在提交 `c3384c5`。M0–M4 已完成；M4 账号池与模型的后端和原型管理页面、本地回归与 [远端 Actions](https://github.com/jasonlat-dot/atelier/actions/runs/39834923711) 均已通过，详见 [进度记录](docs/PROGRESS.md)。本轮停在 M4，不进入 M5；S3 继续待定。实际部署与 Google 实账号回归见 [M1 部署清单](docs/M1_VALIDATION.md)。
+原始原型保存在提交 `c3384c5`。M0–M5 已完成；M4 账号池与模型的后端和原型管理页面、本地回归与 [远端 Actions](https://github.com/jasonlat-dot/atelier/actions/runs/39834923711) 均已通过，详见 [进度记录](docs/PROGRESS.md)。本轮停在 M5，不进入 M6；S3 继续待定。实际部署与 Google 实账号回归见 [M1 部署清单](docs/M1_VALIDATION.md)。
 
 ## 已部署 WSL 数据库
 
@@ -117,7 +117,7 @@ cargo test --locked -p atelier-auth --tests -- --ignored
 
 地址、API 密钥和内部模型标识只写不读，编辑时留空保留。账号池沿用后端 `MASTER_KEY` 加密凭据，不新增前端密钥；该主密钥需持久保存，不能随意更换。连接测试只请求模型列表；额度目前由管理员在上游核对后手动更新，不代表自动查询上游余额。
 
-出站默认仅支持公网 HTTPS，并拒绝私网、重定向和环境代理。生产无需配置 `UPSTREAM_DEV_ALLOW_ORIGINS`；只有隔离本地假上游开发才可显式填写准确 loopback origin，且 API 与公开入口都必须为 loopback。实际供应商协议或模型能力需要用供应商真实配置核对，本轮使用受控假上游验收，未发起付费生成。
+上游出站支持公网 HTTP 和 HTTPS，并拒绝私网、重定向和环境代理。生产无需配置 `UPSTREAM_DEV_ALLOW_ORIGINS`；只有隔离本地假上游开发才可显式填写准确 loopback origin，且 API 与公开入口都必须为 loopback。实际供应商协议或模型能力需要用供应商真实配置核对，本轮使用受控假上游验收，未发起付费生成。
 
 重启仓库根目录的 `npm run dev` 后，新迁移会自动执行。M4 账号、模型、价格和内部路由适配验收见 [M4 记录](docs/PR_M4.md)。
 

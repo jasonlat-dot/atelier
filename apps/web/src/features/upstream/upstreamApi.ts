@@ -68,10 +68,12 @@ export function errorText(error: unknown, props: AdminProps): string {
     if (error.status === 401 || error.code === 'ACCOUNT_DISABLED')
       props.onExpired();
     if (error.code === 'MFA_REQUIRED') props.onReload();
+    if (error.code === 'UPSTREAM_ADDRESS_REJECTED')
+      return '接口地址未通过校验，请使用公网 HTTP 或 HTTPS 地址，不要在地址中填写用户名、密码、查询参数或锚点。';
     if (error.status === 409)
       return '配置已变更或账号仍有请求处理中，请关闭后刷新，再重试。';
     if (error.status === 422)
-      return '配置未通过校验，请检查必填项、数值范围、账号绑定及价格；地址须使用公网 HTTPS。';
+      return '配置未通过校验，请检查必填项、数值范围、账号绑定及价格。';
     if (error.status === 429) return '操作过于频繁，请稍后重试。';
     if (error.status === 403)
       return '权限或安全验证已失效，请刷新页面重新验证。';

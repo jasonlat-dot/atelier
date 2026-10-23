@@ -299,3 +299,11 @@ M1 历史交付未打包、未部署。条款仍是开发占位，正式法律�
 - `scripts/ci/prepare_apt_sources.py` 统一覆盖 sources.list、sources.list.d 的有效 list/sources 和 apt-mirrors*.txt，保留 Signed-By/包签名验证；残留未知 Azure 地址即失败。新增三项回归覆盖 mirror+file 入口、传统/其他源、幂等及未知地址失败。
 - identity-schema 固定 Ubuntu 24.04，缓存下载的 .deb（不缓存 apt 索引和运行中 partial 目录），安装仍通过 apt 校验、运行完整视频/数据库回归。准备步骤检查所有实际镜像列表后才下载；不靠延长超时或跳过测试处理问题。
 - 本切片仅 CI、准备脚本和相关测试/文档，M6 仍未开始。三项本地回归通过；最终以推送后最新 Actions 的完整结果为准。
+
+
+### 上游账号支持 HTTP（负责人新要求）
+
+- `upstream/egress.rs` 允许公网 HTTP/HTTPS 及端口，保存、导入和 Provider 共用该策略；FTP/file/gopher/WS 等仍拒绝，HTTP 与 HTTPS 均执行私网/元数据/凭据 URL/DNS/重定向边界校验。开发 loopback 精确白名单保持原样，无需新增开关。
+- 管理表单明确提示两种协议，地址拒绝使用专门提示；一般参数错误不再误提示“必须 HTTPS”。README/API/环境样例与 DECISIONS 同步，本轮不涉及站点入口、OIDC、S3 或 M6。
+- 新测试先确认公网 HTTP 被旧实现拒绝，再修改通过；数据库管理用例改用 HTTP 地址，浏览器实际输入 http://8.8.8.8:8080/v1 并断言发送值。Rust fmt/clippy/workspace test/check（普通测试新增一项，共 60）、上游隔离 PG/Redis 8 项和管理 HTTP 1 项、管理浏览器 6 项（HTTP 输入用例修改后单独再次通过）、前端 typecheck/lint/format:check/build 通过，无新依赖或迁移。
+- CI 镜像列表修复 6178fa4 的视频工具准备在 36 秒内通过（之前 5 分钟超时），继续跟进最终提交的完整远端结果。

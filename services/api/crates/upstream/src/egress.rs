@@ -1,4 +1,4 @@
-//! Resolve once, reject every unsafe answer, and pin approved addresses to TLS.
+//! Resolve once, reject every unsafe answer, and pin approved HTTP(S) addresses.
 use crate::{Error, ProviderFailure};
 use bytes::Bytes;
 use reqwest::{header, Method};
@@ -50,7 +50,7 @@ impl EgressPolicy {
         let local = self
             .local_origins
             .contains(&url.origin().ascii_serialization());
-        if (!local && url.scheme() != "https")
+        if !matches!(url.scheme(), "http" | "https")
             || !url.username().is_empty()
             || url.password().is_some()
             || url.fragment().is_some()
@@ -293,7 +293,6 @@ mod tests {
     fn rejects_private_special_encoded_and_credential_addresses() {
         let policy = EgressPolicy::default();
         for address in [
-            "http://8.8.8.8",
             "https://127.1",
             "https://2130706433",
             "https://0x7f000001",
@@ -318,5 +317,44 @@ mod tests {
         assert!(local.parse("http://127.0.0.1:19999/v1", false).is_ok());
         assert!(local.parse("http://127.0.0.1:19998/v1", false).is_err());
         assert!(EgressPolicy::with_local_origins(vec!["http://10.0.0.1".into()]).is_err());
+    }
+
+    #[test]
+    fn permits_public_http_and_https_but_keeps_address_and_scheme_checks() {
+        let policy = EgressPolicy::default();
+        for scheme in ["http", "https"] {
+            for host in ["8.8.8.8", "example.com", "example.com:8080"] {
+                assert!(policy
+                    .parse(&format!("{scheme}://{host}/v1"), false)
+                    .is_ok());
+            }
+            for host in [
+                "127.1",
+                "2130706433",
+                "0x7f000001",
+                "10.0.0.1",
+                "169.254.169.254",
+                "[::1]",
+                "[::ffff:127.0.0.1]",
+                "localhost",
+                "foo.local",
+                "user:pass@example.com",
+            ] {
+                assert!(policy
+                    .parse(&format!("{scheme}://{host}/v1"), false)
+                    .is_err());
+            }
+            assert!(policy
+                .parse(&format!("{scheme}://example.com/v1?token=value"), false)
+                .is_err());
+            assert!(policy
+                .parse(&format!("{scheme}://example.com/v1#fragment"), false)
+                .is_err());
+        }
+        for scheme in ["ftp", "file", "gopher", "ws", "wss"] {
+            assert!(policy
+                .parse(&format!("{scheme}://example.com/v1"), false)
+                .is_err());
+        }
     }
 }

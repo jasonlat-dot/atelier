@@ -649,6 +649,10 @@ function AccountForm({
           autoComplete="off"
           placeholder={a ? '已配置，留空保留' : 'https://api.example.com/v1'}
         />
+        <small>
+          支持 http:// 和 https://，可填写端口，例如
+          http://api.example.com:8080/v1。
+        </small>
       </label>
       <label>
         API 密钥
