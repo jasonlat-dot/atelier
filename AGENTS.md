@@ -37,3 +37,5 @@
 
 
 - M6 与 M7 已完成：M6 5c7257d 的 Actions #39901276711、M7 最终完整功能 4af169f 的 Actions #39907015646 两作业均 completed/success。M7 配置与验收见 README、docs/PR_M7.md、PROGRESS；本轮收尾仅文档，然后停止，不进入 M8。S3 与视频尾帧扩展待定，任何新阶段先取得负责人新授权。
+
+- 最新范围：负责人要求研究 https://github.com/basketikun/infinite-canvas 并按截图持续完善现有画布 UI/交互。本轮为 M6 体验修订，不进入 M8；沿用分切片提交推送及 Actions 跟进。当前审计与验证见 docs/PR_CANVAS_UX.md、PROGRESS 最新条目。

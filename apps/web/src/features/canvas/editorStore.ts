@@ -8,6 +8,7 @@ export type EditorState = {
   future: Graph[];
   checkpoint?: Graph;
   change: (fn: (graph: Graph) => Graph, history?: boolean) => void;
+  preview: (fn: (graph: Graph) => Graph) => void;
   begin: () => void;
   end: () => void;
   select: (ids: string[]) => void;
@@ -47,7 +48,9 @@ export const createEditorStore = (graph: Graph) =>
           future: history ? [] : s.future,
         };
       }),
-    begin: () => set((s) => ({ checkpoint: s.graph })),
+    // Pointer frames update positions only. Serialize/save once when the gesture ends.
+    preview: (fn) => set((s) => ({ graph: fn(s.graph) })),
+    begin: () => set((s) => ({ checkpoint: s.checkpoint || s.graph })),
     end: () =>
       set((s) => ({
         past:
@@ -55,8 +58,19 @@ export const createEditorStore = (graph: Graph) =>
             ? [...s.past, s.checkpoint].slice(-50)
             : s.past,
         checkpoint: undefined,
+        sequence:
+          s.checkpoint && s.checkpoint !== s.graph
+            ? s.sequence + 1
+            : s.sequence,
+        future: s.checkpoint && s.checkpoint !== s.graph ? [] : s.future,
       })),
-    select: (selected) => set({ selected }),
+    select: (selected) =>
+      set((s) =>
+        s.selected.length === selected.length &&
+        s.selected.every((id, i) => id === selected[i])
+          ? s
+          : { selected },
+      ),
     reset: (graph) =>
       set((s) => ({
         graph,
@@ -99,42 +113,49 @@ export function nodeLabel(node: GraphNode): string {
       ? '生成节点'
       : node.data.label || (node.type === 'image' ? '图片' : '视频');
 }
-export function connect(
+export function connectionIssue(
   graph: Graph,
   source: string,
   target: string,
-  role?: Graph['edges'][number]['role'],
-): Graph {
+): string | undefined {
   const a = graph.nodes.find((n) => n.id === source),
     b = graph.nodes.find((n) => n.id === target);
-  if (
-    !a ||
-    !b ||
-    source === target ||
-    graph.edges.some((e) => e.source === source && e.target === target)
-  )
-    throw new Error('请选择两个不同且尚未连接的节点。');
-  const inferred =
-    a.type === 'text' && b.type === 'generate'
-      ? 'prompt'
-      : a.type === 'image' && b.type === 'generate'
-        ? 'reference'
-        : a.type === 'generate' && ['image', 'video'].includes(b.type)
-          ? 'result'
-          : undefined;
-  if (!inferred)
-    throw new Error('文字或图片可连到生成节点，生成节点可连到结果图片或视频。');
+  if (!a || !b) return '连接的节点已经不存在。';
+  if (source === target) return '节点不能连接自己。';
+  if (graph.edges.some((e) => e.source === source && e.target === target))
+    return '这两个节点已经连接。';
+  if (!(
+    (['text', 'image'].includes(a.type) && b.type === 'generate') ||
+    (a.type === 'generate' && ['image', 'video'].includes(b.type))
+  ))
+    return '把文字或图片的输出端连接到生成节点左侧的输入端。';
   const seen = new Set<string>(),
     stack = [target];
   while (stack.length) {
     const id = stack.pop()!;
-    if (id === source) throw new Error('这条连线会形成循环，请调整连接方向。');
+    if (id === source) return '这条连线会形成循环，请调整连接方向。';
     if (seen.has(id)) continue;
     seen.add(id);
     stack.push(
       ...graph.edges.filter((e) => e.source === id).map((e) => e.target),
     );
   }
+}
+export function connect(
+  graph: Graph,
+  source: string,
+  target: string,
+  role?: Graph['edges'][number]['role'],
+): Graph {
+  const issue = connectionIssue(graph, source, target);
+  if (issue) throw new Error(issue);
+  const sourceNode = graph.nodes.find((n) => n.id === source)!;
+  const inferred =
+    sourceNode.type === 'text'
+      ? 'prompt'
+      : sourceNode.type === 'image'
+        ? 'reference'
+        : 'result';
   return {
     ...graph,
     edges: [

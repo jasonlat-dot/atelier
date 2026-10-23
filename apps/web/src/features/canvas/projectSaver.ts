@@ -35,12 +35,17 @@ export class ProjectSaver {
     this.notify('saved');
   }
   dirty() {
-    return this.savedSequence !== this.store.getState().sequence;
+    const state = this.store.getState();
+    return (
+      this.savedSequence !== state.sequence ||
+      (!!state.checkpoint && state.checkpoint !== state.graph)
+    );
   }
   close() {
     this.channel?.close();
   }
   async flush(): Promise<void> {
+    if (this.store.getState().checkpoint) this.store.getState().end();
     if (this.pending) {
       await this.pending;
       if (this.dirty()) return this.flush();
@@ -58,6 +63,10 @@ export class ProjectSaver {
   }
   private async write() {
     while (this.dirty()) {
+      if (this.store.getState().checkpoint) {
+        this.notify('dirty');
+        return;
+      }
       if (this.blocked) throw new Error('画布版本已变更。');
       const { sequence, graph } = this.store.getState();
       this.notify('saving');

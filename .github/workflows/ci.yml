@@ -19,6 +19,7 @@ jobs:
         working-directory: apps/web
       - run: python -m unittest discover -s tests -p "test_ci_apt_sources.py"
       - run: node --check scripts/dev.mjs
+      - run: node --test tests/canvas-state.test.cjs
       - run: node --test tests/dev-proxy.test.mjs
       - run: cargo fmt --all --check
         working-directory: services/api
