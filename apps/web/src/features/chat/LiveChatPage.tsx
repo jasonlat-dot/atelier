@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams, useNavigate, useBlocker } from 'react-router-dom';
 import {
   ArrowUp,
+  ArrowDown,
   ArrowUpRight,
   Plus,
   MessageSquare,
@@ -67,7 +68,8 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
     [uncertain, setUncertain] = useState(false),
     [streaming, setStreaming] = useState<Streaming>(),
     [contextOpen, setContextOpen] = useState(window.innerWidth > 1180),
-    [historyOpen, setHistoryOpen] = useState(false);
+    [historyOpen, setHistoryOpen] = useState(false),
+    [awayFromLatest, setAwayFromLatest] = useState(false);
   const [before, setBefore] = useState<string>(),
     [older, setOlder] = useState<Turn[]>([]),
     [dialog, setDialog] = useState<'rename' | 'delete'>(),
@@ -77,7 +79,9 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
     submission = useRef<{ id: string; key: string; body: S['SendMessage'] }>(),
     lock = useRef(false),
     streamId = useRef<string>(),
-    bottom = useRef<HTMLDivElement>(null),
+    messages = useRef<HTMLDivElement>(null),
+    composerInput = useRef<HTMLTextAreaElement>(null),
+    followLatest = useRef(true),
     pendingCreate = useRef<{ key: string; title: string }>();
   const list = useQuery({
     queryKey: ['chat-list', me.user.id, before],
@@ -142,6 +146,8 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
     submission.current = undefined;
     pendingCreate.current = undefined;
     setStreaming(undefined);
+    followLatest.current = true;
+    setAwayFromLatest(false);
   }, [id]);
   useEffect(
     () => () => {
@@ -150,8 +156,16 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
     [],
   );
   useEffect(() => {
-    bottom.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [streaming?.reply, view.data?.turns.length]);
+    const container = messages.current;
+    if (container && followLatest.current)
+      container.scrollTop = container.scrollHeight;
+  }, [streaming, view.data?.turns.length, effective]);
+  useEffect(() => {
+    const field = composerInput.current;
+    if (!field) return;
+    field.style.height = 'auto';
+    field.style.height = `${Math.min(field.scrollHeight, 160)}px`;
+  }, [input]);
   const refresh = useCallback(
     async (conversation?: string) => {
       await queries.invalidateQueries({ queryKey: ['chat-list', me.user.id] });
@@ -171,6 +185,8 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
     )
       return;
     lock.current = true;
+    followLatest.current = true;
+    setAwayFromLatest(false);
     setBusy(true);
     setError('');
     setNotice('');
@@ -321,15 +337,16 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
     !uncertain &&
     (!effective || (!!view.data && turns.length === 0));
   const usedTokens = view.data?.estimated_tokens || 0;
-  const contextPercent = config.data
-    ? Math.min(
-        100,
-        Math.max(
-          0,
-          Math.round((usedTokens / config.data.context_window) * 100),
-        ),
-      )
-    : undefined;
+  const contextPercent =
+    config.data && config.data.context_window > 0
+      ? Math.min(
+          100,
+          Math.max(
+            0,
+            Math.round((usedTokens / config.data.context_window) * 100),
+          ),
+        )
+      : undefined;
   return (
     <div
       className={`chat-layout live-chat ${contextOpen ? 'has-context' : ''}`}
@@ -343,6 +360,7 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
           <button
             className="icon-btn"
             aria-label="新建对话"
+            title="新建对话"
             disabled={busy}
             onClick={() => {
               navigate('/chat');
@@ -365,7 +383,14 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
           </button>
         </div>
         <div className="thread-list">
-          {list.isPending && <p role="status">正在加载对话…</p>}
+          {list.isPending && (
+            <div className="chat-history-loading" role="status">
+              <span>正在加载对话…</span>
+              <i aria-hidden="true" />
+              <i aria-hidden="true" />
+              <i aria-hidden="true" />
+            </div>
+          )}
           {list.isError && (
             <p role="alert">
               列表加载失败。
@@ -389,6 +414,7 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
               <Link
                 className={effective === c.id ? 'selected' : ''}
                 to={`/chat/${c.id}`}
+                title={c.title}
                 aria-current={effective === c.id ? 'page' : undefined}
               >
                 <MessageSquare size={15} />
@@ -397,7 +423,11 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
             </Fragment>
           ))}
           {list.data?.items.length === 0 && (
-            <p className="empty-caption">从一个想法开始，保存你的创作讨论。</p>
+            <div className="chat-history-empty">
+              <MessageSquare size={22} aria-hidden="true" />
+              <strong>还没有创作讨论</strong>
+              <p>发送第一条消息后，对话会自动保存在这里。</p>
+            </div>
           )}
         </div>
         <div className="gen-actions">
@@ -406,7 +436,7 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
             disabled={!before}
             onClick={() => setBefore(undefined)}
           >
-            首批
+            最近对话
           </button>
           <button
             className="text-action"
@@ -422,12 +452,15 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
           <button
             className="icon-btn chat-history-toggle"
             aria-label="展开对话列表"
+            aria-expanded={historyOpen}
             onClick={() => setHistoryOpen(!historyOpen)}
           >
             <PanelLeft size={17} />
           </button>
           <div>
-            <strong>{view.data?.conversation.title || '新的创作讨论'}</strong>
+            <strong title={view.data?.conversation.title}>
+              {view.data?.conversation.title || '新的创作讨论'}
+            </strong>
             <p>实时流式对话 · 仅本人可见</p>
           </div>
           <div className="gen-actions">
@@ -436,6 +469,7 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
                 <button
                   className="icon-btn"
                   aria-label="重命名对话"
+                  title="重命名对话"
                   disabled={busy}
                   onClick={() => {
                     setTitle(view.data?.conversation.title || '新对话');
@@ -447,6 +481,7 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
                 <button
                   className="icon-btn"
                   aria-label="删除当前对话"
+                  title="删除当前对话"
                   disabled={busy}
                   onClick={() => setDialog('delete')}
                 >
@@ -458,6 +493,8 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
               className="btn btn-light"
               onClick={() => setContextOpen(!contextOpen)}
               aria-expanded={contextOpen}
+              aria-label={contextOpen ? '收起智能上下文' : '展开智能上下文'}
+              title={contextOpen ? '收起智能上下文' : '展开智能上下文'}
             >
               <PanelRightClose size={15} />
               智能上下文
@@ -466,9 +503,26 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
         </div>
         <div
           className={`chat-messages ${showWelcome ? 'is-empty' : ''}`}
+          ref={messages}
           aria-label="对话消息"
           aria-live="polite"
+          onScroll={(event) => {
+            const container = event.currentTarget;
+            const away =
+              container.scrollHeight -
+                container.scrollTop -
+                container.clientHeight >
+              80;
+            followLatest.current = !away;
+            setAwayFromLatest(away);
+          }}
         >
+          {effective && view.isPending && !streaming && (
+            <div className="chat-message-loading" role="status">
+              <MessageSquare size={24} aria-hidden="true" />
+              <span>正在打开这段创作讨论…</span>
+            </div>
+          )}
           {view.isError && (
             <p role="alert">
               {failed(view.error)}
@@ -494,7 +548,13 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
                   '优化我的海报提示词',
                   '生成一张安静海岸的图片',
                 ].map((text) => (
-                  <button key={text} onClick={() => setInput(text)}>
+                  <button
+                    key={text}
+                    onClick={() => {
+                      setInput(text);
+                      composerInput.current?.focus();
+                    }}
+                  >
                     {text}
                     <ArrowUpRight size={16} />
                   </button>
@@ -616,9 +676,22 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
               </div>
             </div>
           )}
-          <div ref={bottom} />
         </div>
         <div className="composer">
+          {awayFromLatest && !showWelcome && (
+            <button
+              className="chat-jump-latest"
+              onClick={() => {
+                followLatest.current = true;
+                setAwayFromLatest(false);
+                const container = messages.current;
+                if (container) container.scrollTop = container.scrollHeight;
+              }}
+            >
+              <ArrowDown size={14} />
+              回到最新消息
+            </button>
+          )}
           <div className="chat-composer-card">
             {error && (
               <p role="alert">
@@ -649,14 +722,20 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
               </p>
             )}
             <textarea
+              ref={composerInput}
               aria-label="对话内容"
+              aria-describedby="chat-composer-hint"
               maxLength={4000}
               placeholder="描述你的创意，或让 AI 帮你整理工作流…"
               value={input}
               disabled={busy || uncertain || !!busyTurn}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                if (
+                  !e.nativeEvent.isComposing &&
+                  e.key === 'Enter' &&
+                  (e.ctrlKey || e.metaKey)
+                ) {
                   e.preventDefault();
                   void send();
                 }
@@ -677,7 +756,7 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
                     </option>
                   ))}
                 </select>
-                <span>
+                <span id="chat-composer-hint">
                   {config.data
                     ? `完整回复 ${config.data.credits_per_message} 积分 · 失败/中断不扣`
                     : '正在读取模型…'}{' '}
@@ -729,6 +808,10 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
               )}
             </div>
           </div>
+          <div className="chat-composer-count" aria-live="off">
+            {input.length > 0 &&
+              `${input.length.toLocaleString('zh-CN')} / 4,000 字符`}
+          </div>
         </div>
       </section>
       {contextOpen && (
@@ -770,7 +853,7 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
             <div className="meter">
               <i
                 style={{
-                  width: `${Math.min(100, ((view.data?.estimated_tokens || 0) / (config.data?.context_window || 8192)) * 100)}%`,
+                  width: `${contextPercent ?? 0}%`,
                 }}
               />
             </div>
