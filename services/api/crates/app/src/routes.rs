@@ -128,10 +128,10 @@ async fn revoke_device(
 
 #[derive(OpenApi)]
 #[openapi(
-    paths(crate::generation_http::quote,crate::generation_http::create,crate::generation_http::list,crate::generation_http::get_one,crate::generation_http::cancel,crate::upstream_http::accounts,crate::upstream_http::account,crate::upstream_http::create_account,crate::upstream_http::update_account,crate::upstream_http::delete_account,crate::upstream_http::import_accounts,crate::upstream_http::probe,crate::upstream_http::refresh_quota,crate::upstream_http::stats,crate::upstream_http::models,crate::upstream_http::create_model,crate::upstream_http::update_model,crate::upstream_http::bindings,crate::upstream_http::pricing,crate::upstream_http::save_pricing,crate::upstream_http::catalog,crate::assets_http::list,crate::assets_http::get_one,crate::assets_http::limits,crate::assets_http::upload,crate::assets_http::delete_one,crate::assets_http::delete_many,crate::assets_http::media,crate::wallet_http::summary,crate::wallet_http::ledger,crate::wallet_http::checkin,crate::wallet_http::redeem,crate::wallet_http::adjust,crate::wallet_http::create_codes,crate::wallet_http::codes,health, me, rename, logout, devices, revoke_device,crate::login_http::google_start,crate::login_http::google_callback,crate::login_http::public_config,crate::login_http::mfa_setup,crate::login_http::mfa_verify),
+    paths(crate::generation_http::events,crate::generation_http::limits,crate::generation_http::quote,crate::generation_http::create,crate::generation_http::list,crate::generation_http::get_one,crate::generation_http::cancel,crate::upstream_http::accounts,crate::upstream_http::account,crate::upstream_http::create_account,crate::upstream_http::update_account,crate::upstream_http::delete_account,crate::upstream_http::import_accounts,crate::upstream_http::probe,crate::upstream_http::refresh_quota,crate::upstream_http::stats,crate::upstream_http::models,crate::upstream_http::create_model,crate::upstream_http::update_model,crate::upstream_http::bindings,crate::upstream_http::pricing,crate::upstream_http::save_pricing,crate::upstream_http::catalog,crate::assets_http::list,crate::assets_http::get_one,crate::assets_http::limits,crate::assets_http::upload,crate::assets_http::delete_one,crate::assets_http::delete_many,crate::assets_http::media,crate::wallet_http::summary,crate::wallet_http::ledger,crate::wallet_http::checkin,crate::wallet_http::redeem,crate::wallet_http::adjust,crate::wallet_http::create_codes,crate::wallet_http::codes,health, me, rename, logout, devices, revoke_device,crate::login_http::google_start,crate::login_http::google_callback,crate::login_http::public_config,crate::login_http::mfa_setup,crate::login_http::mfa_verify),
     modifiers(&CookieSecurity),
     components(schemas(
-        atelier_generation::JobInput,atelier_generation::QuoteInput,atelier_generation::Quote,atelier_generation::JobView,atelier_generation::JobParams,atelier_generation::Reference,atelier_generation::JobOutput,atelier_generation::JobReceipt,atelier_generation::JobPage,atelier_generation::JobEvent,
+        atelier_generation::GenerationEvent,atelier_generation::EventOutput,atelier_generation::GenerationLimits,atelier_generation::JobInput,atelier_generation::QuoteInput,atelier_generation::Quote,atelier_generation::JobView,atelier_generation::JobParams,atelier_generation::Reference,atelier_generation::JobOutput,atelier_generation::JobReceipt,atelier_generation::JobPage,atelier_generation::JobEvent,
         atelier_upstream::AccountInput,atelier_upstream::AccountPage,atelier_upstream::AccountView,atelier_upstream::ModelInput,atelier_upstream::ModelView,atelier_upstream::BindingInput,atelier_upstream::QuotaInput,atelier_upstream::Pricing,atelier_upstream::Capabilities,atelier_upstream::PriceRule,atelier_upstream::SizeMultiplier,atelier_upstream::ProbeResult,atelier_upstream::FailureCode,atelier_upstream::AccountStats,atelier_upstream::ErrorCount,atelier_upstream::Catalog,atelier_upstream::CatalogModel,
         atelier_wallet::WalletSummary, atelier_wallet::LedgerPage, atelier_wallet::LedgerEntry, atelier_wallet::CheckinReceipt, atelier_wallet::CreditReceipt, atelier_wallet::RedeemRequest, atelier_wallet::AdjustRequest, atelier_wallet::CreateCodesRequest, atelier_wallet::CreatedCodes, atelier_wallet::CreatedCode, atelier_wallet::CodeInfo,
         atelier_assets::AssetView,atelier_assets::AssetPage,atelier_assets::DeleteAssets,atelier_assets::AssetLimits,crate::assets_http::UploadFile,
@@ -156,6 +156,14 @@ pub fn openapi() -> utoipa::openapi::OpenApi {
 
 pub fn router(state: AppState) -> Router {
     let protected = Router::new()
+        .route(
+            "/api/v1/events",
+            get(crate::generation_http::events).fallback(protected_missing),
+        )
+        .route(
+            "/api/v1/generation/limits",
+            get(crate::generation_http::limits).fallback(protected_missing),
+        )
         .route(
             "/api/v1/generation/quote",
             post(crate::generation_http::quote)

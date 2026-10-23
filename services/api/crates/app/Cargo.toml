@@ -27,6 +27,7 @@ utoipa.workspace = true
 chrono.workspace = true
 uuid.workspace = true
 url.workspace = true
+futures-util = "0.3"
 
 [dev-dependencies]
 tower.workspace = true

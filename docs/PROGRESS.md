@@ -258,3 +258,10 @@ M1 历史交付未打包、未部署。条款仍是开发占位，正式法律�
 - 基础切片 e7d7eaf 的 Actions #39881534276 两个作业均 completed/success。当前 worker 全量检查进行中；SSE 和原型生成/任务界面仍待后续切片，M5 不标完成。
 
 - worker 切片 fmt/clippy/workspace test/check 通过（普通测试仍 59 项），完整隔离 PG/Redis/媒体/M5 回归 45/45 通过。无新版本依赖、无 API 契约变化；仍未开放生成前端，下一切片接 SSE 与原型任务界面。
+
+
+## M5 · SSE 与连接边界（进行中）
+
+- `generation/events.rs` 使用 PostgreSQL 只追加事件重放，LISTEN/NOTIFY 在提交后经 Redis Pub/Sub 跨实例唤醒；数据库仍为事实来源，丢失唤醒时每秒补查。每用户最多三个连接、实例最多 128 个，槽位租约随连接续期/关闭释放。
+- `/events` 支持 Last-Event-ID 和 after 游标、只查询本人事件；流持续复核会话/账号/MFA，失效立即关闭。事件输出链接重新按本人素材授权签名，不公开上游信息。`/generation/limits` 提供当前等级/分辨率/活跃上限/视频能力。
+- SSE HTTP 隔离回归（归属、重放、连接上限、未来游标、撤销会话断流）与真实 PG→Redis→实例唤醒回归均通过。fmt/clippy/workspace test/check（59 项普通测试）、前端 typecheck/build、OpenAPI/TS 契约通过。原型生成页面仍在下一切片，不标 M5 完成。

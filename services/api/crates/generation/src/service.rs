@@ -10,6 +10,7 @@ pub struct GenerationService {
     pub(crate) db: PgPool,
     pub(crate) assets: AssetService,
     pub(crate) wake: std::sync::Arc<tokio::sync::Notify>,
+    pub(crate) bus: Option<std::sync::Arc<crate::events::EventBus>>,
 }
 impl GenerationService {
     pub fn new(db: PgPool, assets: AssetService) -> Self {
@@ -17,6 +18,7 @@ impl GenerationService {
             db,
             assets,
             wake: std::sync::Arc::new(tokio::sync::Notify::new()),
+            bus: None,
         }
     }
     pub(crate) async fn owner_tx(

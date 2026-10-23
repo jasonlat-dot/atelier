@@ -110,3 +110,27 @@ pub struct JobEvent {
     pub payload: serde_json::Value,
     pub created_at: DateTime<Utc>,
 }
+#[derive(Serialize, ToSchema)]
+pub struct GenerationLimits {
+    pub tier: String,
+    pub max_resolution: String,
+    pub max_active_jobs: i64,
+    pub video_enabled: bool,
+}
+#[derive(Serialize, Deserialize, ToSchema)]
+pub struct GenerationEvent {
+    pub job_id: Uuid,
+    pub status: String,
+    pub progress: i32,
+    pub cancel_requested: bool,
+    pub error_code: Option<String>,
+    pub outputs: Vec<EventOutput>,
+}
+#[derive(Serialize, Deserialize, ToSchema)]
+pub struct EventOutput {
+    pub idx: i32,
+    pub asset_id: Uuid,
+    pub url: Option<String>,
+    pub width: Option<i32>,
+    pub height: Option<i32>,
+}

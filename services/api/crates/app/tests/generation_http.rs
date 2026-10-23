@@ -267,3 +267,158 @@ async fn generation_http_reprices_is_idempotent_and_enforces_csrf_ownership_and_
         StatusCode::UNPROCESSABLE_ENTITY
     );
 }
+
+async fn event_response(
+    state: &AppState,
+    secrets: &SessionSecrets,
+    after: Option<i64>,
+) -> axum::response::Response {
+    let mut req = Request::builder()
+        .method("GET")
+        .uri("/api/v1/events")
+        .header("Host", "atelier.test")
+        .header("Cookie", secrets.cookie());
+    if let Some(id) = after {
+        req = req.header("Last-Event-ID", id.to_string());
+    }
+    router(state.clone())
+        .oneshot(req.body(Body::empty()).unwrap())
+        .await
+        .unwrap()
+}
+#[sqlx::test(migrations = "../../migrations")]
+#[ignore = "Requires isolated PostgreSQL and TEST_REDIS_URL"]
+async fn sse_replays_only_owned_events_limits_connections_and_closes_revoked_sessions(db: PgPool) {
+    use base64::Engine;
+    use futures_util::StreamExt;
+    let (owner, user) = session(&db, false).await;
+    let (other_id, other) = session(&db, false).await;
+    let mut state = AppState::test();
+    state.db = db.clone();
+    state.auth = SessionService::new(
+        Arc::new(PostgresSessions::new(db.clone())),
+        PublicOrigin::parse("https://atelier.test").unwrap(),
+    );
+    let assets = atelier_assets::AssetService::new(
+        db.clone(),
+        atelier_assets::storage::Storage::memory(),
+        atelier_assets::signing::MediaSigner::from_base64(
+            &base64::engine::general_purpose::STANDARD.encode([59; 32]),
+        )
+        .unwrap(),
+    );
+    let service = atelier_generation::GenerationService::new(db.clone(), assets.clone())
+        .with_events(
+            &std::env::var("TEST_REDIS_URL").unwrap(),
+            &format!("events-test:{}", Uuid::new_v4()),
+        )
+        .await
+        .unwrap();
+    state.generation = Some(service.clone());
+    state.assets = Some(assets);
+    sqlx::query("INSERT INTO models(id,kind,display_name,upstream_model,enabled,capabilities) VALUES('image','image','Image','private-model',true,'{\"qualities\":[\"low\"],\"ratios\":[\"1:1\"],\"resolutions\":[\"1K\"],\"max_n\":1}')").execute(&db).await.unwrap();
+    sqlx::query("INSERT INTO pricing_rules(model_id,quality,base_credits) VALUES('image','low',1)")
+        .execute(&db)
+        .await
+        .unwrap();
+    let input = || {
+        serde_json::from_value::<atelier_generation::JobInput>(serde_json::json!({"model_id":"image","prompt":"A coast","quality":"low","ratio":"1:1","resolution":"1K","n":1})).unwrap()
+    };
+    let first = service
+        .create(owner, Uuid::new_v4(), input())
+        .await
+        .unwrap()
+        .job
+        .id;
+    service.cancel(owner, first).await.unwrap();
+    let foreign = service
+        .create(other_id, Uuid::new_v4(), input())
+        .await
+        .unwrap()
+        .job
+        .id;
+    service.cancel(other_id, foreign).await.unwrap();
+    let own = service.events(owner, 0, 100).await.unwrap();
+    assert_eq!(own.len(), 2);
+    let response = event_response(&state, &user, None).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(response.headers()["content-type"]
+        .to_str()
+        .unwrap()
+        .starts_with("text/event-stream"));
+    assert_eq!(response.headers()["X-Accel-Buffering"], "no");
+    let mut stream = response.into_body().into_data_stream();
+    let data = tokio::time::timeout(std::time::Duration::from_secs(2), stream.next())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    let text = String::from_utf8(data.to_vec()).unwrap();
+    assert!(text.contains(&first.to_string()));
+    assert!(!text.contains(&foreign.to_string()));
+    assert!(text.contains("event: job.updated"));
+    assert!(text.contains(&format!("id: {}", own[0].seq)));
+    drop(stream);
+    let replay = event_response(&state, &user, Some(own[0].seq)).await;
+    let mut stream = replay.into_body().into_data_stream();
+    let data = tokio::time::timeout(std::time::Duration::from_secs(2), stream.next())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert!(String::from_utf8(data.to_vec())
+        .unwrap()
+        .contains("CANCELLED"));
+    drop(stream);
+    let mut held = Vec::new();
+    for _ in 0..3 {
+        let r = event_response(&state, &other, None).await;
+        assert_eq!(r.status(), StatusCode::OK);
+        held.push(r);
+    }
+    assert_eq!(
+        event_response(&state, &other, None).await.status(),
+        StatusCode::TOO_MANY_REQUESTS
+    );
+    held.pop();
+    let mut opened = None;
+    for _ in 0..50 {
+        let r = event_response(&state, &other, None).await;
+        if r.status() == StatusCode::OK {
+            opened = Some(r);
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+    assert!(opened.is_some());
+    drop(opened);
+    drop(held);
+    let future = event_response(&state, &user, Some(i64::MAX)).await;
+    assert_eq!(future.status(), StatusCode::OK);
+    let mut stream = future.into_body().into_data_stream();
+    let next = service
+        .create(owner, Uuid::new_v4(), input())
+        .await
+        .unwrap()
+        .job
+        .id;
+    let data = tokio::time::timeout(std::time::Duration::from_secs(3), stream.next())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert!(String::from_utf8(data.to_vec())
+        .unwrap()
+        .contains(&next.to_string()));
+    sqlx::query("UPDATE sessions SET revoked_at=clock_timestamp() WHERE user_id=$1")
+        .bind(owner)
+        .execute(&db)
+        .await
+        .unwrap();
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_secs(3), stream.next())
+            .await
+            .unwrap()
+            .is_none()
+    );
+}

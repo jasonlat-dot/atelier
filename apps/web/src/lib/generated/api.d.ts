@@ -324,6 +324,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["events"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/generation/jobs": {
         parameters: {
             query?: never;
@@ -366,6 +382,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/generation/limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["limits"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -794,8 +826,36 @@ export interface components {
         ErrorResponse: {
             error: components["schemas"]["ErrorDetail"];
         };
+        EventOutput: {
+            /** Format: uuid */
+            asset_id: string;
+            /** Format: int32 */
+            height?: number | null;
+            /** Format: int32 */
+            idx: number;
+            url?: string | null;
+            /** Format: int32 */
+            width?: number | null;
+        };
         /** @enum {string} */
         FailureCode: "ACCOUNT_INVALID" | "RATE_LIMITED" | "UPSTREAM_ERROR" | "CONTENT_POLICY" | "BAD_REQUEST";
+        GenerationEvent: {
+            cancel_requested: boolean;
+            error_code?: string | null;
+            /** Format: uuid */
+            job_id: string;
+            outputs: components["schemas"]["EventOutput"][];
+            /** Format: int32 */
+            progress: number;
+            status: string;
+        };
+        GenerationLimits: {
+            /** Format: int64 */
+            max_active_jobs: number;
+            max_resolution: string;
+            tier: string;
+            video_enabled: boolean;
+        };
         Health: {
             milestone: string;
             status: string;
@@ -2729,6 +2789,70 @@ export interface operations {
             };
         };
     };
+    events: {
+        parameters: {
+            query?: never;
+            header: {
+                "Last-Event-ID": number;
+            };
+            path: {
+                after: number | null;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description job.updated events; PostgreSQL seq as event id, owner-scoped replay */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": components["schemas"]["GenerationEvent"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     list: {
         parameters: {
             query?: never;
@@ -2962,6 +3086,49 @@ export interface operations {
                 };
             };
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    limits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationLimits"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

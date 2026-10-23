@@ -1,9 +1,11 @@
 //! Durable generation jobs; financial writes always go through wallet service.
+mod events;
 mod service;
 mod types;
 mod worker;
 use atelier_common::ApiError;
 use axum::http::StatusCode;
+pub use events::EventPermit;
 pub use service::GenerationService;
 pub use types::*;
 pub use worker::GenerationWorker;
@@ -27,6 +29,8 @@ pub enum GenerationError {
     State,
     #[error("Requested resolution is unavailable for this account")]
     Tier,
+    #[error("Too many event streams")]
+    EventLimit,
     #[error(transparent)]
     Wallet(#[from] atelier_wallet::WalletError),
 }
@@ -59,6 +63,7 @@ impl From<GenerationError> for ApiError {
             GenerationError::ActiveLimit => (StatusCode::TOO_MANY_REQUESTS, "TOO_MANY_ACTIVE_JOBS"),
             GenerationError::ContentPolicy => (StatusCode::UNPROCESSABLE_ENTITY, "CONTENT_POLICY"),
             GenerationError::Tier => (StatusCode::FORBIDDEN, "RESOLUTION_NOT_ALLOWED"),
+            GenerationError::EventLimit => (StatusCode::TOO_MANY_REQUESTS, "SSE_CONNECTION_LIMIT"),
             GenerationError::State => (StatusCode::CONFLICT, "JOB_STATE_CONFLICT"),
             _ => (StatusCode::SERVICE_UNAVAILABLE, "SERVICE_UNAVAILABLE"),
         };

@@ -117,3 +117,142 @@ pub async fn cancel(
     let Path(id) = path.map_err(|_| invalid())?;
     Ok(Json(service(&s)?.cancel(actor.user().id, id).await?))
 }
+
+#[utoipa::path(get,path="/api/v1/generation/limits",security(("session"=[])),responses((status=200,body=GenerationLimits),(status=401,body=ErrorResponse),(status=403,body=ErrorResponse),(status=503,body=ErrorResponse)))]
+pub async fn limits(
+    State(s): State<AppState>,
+    _actor: AuthUser,
+) -> Result<Json<GenerationLimits>, ApiError> {
+    Ok(Json(service(&s)?.limits().await?))
+}
+
+#[derive(Deserialize, utoipa::IntoParams)]
+#[serde(deny_unknown_fields)]
+pub struct EventsQuery {
+    pub after: Option<i64>,
+}
+struct EventState {
+    service: GenerationService,
+    app: AppState,
+    headers: HeaderMap,
+    owner: Uuid,
+    cursor: i64,
+    pending: std::collections::VecDeque<JobEvent>,
+    permit: EventPermit,
+}
+#[utoipa::path(get,path="/api/v1/events",params(EventsQuery,("Last-Event-ID"=i64,Header)),security(("session"=[])),responses((status=200,body=GenerationEvent,content_type="text/event-stream",description="job.updated events; PostgreSQL seq as event id, owner-scoped replay"),(status=401,body=ErrorResponse),(status=403,body=ErrorResponse),(status=422,body=ErrorResponse),(status=429,body=ErrorResponse),(status=503,body=ErrorResponse)))]
+pub async fn events(
+    State(s): State<AppState>,
+    AuthUser(actor): AuthUser,
+    headers: HeaderMap,
+    query: Result<Query<EventsQuery>, QueryRejection>,
+) -> Result<axum::response::Response, ApiError> {
+    use axum::response::{
+        sse::{Event, KeepAlive, Sse},
+        IntoResponse,
+    };
+    let Query(q) = query.map_err(|_| invalid())?;
+    let mut values = headers.get_all("Last-Event-ID").iter();
+    let requested = match values.next() {
+        Some(v) => v
+            .to_str()
+            .ok()
+            .and_then(|s| s.parse::<i64>().ok())
+            .ok_or_else(invalid)?,
+        None => q.after.unwrap_or(0),
+    };
+    if values.next().is_some() || requested < 0 {
+        return Err(invalid());
+    }
+    let service = service(&s)?.clone();
+    let cursor = service.event_cursor(actor.user().id, requested).await?;
+    let permit = service.open_events(actor.user().id).await?;
+    let stream = futures_util::stream::unfold(
+        EventState {
+            service,
+            app: s,
+            headers,
+            owner: actor.user().id,
+            cursor,
+            pending: std::collections::VecDeque::new(),
+            permit,
+        },
+        |mut state| async move {
+            loop {
+                if !state.permit.valid() {
+                    return None;
+                }
+                let actor = state
+                    .app
+                    .auth
+                    .authenticate("GET", &state.headers)
+                    .await
+                    .ok()?;
+                if actor.user().id != state.owner {
+                    return None;
+                }
+                if actor.user().role != atelier_auth::policy::Role::User
+                    && actor
+                        .require_admin(atelier_auth::policy::Role::Admin)
+                        .is_err()
+                {
+                    return None;
+                }
+                if let Some(mut item) = state.pending.pop_front() {
+                    if let Some(outputs) = item
+                        .payload
+                        .get_mut("outputs")
+                        .and_then(|v| v.as_array_mut())
+                    {
+                        for output in outputs {
+                            if let Some(id) = output["asset_id"]
+                                .as_str()
+                                .and_then(|s| Uuid::parse_str(s).ok())
+                            {
+                                match state.app.assets.as_ref()?.get(state.owner, id).await {
+                                    Ok(asset) => {
+                                        output["url"] = serde_json::json!(asset.media_url);
+                                        output["width"] = serde_json::json!(asset.width);
+                                        output["height"] = serde_json::json!(asset.height);
+                                    }
+                                    Err(atelier_assets::AssetError::NotFound) => {
+                                        output["url"] = serde_json::Value::Null;
+                                    }
+                                    Err(_) => return None,
+                                }
+                            }
+                        }
+                    }
+                    state.cursor = item.seq;
+                    let event = Event::default()
+                        .event("job.updated")
+                        .id(item.seq.to_string())
+                        .json_data(item.payload)
+                        .ok()?;
+                    return Some((Ok::<_, std::convert::Infallible>(event), state));
+                }
+                state.pending = state
+                    .service
+                    .events(state.owner, state.cursor, 50)
+                    .await
+                    .ok()?
+                    .into();
+                if state.pending.is_empty() {
+                    tokio::select! {_=state.service.wait_events()=>{},_=tokio::time::sleep(std::time::Duration::from_secs(1))=>{}}
+                }
+            }
+        },
+    );
+    let mut response = Sse::new(stream)
+        .keep_alive(
+            KeepAlive::new()
+                .interval(std::time::Duration::from_secs(10))
+                .text("keepalive"),
+        )
+        .into_response();
+    response.headers_mut().insert(
+        "X-Accel-Buffering",
+        axum::http::HeaderValue::from_static("no"),
+    );
+    Ok(response)
+}

@@ -2388,6 +2388,104 @@
         ]
       }
     },
+    "/api/v1/events": {
+      "get": {
+        "tags": [
+          "crate::generation_http"
+        ],
+        "operationId": "events",
+        "parameters": [
+          {
+            "name": "after",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            }
+          },
+          {
+            "name": "Last-Event-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "job.updated events; PostgreSQL seq as event id, owner-scoped replay",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationEvent"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
     "/api/v1/generation/jobs": {
       "get": {
         "tags": [
@@ -2763,6 +2861,61 @@
         "security": [
           {
             "csrf": [],
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/generation/limits": {
+      "get": {
+        "tags": [
+          "crate::generation_http"
+        ],
+        "operationId": "limits",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationLimits"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
             "session": []
           }
         ]
@@ -4385,6 +4538,43 @@
           }
         }
       },
+      "EventOutput": {
+        "type": "object",
+        "required": [
+          "idx",
+          "asset_id"
+        ],
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "height": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "idx": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "width": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "FailureCode": {
         "type": "string",
         "enum": [
@@ -4394,6 +4584,68 @@
           "CONTENT_POLICY",
           "BAD_REQUEST"
         ]
+      },
+      "GenerationEvent": {
+        "type": "object",
+        "required": [
+          "job_id",
+          "status",
+          "progress",
+          "cancel_requested",
+          "outputs"
+        ],
+        "properties": {
+          "cancel_requested": {
+            "type": "boolean"
+          },
+          "error_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "job_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "outputs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EventOutput"
+            }
+          },
+          "progress": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "GenerationLimits": {
+        "type": "object",
+        "required": [
+          "tier",
+          "max_resolution",
+          "max_active_jobs",
+          "video_enabled"
+        ],
+        "properties": {
+          "max_active_jobs": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "max_resolution": {
+            "type": "string"
+          },
+          "tier": {
+            "type": "string"
+          },
+          "video_enabled": {
+            "type": "boolean"
+          }
+        }
       },
       "Health": {
         "type": "object",
