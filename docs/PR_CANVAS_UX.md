@@ -41,3 +41,8 @@ S3 与视频尾帧协议扩展仍待定。本轮不改变积分、权限、上�
 ## 远端与窗口缩放
 
 `7679aa7` 的 [Actions #39918528864](https://github.com/jasonlat-dot/atelier/actions/runs/39918528864) 两作业全部成功，含完整浏览器及真实 PG/Redis 验收。更早 `8889e63` 的窗口缩放用例曾在 ResizeObserver 更新前读取旧位置而失败；将 CSS 宽高约束与观察器定位结合，测试等待布局稳定，保持严格边界断言。加固后的 11 项画布回归与静态检查/构建通过，最后完整 CI 在 PROGRESS 记录。
+
+
+## 最终验收
+
+最终完整功能 `51ae28bde18d712f109cf2eb64e7a89273d4f138` 的 [Actions #39922507132](https://github.com/jasonlat-dot/atelier/actions/runs/39922507132) 两作业均 completed/success，含完整静态/构建/依赖审计、45 项 HTTP 浏览器和真实 PG/Redis 浏览器。负责人手动推送后已核对远端 main 与本地一致。本轮画布交互修订完成，不进入 M8。
