@@ -507,12 +507,15 @@ export default function GenerationPage(props: Props) {
     <main className="generation-page">
       <header className="gen-heading">
         <div>
-          <div className="eyebrow">CREATE WITH ATELIER</div>
+          <div className="eyebrow">GENERATE</div>
           <h1>生成工作台</h1>
           <p className="muted">让一个想法，成为看得见的作品。</p>
         </div>
-        <span className="gen-connection" role="status">
-          <i />
+        <span
+          className={`gen-connection ${connection === '实时更新' ? 'connected' : ''}`}
+          role="status"
+        >
+          <i aria-hidden="true" />
           {connection}
         </span>
       </header>
@@ -864,7 +867,10 @@ export default function GenerationPage(props: Props) {
                     <button
                       key={prompt}
                       disabled={disabled}
-                      onClick={() => edit({ prompt })}
+                      onClick={() => {
+                        edit({ prompt });
+                        document.getElementById('generation-prompt')?.focus();
+                      }}
                     >
                       {prompt} <Plus size={12} />
                     </button>
@@ -876,6 +882,9 @@ export default function GenerationPage(props: Props) {
             <>
               <div className="gen-result-meta">
                 <span className={`gen-status ${selected.status.toLowerCase()}`}>
+                  {selected.status === 'SUCCEEDED' && (
+                    <Check size={13} aria-hidden="true" />
+                  )}
                   {selected.cancel_requested && active(selected)
                     ? '正在取消'
                     : statuses[selected.status] || selected.status}
@@ -911,6 +920,14 @@ export default function GenerationPage(props: Props) {
                     <article key={asset.id}>
                       <button
                         className="gen-output-preview"
+                        style={{
+                          aspectRatio:
+                            asset.width && asset.height
+                              ? `${asset.width} / ${asset.height}`
+                              : asset.kind === 'video'
+                                ? '16 / 9'
+                                : '1 / 1',
+                        }}
                         aria-label={`预览结果 ${idx + 1}`}
                         onClick={() => setPreview(asset)}
                       >
@@ -983,18 +1000,27 @@ export default function GenerationPage(props: Props) {
                       ? ` · ${selected.params.seconds} 秒`
                       : ''}
                   </span>
-                  <time>
+                  <time dateTime={selected.created_at}>
                     {new Date(selected.created_at).toLocaleString('zh-CN')}
                   </time>
                 </div>
                 <div className="gen-settlement">
-                  <span>预占 {selected.cost}</span>
-                  <span>已结算 {selected.settled}</span>
-                  <span>已退回 {selected.released} 积分</span>
+                  <div>
+                    <span>预占</span> <strong>{selected.cost}</strong>
+                  </div>
+                  <div>
+                    <span>已结算</span> <strong>{selected.settled}</strong>
+                  </div>
+                  <div>
+                    <span>已退回</span>{' '}
+                    <strong>
+                      {selected.released} <small>积分</small>
+                    </strong>
+                  </div>
                 </div>
                 <div className="gen-actions">
                   <button
-                    className="btn"
+                    className="btn btn-dark"
                     disabled={disabled || uploading}
                     onClick={() => void reuse(selected)}
                   >
@@ -1042,6 +1068,9 @@ export default function GenerationPage(props: Props) {
               <button
                 key={job.id}
                 className={`gen-task ${selected?.id === job.id ? 'selected' : ''}`}
+                data-status={job.status}
+                aria-pressed={selected?.id === job.id}
+                title={job.prompt}
                 onClick={() => selectJob(job)}
               >
                 <div className="gen-task-icon">
@@ -1056,10 +1085,12 @@ export default function GenerationPage(props: Props) {
                 <div>
                   <strong>{job.prompt}</strong>
                   <span>
+                    {job.status === 'SUCCEEDED' && (
+                      <Check size={12} aria-hidden="true" />
+                    )}
                     {job.cancel_requested && active(job)
                       ? '正在取消'
                       : statuses[job.status]}
-                    {job.status === 'SUCCEEDED' && <Check size={11} />}
                   </span>
                   <small>
                     {job.display_name} ·{' '}

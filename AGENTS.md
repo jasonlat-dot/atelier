@@ -59,3 +59,5 @@
 - 负责人继续要求按 public/ui-register/AI 智能对话-html 调整对话 UI，沿用“修改后静态检查/构建并提交推送，交互自行测试”的工作方式。接入与检查结果见 PROGRESS 最新对话 UI 记录；不进入 M10，不等待 Actions。
 
 - 最新修订：负责人要求按 public/ui-register/无限画布html/html 优化 `/canvas` 项目列表，并修复 Actions #55。参考是列表页，编辑器不在此次样式范围内；认证失败为上游结果/处理中两个 status 的定位冲突。保留画布交互自行测试，只复验反馈的认证失败；提交推送后不等待 Actions。保留负责人未提交的 .gitignore 修改与原型素材。
+
+- 负责人继续要求按 public/ui-register/图片与视频生成-html 调整 `/generate` UI，按参考拆为参数/预览/记录独立卡片；继续使用真实接口数据。沿用静态检查/构建后提交推送、交互自行测试、不等待 Actions 的方式，不进入 M10；见 PROGRESS 最新记录。
