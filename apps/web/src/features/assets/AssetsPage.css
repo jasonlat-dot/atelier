@@ -304,15 +304,36 @@
   top: 9px;
   left: 9px;
   z-index: 1;
-  padding: 4px;
-  display: flex;
-  background: #fffffff0;
-  border-radius: 5px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  background: transparent;
   opacity: 0;
   transition: opacity 0.18s;
 }
-.asset-select input {
+.assets-page .asset-select input {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
   margin: 0;
+  border: 1.5px solid #ffffffd9;
+  border-radius: 5px;
+  background: #18181666;
+}
+.assets-page .asset-select input:checked {
+  background: #1b1b1ae6;
+}
+.assets-page .asset-select input:checked::after {
+  content: '';
+  width: 5px;
+  height: 9px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: translateY(-1px) rotate(45deg);
 }
 .asset-card-delete {
   position: absolute;
@@ -322,18 +343,19 @@
   place-items: center;
   width: 30px;
   height: 30px;
-  border: 1px solid #e6e3dce6;
+  border: 0;
   border-radius: 7px;
-  background: #fffffff0;
-  color: #69665d;
+  background: #18181666;
+  color: #fff;
   opacity: 0;
   transition:
     opacity 0.18s,
-    color 0.18s;
+    color 0.18s,
+    background-color 0.18s;
 }
 .asset-card-delete:hover {
-  color: #b42318;
-  background: #fff;
+  color: #ffb4ab;
+  background: #181816b3;
 }
 .asset-card:is(:hover, :focus-within) :is(.asset-select, .asset-card-delete),
 .assets-selecting .asset-select {
@@ -467,6 +489,12 @@
   top: 50%;
   transform: translateY(-50%);
   opacity: 1;
+  color: #69665d;
+  background: transparent;
+}
+.assets-page .asset-grid[data-view='list'] .asset-card-delete:hover {
+  color: #b42318;
+  background: #fbefe9;
 }
 .assets-page .asset-grid[data-view='list'] :is(.asset-type, .asset-duration) {
   display: none;
