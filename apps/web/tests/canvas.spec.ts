@@ -25,7 +25,12 @@ const graph = (): Graph => ({
   viewport: { x: 30, y: 50, zoom: 0.7 },
   background: 'dots',
 });
-async function fixture(page: Page, initial = graph(), edit = true) {
+async function fixture(
+  page: Page,
+  initial = graph(),
+  edit = true,
+  qualities = ['low'],
+) {
   let saved = initial,
     revision = 0,
     conflict = false;
@@ -110,21 +115,21 @@ async function fixture(page: Page, initial = graph(), edit = true) {
               display_name: 'Canvas Image',
               kind: 'image',
               capabilities: {
-                qualities: ['low'],
+                qualities,
                 ratios: ['1:1'],
                 resolutions: ['1K'],
                 max_n: 4,
                 max_refs: 4,
                 supports_edit: edit,
               },
-              prices: [
-                {
-                  model_id: 'image',
-                  quality: 'low',
-                  base_credits: 2,
-                  edit_surcharge: 0,
-                },
-              ],
+              prices: qualities.map((quality) => ({
+                model_id: 'image',
+                quality,
+                base_credits: (
+                  { low: 2, medium: 4, high: 8 } as Record<string, number>
+                )[quality],
+                edit_surcharge: 0,
+              })),
             },
           ],
           multipliers: [{ resolution: '1K', multiplier: 1 }],
@@ -143,8 +148,12 @@ async function fixture(page: Page, initial = graph(), edit = true) {
       return route.fulfill({
         json: {
           kind: 'image',
-          cost: 2,
-          cost_per_output: 2,
+          cost: ({ low: 2, medium: 4, high: 8 } as Record<string, number>)[
+            req.postDataJSON().quality
+          ],
+          cost_per_output: (
+            { low: 2, medium: 4, high: 8 } as Record<string, number>
+          )[req.postDataJSON().quality],
           size: '1024x1024',
           model_revision: 1,
           pricing_revision: 1,
@@ -613,6 +622,11 @@ test('node generation explains missing edit support before any job submission', 
   const api = await fixture(page, initial, false);
   await page.goto(`/canvas/${projectId}`);
   await page.locator('[data-id="generator"] .graph-head').click();
+  await expect(
+    page
+      .getByRole('group', { name: '生成质量' })
+      .getByRole('button', { name: '高质量', exact: true }),
+  ).toBeDisabled();
   await expect(page.getByLabel('生成模型')).toContainText('Canvas Image');
   await page
     .locator('[data-id="generator"]')
@@ -729,5 +743,42 @@ test('blank drag pans by default, Shift selects nodes, toolbar hints and layer s
   await expect(
     page.getByText('没有匹配的节点，试试其他关键词。'),
   ).toBeVisible();
+  expect(api.writes.includes('/api/v1/generation/jobs')).toBe(false);
+});
+
+test('image quality is visible outside advanced settings, reprices and persists without submitting', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  const initial = graph();
+  initial.nodes = [{ ...gen, data: { ...gen.data, prompt: 'A quiet coast' } }];
+  const api = await fixture(page, initial, true, ['low', 'medium', 'high']);
+  await page.goto(`/canvas/${projectId}`);
+  await page.locator('[data-id="generator"] .graph-head').click();
+  const quality = page.getByRole('group', { name: '生成质量' });
+  await expect(quality).toBeInViewport();
+  await expect(page.getByRole('button', { name: /^生成参数/ })).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  );
+  await quality.getByRole('button', { name: '中质量', exact: true }).click();
+  await expect(
+    page.locator('.canvas-submission .generation-summary strong'),
+  ).toHaveText('4 积分');
+  await quality.getByRole('button', { name: '高质量', exact: true }).click();
+  await expect(
+    page.locator('.canvas-submission .generation-summary strong'),
+  ).toHaveText('8 积分');
+  await expect.poll(() => api.saved().nodes[0].data.quality).toBe('high');
+  await page.reload();
+  await page.locator('[data-id="generator"] .graph-head').click();
+  await expect(
+    quality.getByRole('button', { name: '高质量', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await page.screenshot({
+    path: fileURLToPath(
+      new URL('../../../.tools/canvas-visible-quality.png', import.meta.url),
+    ),
+  });
   expect(api.writes.includes('/api/v1/generation/jobs')).toBe(false);
 });

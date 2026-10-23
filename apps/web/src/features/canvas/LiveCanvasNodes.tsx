@@ -259,7 +259,14 @@ const CanvasNodeView = memo(function CanvasNodeView({
               <span>
                 参数
                 <strong>
-                  {node.data.ratio} · {node.data.resolution} · {node.data.n} 份
+                  {(
+                    { low: '低', medium: '中', high: '高' } as Record<
+                      string,
+                      string
+                    >
+                  )[node.data.quality] || node.data.quality}{' '}
+                  · {node.data.ratio} · {node.data.resolution} · {node.data.n}{' '}
+                  份
                 </strong>
               </span>
             </div>

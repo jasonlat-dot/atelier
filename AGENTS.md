@@ -41,3 +41,5 @@
 - 最新范围：负责人要求研究 https://github.com/basketikun/infinite-canvas 并按截图持续完善现有画布 UI/交互。本轮为 M6 体验修订，不进入 M8；沿用分切片提交推送及 Actions 跟进。当前审计与验证见 docs/PR_CANVAS_UX.md、PROGRESS 最新条目。
 
 - 画布体验修订已完成：最终功能 51ae28b 的 Actions #39922507132 两作业 completed/success；验收见 docs/PR_CANVAS_UX.md 与 PROGRESS 最新完成记录。收尾仅文档，不进入 M8；后续按负责人新的实际体验反馈继续优化，保留上游任意合法 HTTP/HTTPS 地址支持。
+
+- 最新工作方式覆盖前文“等待/跟进 Actions”：负责人明确要求本地检查通过后自行提交推送即可，不要阻塞等待 GitHub Actions；负责人自行查看，有报错会告知，再按具体报错修复。除非负责人重新要求，不主动轮询或等待 Actions。

@@ -968,3 +968,45 @@
 .live-canvas .floating-creator > .segmented {
   flex-shrink: 0;
 }
+.canvas-quality-options {
+  display: flex;
+  gap: 8px;
+}
+.canvas-quality-options button {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 6px;
+  border: 1px solid #dce2d9;
+  border-radius: 9px;
+  background: #fff;
+  color: #526353;
+  cursor: pointer;
+}
+.canvas-quality-options button[aria-pressed='true'] {
+  border-color: #648574;
+  background: #edf4ee;
+  box-shadow: inset 0 0 0 1px #648574;
+}
+.canvas-quality-options strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.canvas-quality-options small {
+  font-size: 10px;
+  color: #758176;
+}
+.canvas-quality-options button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.canvas-quality-options button:focus-visible {
+  outline: 2px solid #648574;
+  outline-offset: 2px;
+}
+.live-field-pair.only-resolution {
+  grid-template-columns: 1fr;
+}

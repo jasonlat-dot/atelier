@@ -276,6 +276,69 @@ export default function CanvasCreator({
               </button>
             </p>
           )}
+          <div className="field-label" id="canvas-quality-label">
+            生成质量
+          </div>
+          <div
+            className="canvas-quality-options"
+            role="group"
+            aria-labelledby="canvas-quality-label"
+          >
+            {(actualKind === 'image'
+              ? Array.from(
+                  new Set([
+                    'low',
+                    'medium',
+                    'high',
+                    ...(model?.capabilities.qualities || []),
+                  ]),
+                )
+              : model?.capabilities.qualities || [value.quality]
+            ).map((quality) => {
+              const supported =
+                !!model?.capabilities.qualities?.includes(quality);
+              const price = model?.prices.find(
+                (p) => p.quality === quality,
+              )?.base_credits;
+              const label =
+                (
+                  {
+                    low: '低',
+                    medium: '中',
+                    high: '高',
+                    standard: '标准',
+                  } as Record<string, string>
+                )[quality] || quality;
+              return (
+                <button
+                  type="button"
+                  key={quality}
+                  aria-label={`${label}质量`}
+                  aria-pressed={value.quality === quality}
+                  disabled={!supported}
+                  onClick={() => change({ quality })}
+                >
+                  <strong>{label}</strong>
+                  <small>
+                    {supported
+                      ? price == null
+                        ? '待报价'
+                        : `${price} 积分起`
+                      : '未开放'}
+                  </small>
+                </button>
+              );
+            })}
+          </div>
+          {model &&
+            actualKind === 'image' &&
+            ['low', 'medium', 'high'].some(
+              (q) => !model.capabilities.qualities?.includes(q),
+            ) && (
+              <p className="subtle-hint">
+                未开放的质量档位需由管理员在“模型与定价”中配置。
+              </p>
+            )}
           <label className="field-label" htmlFor="canvas-prompt">
             创意描述
           </label>
@@ -312,29 +375,7 @@ export default function CanvasCreator({
             </button>
           )}
           <div hidden={floating && !advanced}>
-            <div className="live-field-pair">
-              <div>
-                <label className="field-label" htmlFor="canvas-quality">
-                  画质
-                </label>
-                <select
-                  className="select"
-                  id="canvas-quality"
-                  value={value.quality}
-                  onChange={(e) => change({ quality: e.target.value })}
-                >
-                  {(model?.capabilities.qualities || [value.quality]).map(
-                    (q) => (
-                      <option key={q} value={q}>
-                        {{ low: '快速', medium: '标准', high: '精细' }[q] || q}
-                        {model
-                          ? ` · ${model.prices.find((p) => p.quality === q)?.base_credits || '—'} 积分起`
-                          : ''}
-                      </option>
-                    ),
-                  )}
-                </select>
-              </div>
+            <div className="live-field-pair only-resolution">
               <div>
                 <label className="field-label" htmlFor="canvas-resolution">
                   分辨率
