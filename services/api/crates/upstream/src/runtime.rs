@@ -54,6 +54,7 @@ pub struct RouteLease {
     valid: Arc<AtomicBool>,
     heartbeat: JoinHandle<()>,
     done: bool,
+    usage_key: Option<Uuid>,
 }
 struct PendingSlot {
     slots: SlotStore,
@@ -94,6 +95,41 @@ impl Drop for RouteLease {
     }
 }
 impl RouteLease {
+    pub fn model_revision(&self) -> Option<i64> {
+        self.model.as_ref().map(|m| m.revision)
+    }
+    pub fn account_revision(&self) -> i64 {
+        self.revision
+    }
+    pub async fn image_once(
+        &self,
+        input: &ImageRequest,
+        size: &str,
+    ) -> Result<Vec<MediaOutput>, Error> {
+        tokio::select! { r=self.service.inner.provider.images(&self.context,input,size)=>r,_=self.invalid()=>Err(Error::Store) }
+    }
+    pub async fn submit_video_once(
+        &self,
+        input: &VideoRequest,
+        size: &str,
+    ) -> Result<String, Error> {
+        tokio::select! { r=self.service.inner.provider.submit_video(&self.context,input,size)=>r,_=self.invalid()=>Err(Error::Store) }
+    }
+    pub async fn poll_video_once(&self, id: &str) -> Result<VideoStatus, Error> {
+        tokio::select! { r=self.service.inner.provider.poll_video(&self.context,id)=>r,_=self.invalid()=>Err(Error::Store) }
+    }
+    pub async fn fetch_video_once(&self, id: &str) -> Result<MediaOutput, Error> {
+        tokio::select! { r=self.service.inner.provider.video_content(&self.context,id)=>r,_=self.invalid()=>Err(Error::Store) }
+    }
+    pub async fn finish_generation(
+        mut self,
+        key: Uuid,
+        used: i32,
+        operation: &str,
+    ) -> Result<(), Error> {
+        self.usage_key = Some(key);
+        self.finish(None, used, operation, 0, None, false).await
+    }
     pub fn is_valid(&self) -> bool {
         self.valid.load(Ordering::Acquire)
     }
@@ -146,8 +182,30 @@ impl RouteLease {
         }
         let revision: i64 = current.get("revision");
         if failure.is_none() && used > 0 {
-            sqlx::query("UPDATE upstream_accounts SET quota_remaining=greatest(quota_remaining-$2,0),status=CASE WHEN status='ACTIVE' AND quota_remaining<=$2 THEN 'QUOTA_EXHAUSTED' ELSE status END WHERE id=$1")
+            let charge = if let Some(key) = self.usage_key {
+                let inserted=sqlx::query("INSERT INTO upstream_usage(request_id,account_id,units) VALUES($1,$2,$3) ON CONFLICT DO NOTHING")
+                    .bind(key).bind(self.account_id).bind(used).execute(&mut *tx).await?;
+                if inserted.rows_affected() == 0 {
+                    let matches: bool = sqlx::query_scalar(
+                        "SELECT account_id=$2 AND units=$3 FROM upstream_usage WHERE request_id=$1",
+                    )
+                    .bind(key)
+                    .bind(self.account_id)
+                    .bind(used)
+                    .fetch_one(&mut *tx)
+                    .await?;
+                    if !matches {
+                        return Err(Error::Store);
+                    }
+                }
+                inserted.rows_affected() == 1
+            } else {
+                true
+            };
+            if charge {
+                sqlx::query("UPDATE upstream_accounts SET quota_remaining=greatest(quota_remaining-$2,0),status=CASE WHEN status='ACTIVE' AND quota_remaining<=$2 THEN 'QUOTA_EXHAUSTED' ELSE status END WHERE id=$1")
                 .bind(self.account_id).bind(used as i64).execute(&mut *tx).await?;
+            }
         }
         if revision == self.revision {
             if let Some(failure) = &failure {
@@ -211,6 +269,31 @@ impl RouteLease {
     }
 }
 impl UpstreamService {
+    pub async fn acquire_avoiding(
+        &self,
+        model: &str,
+        requirements: &RouteRequirements,
+        exclude: &HashSet<Uuid>,
+    ) -> Result<RouteLease, Error> {
+        self.acquire_excluding(model, requirements, exclude).await
+    }
+    pub async fn resume_on(
+        &self,
+        account: Uuid,
+        model: &str,
+        requirements: &RouteRequirements,
+    ) -> Result<RouteLease, Error> {
+        let snapshot = self.snapshot(model).await?;
+        validate_requirements(&snapshot, requirements)?;
+        let units = if snapshot.kind == "video" {
+            requirements.seconds.ok_or(Error::Validation)? as i32
+        } else {
+            requirements.n as i32
+        };
+        self.claim(account, Some((model, snapshot)), units, false, false)
+            .await?
+            .ok_or(Error::NoCapacity)
+    }
     pub fn with_slots(mut self, slots: SlotStore) -> Self {
         Arc::make_mut(&mut self.inner).slots = Some(slots);
         self
@@ -413,6 +496,7 @@ impl UpstreamService {
             valid,
             heartbeat,
             done: false,
+            usage_key: None,
         }))
     }
     pub async fn probe(&self, actor: Uuid, id: Uuid) -> Result<ProbeResult, Error> {

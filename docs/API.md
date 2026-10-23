@@ -92,7 +92,7 @@ Provider 和调度为内部 service：图片 generations/edits；视频 /videos 
 M4 不开放用户生成/任务/quote/SSE 接口，不修改钱包余额；这些属于 M5。HTTP 后端与现有原型管理页面已接通：`/admin/accounts`、`/admin/models`；历史 `/admin/providers` 导航至账号池。
 
 
-## M5 生成任务（基础接口已接通，worker/界面仍在进行中）
+## M5 生成任务（worker 已接通，SSE/界面仍在进行中）
 
 所有路径以 `/api/v1` 为前缀，要求登录，管理员要求最近 MFA；写请求要求同源与 CSRF。客户端价格不被接受。quote/create 各按用户 30 次/分钟，JSON 最多 32 KiB。
 
@@ -105,3 +105,5 @@ M4 不开放用户生成/任务/quote/SSE 接口，不修改钱包余额；这�
 | POST /generation/jobs/{id}/cancel | 排队/路由中直接原子取消与全额释放；运行/存储中写取消标记，由 worker 停止并释放；终态重复调用只返回当前结果，不重复扣款/释放 |
 
 任务视图不返回账号 ID、租约令牌、真实模型名、上游任务 ID 或地址。价格和参数快照不可修改，终态不可再更新；同请求键异参 422 IDEMPOTENCY_CONFLICT，余额不足 402，活跃任务超限 429 TOO_MANY_ACTIVE_JOBS，免费层越级 403 RESOLUTION_NOT_ALLOWED，黑名单 422 CONTENT_POLICY。
+
+任务由 API 内持久 worker 执行：60 秒租约/20 秒续期，过期回收带令牌栅栏，三次尝试预算；无账号容量每两秒重试，五分钟失败释放。生成媒体先暂存，发布/按张结算/余量释放/终态/事件同事务；视频 ID 已持久化后不重复提交。SSE 和真实生成页面在后续切片接入。

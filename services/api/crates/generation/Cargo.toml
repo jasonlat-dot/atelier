@@ -29,3 +29,4 @@ redis = { version = "1.7.1", features = ["tokio-comp", "connection-manager"] }
 
 [dev-dependencies]
 base64.workspace = true
+bytes = "1"

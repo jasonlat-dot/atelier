@@ -1,10 +1,12 @@
 //! Durable generation jobs; financial writes always go through wallet service.
 mod service;
 mod types;
+mod worker;
 use atelier_common::ApiError;
 use axum::http::StatusCode;
 pub use service::GenerationService;
 pub use types::*;
+pub use worker::GenerationWorker;
 #[derive(Debug, thiserror::Error)]
 pub enum GenerationError {
     #[error("Invalid generation input")]

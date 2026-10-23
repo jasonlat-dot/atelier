@@ -1,4 +1,5 @@
 //! Private media: validated bytes, owner-scoped metadata and expiring access.
+mod generated;
 pub mod imaging;
 mod service;
 pub mod signing;

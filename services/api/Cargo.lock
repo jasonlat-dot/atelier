@@ -197,6 +197,7 @@ dependencies = [
  "atelier-wallet",
  "axum",
  "base64 0.22.1",
+ "bytes",
  "chrono",
  "futures-util",
  "redis",

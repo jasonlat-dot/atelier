@@ -72,11 +72,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .await
             .map_err(|_| "Upstream Redis unavailable")?,
     );
+    let generation = atelier_generation::GenerationService::new(db.clone(), assets.clone());
+    let generation_worker =
+        atelier_generation::GenerationWorker::new(generation.clone(), upstream.clone());
     let state = AppState {
-        generation: Some(atelier_generation::GenerationService::new(
-            db.clone(),
-            assets.clone(),
-        )),
+        generation: Some(generation),
         upstream: Some(upstream.clone()),
         assets: Some(assets.clone()),
         login: Some(atelier_auth::login::LoginService::new(
@@ -103,6 +103,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let reconciliation =
         tokio::spawn(atelier_wallet::WalletService::new(db.clone()).reconciliation_loop());
     let video_processing = tokio::spawn(assets.clone().processing_loop());
+    let generation_processing = tokio::spawn(generation_worker.run());
     let upstream_health = tokio::spawn(upstream.maintenance_loop());
     let media_maintenance = tokio::spawn(assets.maintenance_loop());
     tracing::info!(address = %config.bind_address, "Atelier API listening");
@@ -115,6 +116,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     reconciliation.abort();
     media_maintenance.abort();
     video_processing.abort();
+    generation_processing.abort();
     upstream_health.abort();
     db.close().await;
     Ok(())
