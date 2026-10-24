@@ -346,6 +346,7 @@ test('code copy keeps rows and column widths stable; lifecycle actions require c
   const secondId = '2f8848d3-1bd4-4eb3-8c91-a653c27a11a0';
   const writes: { method: string; body: unknown }[] = [];
   let listReads = 0;
+  let copyRequests = 0;
   let releaseCopy = () => {};
   const copyGate = new Promise<void>((resolve) => {
     releaseCopy = resolve;
@@ -386,6 +387,7 @@ test('code copy keeps rows and column widths stable; lifecycle actions require c
       return route.fulfill({ json: items.filter((item) => !item.deleted_at) });
     }
     if (path === `/api/v1/admin/redeem-codes/${id}/copy`) {
+      copyRequests++;
       await copyGate;
       return route.fulfill({ json: { id, code: 'transient-fixture-code' } });
     }
@@ -420,6 +422,7 @@ test('code copy keeps rows and column widths stable; lifecycle actions require c
     exact: true,
   });
   await expect(copy).toBeVisible();
+  await page.evaluate(() => document.fonts.ready);
   await expect(
     page.getByText('旧版仅存哈希的兑换码无法恢复。', { exact: false }),
   ).toHaveCount(0);
@@ -432,9 +435,32 @@ test('code copy keeps rows and column widths stable; lifecycle actions require c
       cells.map((cell) => cell.getBoundingClientRect().width),
     );
   const readsBeforeCopy = listReads;
+  await copy.hover();
+  await expect(copy).toHaveCSS('color', 'rgb(52, 79, 59)');
+  await copy.locator('svg').evaluate((element) => {
+    element.setAttribute('data-copy-icon', 'original');
+  });
+  const lookBefore = await copy.evaluate((element) => ({
+    opacity: getComputedStyle(element).opacity,
+    color: getComputedStyle(element).color,
+  }));
   await copy.click();
   await expect(copy).toHaveAttribute('aria-busy', 'true');
   await expect(copy).toHaveText('复制');
+  await expect(copy).toHaveAttribute('aria-disabled', 'true');
+  await expect(copy).not.toHaveAttribute('disabled');
+  await expect(copy.locator('svg')).toHaveAttribute(
+    'data-copy-icon',
+    'original',
+  );
+  expect(
+    await copy.evaluate((element) => ({
+      opacity: getComputedStyle(element).opacity,
+      color: getComputedStyle(element).color,
+    })),
+  ).toEqual(lookBefore);
+  await copy.press('Enter');
+  expect(copyRequests).toBe(1);
   await expect(
     page.getByRole('button', { name: `复制兑换码 ${secondId}`, exact: true }),
   ).toBeEnabled();

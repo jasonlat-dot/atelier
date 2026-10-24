@@ -492,21 +492,15 @@ export default function AdminRedeemCodes({
                                   className="admin-code-copy"
                                   aria-label={`复制兑换码 ${item.id}`}
                                   disabled={
-                                    !item.copyable ||
-                                    copying.has(item.id) ||
-                                    managing?.id === item.id
+                                    !item.copyable || managing?.id === item.id
+                                  }
+                                  aria-disabled={
+                                    copying.has(item.id) || undefined
                                   }
                                   aria-busy={copying.has(item.id)}
                                   onClick={() => void copyCode(item)}
                                 >
-                                  {copying.has(item.id) ? (
-                                    <LoaderCircle
-                                      size={14}
-                                      className="admin-code-spinner"
-                                    />
-                                  ) : (
-                                    <Copy size={14} />
-                                  )}
+                                  <Copy size={14} />
                                   复制
                                 </button>
                               </Tooltip>

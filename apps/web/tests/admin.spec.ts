@@ -744,3 +744,220 @@ test('job email opens user details in place and has a separate copy action', asy
   ).toBeFocused();
   expect(page.url()).toBe(before);
 });
+
+test('policy reference keeps search by tab, filters only this page and confirms rule switches', async ({
+  page,
+}, testInfo) => {
+  const state = await mock(page);
+  state.rules = [
+    { id: 1, pattern: '公司机密', is_regex: false, enabled: true, revision: 3 },
+    {
+      id: 2,
+      pattern: '(?i)https?://example\\.com',
+      is_regex: true,
+      enabled: true,
+      revision: 1,
+    },
+    {
+      id: 3,
+      pattern: '联系方式',
+      is_regex: false,
+      enabled: false,
+      revision: 1,
+    },
+  ];
+  const writes: unknown[] = [];
+  await page.route('**/api/v1/admin/moderation-rules/1', async (route) => {
+    const body = route.request().postDataJSON();
+    expect(route.request().headers()['x-csrf-token']).toBe('csrf');
+    writes.push(body);
+    state.rules[0] = { ...state.rules[0], ...body, revision: 4 };
+    return route.fulfill({ json: state.rules[0] });
+  });
+  await page.goto('/admin/policy');
+  await expect(
+    page.getByRole('switch', { name: '停用规则 1', exact: true }),
+  ).toBeChecked();
+  await expect(
+    page.getByRole('tab', { name: '内容规则', exact: true }),
+  ).toContainText('3');
+  await page.screenshot({
+    path: testInfo.outputPath('policy-rules-desktop.png'),
+    fullPage: true,
+  });
+  await page.getByRole('button', { name: '正则', exact: true }).click();
+  await expect(page.locator('.policy-rule-table tbody tr')).toHaveCount(1);
+  await expect(page.locator('.policy-rule-table')).toContainText(
+    '(?i)https?://example',
+  );
+  await expect(
+    page.getByText('本页 1 条规则 · 类型筛选仅作用于本页'),
+  ).toBeVisible();
+  await page.getByRole('button', { name: '关键词', exact: true }).click();
+  await expect(page.locator('.policy-rule-table tbody tr')).toHaveCount(2);
+  await page.getByRole('switch', { name: '停用规则 1', exact: true }).click();
+  let dialog = page.getByRole('dialog', { name: '停用内容规则', exact: true });
+  await expect(
+    dialog.getByRole('button', { name: '确认停用规则', exact: true }),
+  ).toBeDisabled();
+  await dialog.getByRole('button', { name: '取消', exact: true }).click();
+  expect(writes).toHaveLength(0);
+  await expect(
+    page.getByRole('switch', { name: '停用规则 1', exact: true }),
+  ).toBeChecked();
+  await page.getByRole('switch', { name: '停用规则 1', exact: true }).click();
+  dialog = page.getByRole('dialog', { name: '停用内容规则', exact: true });
+  await dialog.getByLabel('处理说明').fill('内测规则调整，先暂停拦截');
+  await dialog
+    .getByRole('button', { name: '确认停用规则', exact: true })
+    .click();
+  await expect(page.getByRole('alertdialog')).toContainText('规则已停用');
+  await dismissFeedback(page);
+  expect(writes[0]).toEqual({
+    pattern: '公司机密',
+    is_regex: false,
+    enabled: false,
+    revision: 3,
+    reason: '内测规则调整，先暂停拦截',
+  });
+  await expect(
+    page.getByRole('switch', { name: '启用规则 1', exact: true }),
+  ).not.toBeChecked();
+  await page.getByLabel('搜索规则').fill('保留规则搜索词');
+  await page.getByRole('tab', { name: '内容规则', exact: true }).press('End');
+  await expect(
+    page.getByRole('tab', { name: '邀请码', exact: true }),
+  ).toBeFocused();
+  await page.getByLabel('搜索邀请码').fill('保留邀请码搜索词');
+  await page.getByRole('tab', { name: '邀请码', exact: true }).press('Home');
+  await expect(page.getByLabel('搜索规则')).toHaveValue('保留规则搜索词');
+  await expect(
+    page.getByRole('button', { name: '关键词', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await page
+    .getByRole('tab', { name: '内容规则', exact: true })
+    .press('ArrowRight');
+  await expect(page.getByLabel('搜索邀请码')).toHaveValue('保留邀请码搜索词');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: '收起导航', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: '创建邀请码', exact: true }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: testInfo.outputPath('policy-invites-mobile.png'),
+    fullPage: true,
+  });
+  await page.getByRole('button', { name: '创建邀请码', exact: true }).click();
+  dialog = page.getByRole('dialog');
+  await dialog.getByRole('button', { name: '7 天', exact: true }).click();
+  await expect(
+    dialog.getByLabel('过期时间（本地时间）', { exact: true }),
+  ).not.toHaveValue('');
+  await dialog.getByRole('button', { name: '长期有效', exact: true }).click();
+  await expect(
+    dialog.getByLabel('过期时间（本地时间）', { exact: true }),
+  ).toHaveValue('');
+  expect(
+    await dialog.evaluate(
+      (element) => element.scrollWidth <= element.clientWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: testInfo.outputPath('policy-create-invite-mobile.png'),
+    fullPage: true,
+  });
+});
+
+test('invitation rows use actual capacity and expiry; revoked codes cannot be enabled', async ({
+  page,
+}, testInfo) => {
+  const state = await mock(page);
+  const future = new Date(Date.now() + 86400000 * 30).toISOString();
+  state.invites = [
+    {
+      id: jobId,
+      label: '设计组内测',
+      last4: '7F3A',
+      used_count: 3,
+      max_uses: 10,
+      expires_at: future,
+      created_at: stamp,
+      revoked_at: null,
+      revision: 1,
+    },
+    {
+      id: owner,
+      label: '已发完的邀请',
+      last4: 'B21C',
+      used_count: 5,
+      max_uses: 5,
+      expires_at: null,
+      created_at: stamp,
+      revoked_at: null,
+      revision: 1,
+    },
+    {
+      id,
+      label: '已结束的邀请',
+      last4: '90DE',
+      used_count: 0,
+      max_uses: 50,
+      expires_at: '2020-01-01T00:00:00Z',
+      created_at: stamp,
+      revoked_at: null,
+      revision: 1,
+    },
+    {
+      id: '4f8848d3-1bd4-4eb3-8c91-a653c27a11a0',
+      label: '已撤销的邀请',
+      last4: '44AA',
+      used_count: 1,
+      max_uses: 3,
+      expires_at: null,
+      created_at: stamp,
+      revoked_at: stamp,
+      revision: 2,
+    },
+  ];
+  await page.goto('/admin/policy');
+  await page.getByRole('tab', { name: '邀请码', exact: true }).click();
+  await expect(
+    page.getByRole('row').filter({ hasText: '设计组内测' }),
+  ).toContainText('可使用');
+  await expect(
+    page.getByRole('progressbar', { name: '设计组内测 已用 3 / 10' }),
+  ).toHaveAttribute('value', '3');
+  await expect(
+    page.getByRole('row').filter({ hasText: '已发完的邀请' }),
+  ).toContainText('已用尽');
+  await expect(
+    page.getByRole('row').filter({ hasText: '已结束的邀请' }),
+  ).toContainText('已过期');
+  const revoked = page.getByRole('row').filter({ hasText: '已撤销的邀请' });
+  await expect(
+    revoked.getByRole('button', { name: '编辑邀请', exact: true }),
+  ).toBeDisabled();
+  await expect(
+    revoked.getByRole('button', { name: '撤销邀请', exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole('button', { name: '启用', exact: true }),
+  ).toHaveCount(0);
+  await page.screenshot({
+    path: testInfo.outputPath('policy-invites-desktop.png'),
+    fullPage: true,
+  });
+  await page.getByLabel('搜索邀请码').fill('no-such-invite');
+  await page
+    .getByRole('tab', { name: '邀请码', exact: true })
+    .press('ArrowLeft');
+  await page
+    .getByRole('tab', { name: '内容规则', exact: true })
+    .press('ArrowRight');
+  await expect(page.getByLabel('搜索邀请码')).toHaveValue('no-such-invite');
+});
