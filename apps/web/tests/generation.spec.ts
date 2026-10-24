@@ -106,14 +106,21 @@ async function fixture(
       onopen: (() => void) | null = null;
       onerror: (() => void) | null = null;
       callback: ((event: MessageEvent) => void) | null = null;
+      closed = false;
+      openTimer: ReturnType<typeof setTimeout>;
       constructor() {
         (window as unknown as { stream: Stream }).stream = this;
-        setTimeout(() => this.onopen?.(), 100);
+        this.openTimer = setTimeout(() => {
+          if (!this.closed) this.onopen?.();
+        }, 100);
       }
       addEventListener(_name: string, callback: (event: MessageEvent) => void) {
         this.callback = callback;
       }
-      close() {}
+      close() {
+        this.closed = true;
+        clearTimeout(this.openTimer);
+      }
     }
     window.EventSource = Stream as unknown as typeof EventSource;
   });
@@ -616,6 +623,7 @@ test('SSE failure falls back to polling and session expiry returns to login', as
   page,
 }) => {
   const f = await fixture(page);
+  await expect(page.getByRole('status')).toHaveText('实时更新');
   await page.evaluate(() =>
     (window as unknown as { stream: { onerror: () => void } }).stream.onerror(),
   );

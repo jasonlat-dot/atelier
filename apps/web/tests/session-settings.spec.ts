@@ -196,6 +196,9 @@ test('administrator enrolls MFA through CSRF protected endpoints and returns to 
   page,
 }) => {
   let verified = false;
+  let projectReads = 0;
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
   await page.route('**/api/v1/**', async (route) => {
     const req = route.request();
     const path = new URL(req.url()).pathname;
@@ -236,7 +239,16 @@ test('administrator enrolls MFA through CSRF protected endpoints and returns to 
           next_reward: 10,
         },
       });
-    return route.fulfill({ json: { sessions: [] } });
+    if (path === '/api/v1/projects') {
+      projectReads++;
+      return route.fulfill({ json: { items: [], next_cursor: null } });
+    }
+    if (path === '/api/v1/me/sessions')
+      return route.fulfill({ json: { sessions: [] } });
+    return route.fulfill({
+      status: 404,
+      json: { error: { code: 'NOT_FOUND' } },
+    });
   });
   await page.goto('/settings');
   await expect(
@@ -282,6 +294,14 @@ test('administrator enrolls MFA through CSRF protected endpoints and returns to 
   await expect(
     page.getByRole('heading', { name: '欢迎回来，Account' }),
   ).toBeVisible();
+  await expect.poll(() => projectReads).toBeGreaterThan(0);
+  await expect(
+    page.getByText('还没有项目，从一个想法开始吧。', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('Unexpected Application Error!', { exact: true }),
+  ).toHaveCount(0);
+  expect(pageErrors).toEqual([]);
 });
 
 test('MFA binding has no native confirmation and logout uses an accessible modal', async ({

@@ -247,15 +247,16 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   await expect(dialog).toHaveCount(0);
   await expect(page.getByRole('alertdialog')).toContainText('路由绑定已保存');
   await dismissFeedback(page);
-  await page.getByRole('tab', { name: '积分定价' }).click();
+  await page
+    .getByRole('button', { name: '配置价格 Live Image', exact: true })
+    .click();
   for (const quality of ['low', 'medium', 'high'])
     await page.getByLabel(`Live Image ${quality} 基础积分`).fill('10');
-  await page.getByRole('button', { name: '保存全部价格' }).click();
+  await page.getByRole('button', { name: '保存价格', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('价格已保存');
   await dismissFeedback(page);
-  await page.getByRole('tab', { name: '模型目录' }).click();
   await page
-    .getByRole('button', { name: '启用 Live Image', exact: true })
+    .getByRole('switch', { name: '启用 Live Image', exact: true })
     .click();
   await expect(page.getByRole('alertdialog')).toContainText('模型已启用');
   await dismissFeedback(page);

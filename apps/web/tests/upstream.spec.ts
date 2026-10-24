@@ -88,6 +88,15 @@ async function fixture(page: Page, role = 'SUPER_ADMIN') {
           mfa_required: false,
         },
       });
+    if (path === '/api/v1/chat/config')
+      return route.fulfill({
+        json: {
+          models: [],
+          credits_per_message: 3,
+          context_window: 8192,
+          output_tokens: 1024,
+        },
+      });
     if (path === '/api/v1/wallet')
       return route.fulfill({
         json: {
@@ -198,6 +207,318 @@ async function fixture(page: Page, role = 'SUPER_ADMIN') {
   });
   return { accounts, models, writes, reads };
 }
+
+test('typed model lists use real prices, preserve unrelated pricing and keep multiplier drafts across tabs', async ({
+  page,
+}, info) => {
+  const f = await fixture(page);
+  const chat = {
+    ...structuredClone(sampleModel),
+    id: 'text-main',
+    display_name: '文本主模型',
+    kind: 'chat',
+    account_ids: [sampleAccount.id],
+    capabilities: {
+      ...sampleModel.capabilities,
+      qualities: ['message'],
+      resolutions: ['text'],
+      ratios: [],
+      supports_edit: false,
+      max_n: 1,
+      max_refs: 0,
+    },
+  };
+  const video = {
+    ...structuredClone(sampleModel),
+    id: 'video-main',
+    display_name: '视频主模型',
+    kind: 'video',
+    group_tags: ['videos'],
+    capabilities: {
+      ...sampleModel.capabilities,
+      qualities: ['standard'],
+      resolutions: ['720p', '1080p'],
+      seconds: [4, 8, 12],
+      supports_edit: false,
+      max_n: 1,
+    },
+  };
+  f.models.push(chat, video);
+  let current = {
+    revision: 7,
+    multipliers: [
+      { resolution: '1K', multiplier: 1 },
+      { resolution: '2K', multiplier: 2 },
+      { resolution: '4K', multiplier: 4 },
+      { resolution: '720p', multiplier: 1 },
+      { resolution: '1080p', multiplier: 2 },
+      { resolution: 'text', multiplier: 1 },
+    ],
+    rules: [
+      {
+        model_id: 'text-main',
+        quality: 'message',
+        base_credits: 0,
+        edit_surcharge: 0,
+      },
+      {
+        model_id: 'atelier-image',
+        quality: 'low',
+        base_credits: 10,
+        edit_surcharge: 1,
+      },
+      {
+        model_id: 'atelier-image',
+        quality: 'medium',
+        base_credits: 20,
+        edit_surcharge: 2,
+      },
+      {
+        model_id: 'atelier-image',
+        quality: 'high',
+        base_credits: 30,
+        edit_surcharge: 3,
+      },
+      {
+        model_id: 'video-main',
+        quality: 'standard',
+        base_credits: 5,
+        edit_surcharge: 0,
+      },
+    ],
+  };
+  const saves: (typeof current)[] = [];
+  let conflict = true;
+  await page.route('**/api/v1/admin/pricing', async (route) => {
+    if (route.request().method() === 'GET')
+      return route.fulfill({ json: current });
+    const body = route.request().postDataJSON();
+    expect(route.request().headers()['x-csrf-token']).toBe('csrf-m4');
+    saves.push(body);
+    if (conflict)
+      return route.fulfill({
+        status: 409,
+        json: { error: { code: 'VERSION_CONFLICT' } },
+      });
+    expect(body.revision).toBe(current.revision);
+    current = { ...body, revision: body.revision + 1 };
+    return route.fulfill({ json: current });
+  });
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.goto('/admin/models');
+  await expect(
+    page.getByRole('tab', { name: '图片模型', exact: true }),
+  ).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('row', { name: /Atelier Image/ })).toContainText(
+    '10 – 60',
+  );
+  await page.screenshot({ path: info.outputPath('models-image-desktop.png') });
+  await page.getByLabel('搜索图片模型').fill('missing');
+  await expect(
+    page.getByRole('heading', { name: '没有匹配的模型' }),
+  ).toBeVisible();
+  await page.getByRole('tab', { name: '文本模型', exact: true }).click();
+  await expect(page.getByRole('row', { name: /文本主模型/ })).toContainText(
+    '3 积分 / 条',
+  );
+  await expect(
+    page.getByRole('button', { name: '配置价格 文本主模型' }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('table').getByText('message', { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('table').getByText('text', { exact: true }),
+  ).toHaveCount(0);
+  await page.screenshot({ path: info.outputPath('models-text-desktop.png') });
+  await page
+    .getByRole('button', { name: '编辑 文本主模型', exact: true })
+    .click();
+  const dialog = page.getByRole('dialog');
+  await expect(
+    dialog.getByRole('group', { name: '质量', exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    dialog.getByRole('group', { name: '分辨率', exact: true }),
+  ).toHaveCount(0);
+  await expect(dialog.getByLabel('模型类型')).toBeDisabled();
+  await page.keyboard.press('Escape');
+  await page.getByRole('tab', { name: '视频模型', exact: true }).click();
+  await expect(page.getByRole('row', { name: /视频主模型/ })).toContainText(
+    '可选 4 / 8 / 12 秒',
+  );
+  await expect(page.getByRole('row', { name: /视频主模型/ })).toContainText(
+    '10 秒约 50 – 100',
+  );
+  await page
+    .getByRole('button', { name: '配置价格 视频主模型', exact: true })
+    .click();
+  await expect(dialog.getByRole('checkbox')).toHaveCount(0);
+  await dialog.getByLabel('视频主模型 standard 基础积分').fill('7');
+  await expect(dialog.locator('.models-video-example')).toContainText('140');
+  await page.screenshot({
+    path: info.outputPath('models-video-price-desktop.png'),
+  });
+  await dialog.getByRole('button', { name: '保存价格', exact: true }).click();
+  await expect(page.getByRole('alertdialog')).toContainText('配置已变更');
+  await dismissFeedback(page);
+  await expect(dialog.getByLabel('视频主模型 standard 基础积分')).toHaveValue(
+    '7',
+  );
+  expect(saves[0].rules.filter((rule) => rule.model_id !== video.id)).toEqual(
+    current.rules.filter((rule) => rule.model_id !== video.id),
+  );
+  expect(saves[0].multipliers).toEqual(current.multipliers);
+  conflict = false;
+  await dialog.getByRole('button', { name: '保存价格', exact: true }).click();
+  await expect(page.getByRole('alertdialog')).toContainText('价格已保存');
+  await dismissFeedback(page);
+  await page.getByRole('tab', { name: '图片模型', exact: true }).click();
+  await expect(page.getByLabel('搜索图片模型')).toHaveValue('missing');
+  await page.getByRole('button', { name: '清除搜索' }).click();
+  await page
+    .getByRole('button', { name: '配置价格 Atelier Image', exact: true })
+    .click();
+  await expect(dialog.getByLabel('Atelier Image high 编辑附加费')).toHaveValue(
+    '3',
+  );
+  await dialog
+    .getByRole('checkbox', { name: '所有质量使用同一价格和编辑附加费' })
+    .check();
+  await dialog.getByLabel('Atelier Image low 基础积分').fill('11');
+  await dialog.getByLabel('Atelier Image low 编辑附加费').fill('4');
+  await expect(dialog.locator('.models-price-example')).toContainText('26');
+  await page.screenshot({
+    path: info.outputPath('models-image-price-desktop.png'),
+  });
+  await dialog.getByRole('button', { name: '保存价格', exact: true }).click();
+  await expect(page.getByRole('alertdialog')).toContainText('价格已保存');
+  await dismissFeedback(page);
+  expect(
+    current.rules
+      .filter((rule) => rule.model_id === 'atelier-image')
+      .every((rule) => rule.base_credits === 11 && rule.edit_surcharge === 4),
+  ).toBe(true);
+  expect(
+    current.rules.find((rule) => rule.model_id === video.id)?.base_credits,
+  ).toBe(7);
+  await page.getByRole('tab', { name: '分辨率倍率', exact: true }).click();
+  await expect(page.getByLabel('text 倍率')).toHaveCount(0);
+  await page.getByLabel('2K 倍率').fill('3');
+  await page.getByRole('tab', { name: '文本模型', exact: true }).click();
+  await page.getByRole('tab', { name: '分辨率倍率', exact: true }).click();
+  await expect(page.getByLabel('2K 倍率')).toHaveValue('3');
+  await page.getByRole('button', { name: '保存倍率', exact: true }).click();
+  await expect(page.getByRole('alertdialog')).toContainText('倍率已保存');
+  await dismissFeedback(page);
+  expect(
+    current.rules.find((rule) => rule.model_id === chat.id)?.base_credits,
+  ).toBe(0);
+  expect(
+    current.multipliers.find((item) => item.resolution === 'text')?.multiplier,
+  ).toBe(1);
+  expect(
+    current.multipliers.find((item) => item.resolution === '2K')?.multiplier,
+  ).toBe(3);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: '收起导航', exact: true }).click();
+  await page.screenshot({
+    path: info.outputPath('models-multipliers-mobile.png'),
+  });
+  await page.getByRole('tab', { name: '图片模型', exact: true }).click();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page
+    .getByRole('button', { name: '配置价格 Atelier Image', exact: true })
+    .click();
+  expect(await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(
+    true,
+  );
+  await page.screenshot({ path: info.outputPath('models-price-mobile.png') });
+  await page.keyboard.press('Escape');
+  await page.getByRole('tab', { name: '文本模型', exact: true }).focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(
+    page.getByRole('tab', { name: '图片模型', exact: true }),
+  ).toBeFocused();
+});
+test('text models use the global rate while enabling prepares only legacy metadata and disabling still requires confirmation', async ({
+  page,
+}) => {
+  const f = await fixture(page);
+  f.models.push({
+    ...structuredClone(sampleModel),
+    id: 'text-only',
+    display_name: '文本模型测试',
+    kind: 'chat',
+    group_tags: ['images'],
+    capabilities: {
+      ...sampleModel.capabilities,
+      qualities: ['message'],
+      resolutions: ['text'],
+      ratios: [],
+      max_n: 1,
+      supports_edit: false,
+    },
+  });
+  await page.goto('/admin/models');
+  await page.getByRole('tab', { name: '文本模型', exact: true }).click();
+  await expect(page.getByRole('row', { name: /文本模型测试/ })).toContainText(
+    '3 积分 / 条',
+  );
+  await page
+    .getByRole('switch', { name: '启用 文本模型测试', exact: true })
+    .click();
+  await expect(page.getByRole('alertdialog')).toContainText('模型已启用');
+  await dismissFeedback(page);
+  expect(f.writes).toHaveLength(2);
+  expect(f.writes[0].path).toBe('/api/v1/admin/pricing');
+  expect(f.writes[0].body?.rules).toEqual([
+    {
+      model_id: 'text-only',
+      quality: 'message',
+      base_credits: 0,
+      edit_surcharge: 0,
+    },
+  ]);
+  expect(f.writes[0].body?.revision).toBe(1);
+  expect(f.writes[1].path).toBe('/api/v1/admin/models');
+  expect(f.writes[1].body).toMatchObject({
+    id: 'text-only',
+    enabled: true,
+    revision: 1,
+  });
+  await expect(page.getByRole('row', { name: /文本模型测试/ })).toContainText(
+    '3 积分 / 条',
+  );
+  await page
+    .getByRole('switch', { name: '停用 文本模型测试', exact: true })
+    .click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: '取消', exact: true })
+    .click();
+  expect(f.writes).toHaveLength(2);
+  await expect(
+    page.getByRole('switch', { name: '停用 文本模型测试' }),
+  ).toHaveAttribute('aria-checked', 'true');
+  await page
+    .getByRole('switch', { name: '停用 文本模型测试', exact: true })
+    .click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: '停用模型', exact: true })
+    .click();
+  await expect(page.getByRole('alertdialog')).toContainText('模型已停用');
+  await dismissFeedback(page);
+  expect(f.writes).toHaveLength(3);
+  await expect(
+    page.getByRole('switch', { name: '启用 文本模型测试' }),
+  ).toHaveAttribute('aria-checked', 'false');
+});
 test('account management writes once, hides saved credentials and uses accessible confirmation', async ({
   page,
 }) => {
@@ -303,16 +624,16 @@ test('JSON import validates before sending and clears materials on close; search
   await page.getByLabel('搜索账号名称或分组').fill('missing');
   await expect(page.getByText('没有匹配的账号', { exact: true })).toBeVisible();
 });
-test('models need bindings and pricing; price drafts survive tabs and native identifiers stay write only', async ({
+test('models require ready bindings and pricing; per-model prices save and native identifiers stay write only', async ({
   page,
 }) => {
   const f = await fixture(page);
   await page.goto('/admin/models');
-  await page
-    .getByRole('button', { name: '启用 Atelier Image', exact: true })
-    .click();
-  await expect(page.getByRole('alert')).toContainText('账号绑定及价格');
-  await dismissFeedback(page);
+  await expect(
+    page.getByRole('switch', { name: '启用 Atelier Image', exact: true }),
+  ).toBeDisabled();
+  await expect(page.getByText('缺账号和价格', { exact: true })).toBeVisible();
+  expect(f.writes).toHaveLength(0);
   await page.getByRole('button', { name: '绑定账号 Atelier Image' }).click();
   const d = page.getByRole('dialog');
   await d.getByLabel('动态分组').fill('images');
@@ -322,23 +643,20 @@ test('models need bindings and pricing; price drafts survive tabs and native ide
   expect(f.models[0].group_tags).toEqual(['images']);
   await expect(page.getByRole('alertdialog')).toContainText('路由绑定已保存');
   await dismissFeedback(page);
-  await page.getByRole('tab', { name: '积分定价' }).click();
+  await page.getByRole('button', { name: '配置价格 Atelier Image' }).click();
   await page.getByLabel('Atelier Image low 基础积分').fill('10');
   await page.getByLabel('Atelier Image medium 基础积分').fill('20');
   await page.getByLabel('Atelier Image high 基础积分').fill('30');
   await page.getByLabel('Atelier Image low 编辑附加费').fill('2');
-  await page.getByRole('tab', { name: '模型目录' }).click();
-  await page.getByRole('tab', { name: '积分定价' }).click();
   await expect(page.getByLabel('Atelier Image low 基础积分')).toHaveValue('10');
-  await page.getByRole('button', { name: '保存全部价格' }).click();
+  await page.getByRole('button', { name: '保存价格', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('价格已保存');
   await dismissFeedback(page);
   expect(
     f.writes.find((w) => w.path.endsWith('/pricing'))?.body?.revision,
   ).toBe(1);
-  await page.getByRole('tab', { name: '模型目录' }).click();
   await page
-    .getByRole('button', { name: '启用 Atelier Image', exact: true })
+    .getByRole('switch', { name: '启用 Atelier Image', exact: true })
     .click();
   await expect(page.getByRole('alertdialog')).toContainText('模型已启用');
   await dismissFeedback(page);
@@ -477,7 +795,7 @@ test('320px account drawer and model pricing fit viewport without native dialogs
     page.getByRole('button', { name: '编辑 Atelier Image' }),
   ).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('models-desktop.png') });
-  await page.getByRole('tab', { name: '积分定价' }).click();
+  await page.getByRole('tab', { name: '分辨率倍率', exact: true }).click();
   await page.screenshot({ path: testInfo.outputPath('pricing-desktop.png') });
   await page.setViewportSize({ width: 320, height: 780 });
   await page.goto('/admin/accounts');
@@ -490,7 +808,7 @@ test('320px account drawer and model pricing fit viewport without native dialogs
   });
   await page.keyboard.press('Escape');
   await page.goto('/admin/models');
-  await page.getByRole('tab', { name: '积分定价' }).click();
+  await page.getByRole('tab', { name: '分辨率倍率', exact: true }).click();
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,

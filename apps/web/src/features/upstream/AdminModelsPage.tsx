@@ -1,15 +1,22 @@
 import Select from '../../components/Select';
 import Feedback from '../../components/Feedback';
-import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Coins,
-  Link2,
-  Pencil,
-  Plus,
-  Power,
-  RefreshCw,
-  SlidersHorizontal,
-} from 'lucide-react';
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from 'react';
+import { Layers3, Plus, RefreshCw, Search } from 'lucide-react';
+import Tooltip from '../../components/Tooltip';
+import { chatApi } from '../chat/chatApi';
+import {
+  ModelPriceEditor,
+  MultiplierEditor,
+  priceRange,
+  rangeText,
+} from './ModelPricing';
+import './AdminModelsPage.css';
 import { Link } from 'react-router-dom';
 import AdminDialog from './AdminDialog';
 import {
@@ -26,10 +33,17 @@ import './AdminUpstream.css';
 const kindNames: Record<string, string> = {
   image: '图片',
   video: '视频',
-  chat: '对话',
+  chat: '文本',
+};
+const qualityNames: Record<string, string> = {
+  low: '快速',
+  medium: '标准',
+  high: '精细',
+  standard: '标准',
 };
 type Panel =
-  { kind: 'edit'; model?: Model } | { kind: 'bind' | 'disable'; model: Model };
+  | { kind: 'edit'; model?: Model }
+  | { kind: 'bind' | 'disable' | 'price'; model: Model };
 export default function AdminModelsPage(props: AdminProps) {
   return props.me.user.role === 'USER' ? (
     <main className="page-padding">
@@ -43,32 +57,38 @@ export default function AdminModelsPage(props: AdminProps) {
 function Models(props: AdminProps) {
   const [models, setModels] = useState<Model[]>([]);
   const [pricing, setPricing] = useState<Pricing>();
-  const [tab, setTab] = useState('models');
+  const [chatPrice, setChatPrice] = useState<number>();
+  const [tab, setTab] = useState('image');
+  const [searches, setSearches] = useState<Record<string, string>>({});
   const [panel, setPanel] = useState<Panel>();
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
+  const version = useRef(0);
   const { me, onExpired, onReload } = props;
   const load = useCallback(
     async (signal?: AbortSignal) => {
+      const current = ++version.current;
       setLoading(true);
       try {
-        const [m, p] = await Promise.all([
+        const [m, p, chat] = await Promise.all([
           api.models(signal),
           api.pricing(signal),
+          chatApi.config(signal).catch(() => undefined),
         ]);
-        if (!signal?.aborted) {
+        if (!signal?.aborted && current === version.current) {
           setModels(m);
           setPricing(p);
+          setChatPrice(chat?.credits_per_message);
           setError('');
         }
-      } catch (e) {
-        if (!signal?.aborted)
-          setError(errorText(e, { me, onExpired, onReload }));
+      } catch (failure) {
+        if (!signal?.aborted && current === version.current)
+          setError(errorText(failure, { me, onExpired, onReload }));
       } finally {
-        if (!signal?.aborted) setLoading(false);
+        if (!signal?.aborted && current === version.current) setLoading(false);
       }
     },
     [me, onExpired, onReload],
@@ -76,7 +96,10 @@ function Models(props: AdminProps) {
   useEffect(() => {
     const a = new AbortController();
     void load(a.signal);
-    return () => a.abort();
+    return () => {
+      a.abort();
+      version.current++;
+    };
   }, [load]);
   async function act(work: () => Promise<string>) {
     if (lock.current) return;
@@ -88,8 +111,8 @@ function Models(props: AdminProps) {
       setMessage(await work());
       setPanel(undefined);
       await load();
-    } catch (e) {
-      setError(errorText(e, props));
+    } catch (failure) {
+      setError(errorText(failure, props));
     } finally {
       lock.current = false;
       setBusy(false);
@@ -101,26 +124,93 @@ function Models(props: AdminProps) {
       setError('');
     }
   };
+  const open = (kind: 'edit' | 'bind' | 'price', model: Model) => {
+    setError('');
+    setPanel({ kind, model });
+  };
+  const tabs = [
+    { kind: 'chat', label: '文本模型' },
+    { kind: 'image', label: '图片模型' },
+    { kind: 'video', label: '视频模型' },
+    { kind: 'pricing', label: '分辨率倍率' },
+  ];
+  const navigateTabs = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const index = tabs.findIndex(
+      (item) => `model-tab-${item.kind}` === event.currentTarget.id,
+    );
+    const next =
+      event.key === 'Home'
+        ? tabs[0]
+        : event.key === 'End'
+          ? tabs.at(-1)!
+          : tabs[
+              (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) %
+                tabs.length
+            ];
+    setTab(next.kind);
+    document.getElementById(`model-tab-${next.kind}`)?.focus();
+  };
+  const ready = (model: Model) => {
+    const route = model.account_ids.length > 0 || model.group_tags.length > 0;
+    return {
+      route,
+      price:
+        model.kind === 'chat'
+          ? chatPrice !== undefined
+          : priceRange(model, pricing) !== undefined,
+    };
+  };
+  const toggle = (model: Model) =>
+    model.enabled
+      ? setPanel({ kind: 'disable', model })
+      : void act(async () => {
+          // The existing enable guard requires metadata rules even for chat. These
+          // zero-valued prerequisites never replace the authoritative global chat rate.
+          if (model.kind === 'chat' && pricing) {
+            const missing = (model.capabilities.qualities || []).filter(
+              (quality) =>
+                !pricing.rules.some(
+                  (rule) =>
+                    rule.model_id === model.id && rule.quality === quality,
+                ),
+            );
+            if (missing.length)
+              await api.savePricing(
+                {
+                  ...pricing,
+                  rules: [
+                    ...pricing.rules,
+                    ...missing.map((quality) => ({
+                      model_id: model.id,
+                      quality,
+                      base_credits: 0,
+                      edit_surcharge: 0,
+                    })),
+                  ],
+                },
+                me.csrf_token,
+              );
+          }
+          await api.saveModel(
+            { ...modelInput(model), enabled: true },
+            me.csrf_token,
+            true,
+          );
+          return '模型已启用，已进入用户模型目录。';
+        });
   return (
-    <main className="page-padding up-page">
-      <div className="page-title-row">
+    <main className="page-padding up-page models-page">
+      <header className="page-title-row models-heading">
         <div>
-          <div className="eyebrow">MANAGEMENT / MODELS</div>
+          <div className="eyebrow">ATELIER / MODELS</div>
           <h1>模型与定价</h1>
-          <p className="page-subtitle">面向用户的模型目录、能力与积分价格。</p>
+          <p>按模型类型管理：用户能用什么、走哪些账号、每次消耗多少积分。</p>
         </div>
-        <span className="neutral-status">
-          <SlidersHorizontal size={14} /> MODEL CONFIGURATION
-        </span>
-      </div>
-      <div className="up-toolbar">
-        <p className="up-note">
-          新建模型 → 绑定<Link to="/admin/accounts">服务账号</Link> → 设置价格 →
-          启用
-        </p>
         <div className="up-actions">
           <button
-            className="btn btn-ghost"
+            className="btn btn-light"
             disabled={loading || busy}
             onClick={() => void load()}
           >
@@ -138,201 +228,354 @@ function Models(props: AdminProps) {
             新增模型
           </button>
         </div>
-      </div>
+      </header>
       {message && (
-        <Feedback
-          onDismiss={() => setMessage('')}
-          className="up-message"
-          variant="success"
-        >
+        <Feedback variant="success" onDismiss={() => setMessage('')}>
           {message}
         </Feedback>
       )}
       {error && !panel && (
-        <Feedback
-          onDismiss={() => setError('')}
-          className="up-message"
-          variant="error"
-        >
+        <Feedback variant="error" onDismiss={() => setError('')}>
           {error}
-          <button className="btn btn-ghost" onClick={() => void load()}>
+          <button className="btn btn-light" onClick={() => void load()}>
             重新加载
           </button>
         </Feedback>
       )}
-      <div className="up-tabs" role="tablist" aria-label="模型管理">
-        <button
-          role="tab"
-          id="models-tab"
-          aria-controls="models-panel"
-          aria-selected={tab === 'models'}
-          onClick={() => setTab('models')}
-        >
-          模型目录
-        </button>
-        <button
-          role="tab"
-          id="pricing-tab"
-          aria-controls="pricing-panel"
-          aria-selected={tab === 'pricing'}
-          onClick={() => setTab('pricing')}
-        >
-          积分定价
-        </button>
+      <div className="models-tabs" role="tablist" aria-label="模型管理">
+        {tabs.map((item) => (
+          <button
+            key={item.kind}
+            id={`model-tab-${item.kind}`}
+            role="tab"
+            aria-label={item.label}
+            aria-selected={tab === item.kind}
+            aria-controls={`model-panel-${item.kind}`}
+            tabIndex={tab === item.kind ? 0 : -1}
+            onClick={() => setTab(item.kind)}
+            onKeyDown={navigateTabs}
+          >
+            {item.label}
+            {item.kind !== 'pricing' && !loading && (
+              <span>
+                {models.filter((model) => model.kind === item.kind).length}
+              </span>
+            )}
+          </button>
+        ))}
       </div>
-      <section
-        id="models-panel"
-        role="tabpanel"
-        aria-labelledby="models-tab"
-        hidden={tab !== 'models'}
-        className="surface-block"
-      >
-        <div className="surface-title">
-          <strong>公开模型目录</strong>
-          <span>
-            {loading
-              ? '正在加载…'
-              : `${models.length} 个模型 · ${models.filter((m) => m.enabled).length} 个已启用`}
-          </span>
-        </div>
-        <div className="up-table-scroll">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>模型</th>
-                <th>类型</th>
-                <th>支持能力</th>
-                <th>路由绑定</th>
-                <th>状态</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {models.map((m) => (
-                <tr key={m.id}>
-                  <td>
-                    <strong>{m.display_name}</strong>
-                    <small className="muted-block">{m.id}</small>
-                  </td>
-                  <td>{kindNames[m.kind]}</td>
-                  <td>
-                    {m.capabilities.qualities?.join(' / ')}
-                    <small className="muted-block">
-                      {m.capabilities.resolutions?.join(' · ')}
-                      {m.kind === 'image'
-                        ? ` · 最多 ${m.capabilities.max_n} 张`
-                        : m.kind === 'video'
-                          ? ` · ${m.capabilities.seconds?.join('/')} 秒`
-                          : ''}
-                    </small>
-                  </td>
-                  <td>
-                    {m.account_ids.length} 个指定账号
-                    <small className="muted-block">
-                      {m.group_tags.length
-                        ? `分组：${m.group_tags.join('、')}`
-                        : '未绑定分组'}
-                    </small>
-                  </td>
-                  <td>
-                    <span className={`up-tag ${m.enabled ? 'good' : ''}`}>
-                      {m.enabled ? '已启用' : '未启用'}
-                    </span>
-                  </td>
-                  <td>
-                    <div className="up-actions">
+      {tabs
+        .filter((item) => item.kind !== 'pricing')
+        .map((item) => {
+          const list = models.filter(
+            (model) =>
+              model.kind === item.kind &&
+              `${model.id} ${model.display_name}`
+                .toLowerCase()
+                .includes((searches[item.kind] || '').trim().toLowerCase()),
+          );
+          return (
+            <section
+              key={item.kind}
+              id={`model-panel-${item.kind}`}
+              role="tabpanel"
+              aria-labelledby={`model-tab-${item.kind}`}
+              hidden={tab !== item.kind}
+            >
+              <p className="models-note">
+                {item.kind === 'chat'
+                  ? '文本模型按完整回复计费，使用全站统一价，不设置质量和分辨率。'
+                  : item.kind === 'image'
+                    ? '图片按张计费：基础积分 × 分辨率倍率；图片编辑在倍率计算后另加附加费。'
+                    : '视频按秒计费：基础积分 × 分辨率倍率 × 时长。可选时长以模型实际能力为准。'}
+              </p>
+              <div className="models-toolbar">
+                <label>
+                  <Search size={16} aria-hidden="true" />
+                  <input
+                    aria-label={`搜索${item.label}`}
+                    placeholder="搜索模型标识或名称"
+                    value={searches[item.kind] || ''}
+                    onChange={(event) =>
+                      setSearches((current) => ({
+                        ...current,
+                        [item.kind]: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <span>{loading ? '正在加载…' : `${list.length} 个模型`}</span>
+              </div>
+              <div className="models-list">
+                <div className="up-table-scroll">
+                  <table className={`models-table models-table-${item.kind}`}>
+                    <thead>
+                      <tr>
+                        <th>模型</th>
+                        {item.kind !== 'chat' && <th>能力</th>}
+                        <th>账号路由</th>
+                        <th>
+                          {item.kind === 'chat'
+                            ? '计费'
+                            : `价格（积分/${item.kind === 'image' ? '张' : '秒'}）`}
+                        </th>
+                        <th>状态</th>
+                        <th>操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {list.map((model) => {
+                        const state = ready(model);
+                        const missing =
+                          !state.route && !state.price
+                            ? '缺账号和价格'
+                            : !state.route
+                              ? '缺账号'
+                              : !state.price
+                                ? model.kind === 'chat'
+                                  ? '统一价未读取'
+                                  : '缺价格'
+                                : '';
+                        const range = priceRange(model, pricing);
+                        const values =
+                          pricing?.rules
+                            .filter((rule) => rule.model_id === model.id)
+                            .map((rule) => rule.edit_surcharge) || [];
+                        const edit = values.length ? rangeText(values) : '—';
+                        return (
+                          <tr key={model.id}>
+                            <td>
+                              <strong
+                                className="models-name"
+                                data-tip={model.display_name}
+                              >
+                                {model.display_name}
+                              </strong>
+                              <code
+                                className="models-id"
+                                data-tip={model.id}
+                                tabIndex={0}
+                              >
+                                {model.id}
+                              </code>
+                            </td>
+                            {item.kind !== 'chat' && (
+                              <td>
+                                <div className="models-capabilities">
+                                  {model.kind === 'image'
+                                    ? (model.capabilities.qualities || []).map(
+                                        (quality) => (
+                                          <span key={quality}>
+                                            {qualityNames[quality] || quality}
+                                          </span>
+                                        ),
+                                      )
+                                    : (
+                                        model.capabilities.resolutions || []
+                                      ).map((resolution) => (
+                                        <span key={resolution}>
+                                          {resolution}
+                                        </span>
+                                      ))}
+                                </div>
+                                <small>
+                                  {model.kind === 'image'
+                                    ? `${model.capabilities.resolutions?.join(' · ')} · 最多 ${model.capabilities.max_n} 张`
+                                    : `可选 ${model.capabilities.seconds?.join(' / ')} 秒`}
+                                </small>
+                              </td>
+                            )}
+                            <td>
+                              {state.route ? (
+                                <>
+                                  <span>
+                                    {model.account_ids.length} 个固定账号
+                                  </span>
+                                  <small>
+                                    {model.group_tags.length
+                                      ? `分组：${model.group_tags.join('、')}`
+                                      : '未设账号分组'}
+                                  </small>
+                                </>
+                              ) : (
+                                <button
+                                  className="models-link models-missing"
+                                  aria-label={`未绑定，去绑定 ${model.display_name}`}
+                                  onClick={() => open('bind', model)}
+                                >
+                                  未绑定，去绑定
+                                </button>
+                              )}
+                            </td>
+                            <td>
+                              {model.kind === 'chat' ? (
+                                <>
+                                  <strong className="models-price">
+                                    {chatPrice === undefined
+                                      ? '—'
+                                      : `${chatPrice} 积分 / 条`}
+                                  </strong>
+                                  <small>
+                                    {chatPrice === undefined
+                                      ? '暂未读取统一价，请刷新'
+                                      : '全站统一价 · 完整回复计费'}
+                                  </small>
+                                </>
+                              ) : range ? (
+                                <>
+                                  <strong className="models-price">
+                                    {rangeText(range)}
+                                  </strong>
+                                  <small>
+                                    {model.kind === 'image'
+                                      ? model.capabilities.supports_edit
+                                        ? `编辑另加 ${edit} 积分 / 张`
+                                        : '未开放图片编辑'
+                                      : `10 秒约 ${rangeText(range.map((value) => value * 10))} 积分`}
+                                  </small>
+                                </>
+                              ) : (
+                                <button
+                                  className="models-link models-missing"
+                                  aria-label={`未设置，去设置 ${model.display_name}`}
+                                  disabled={!pricing}
+                                  onClick={() => open('price', model)}
+                                >
+                                  未设置，去设置
+                                </button>
+                              )}
+                            </td>
+                            <td>
+                              <div className="models-state">
+                                <Tooltip
+                                  content={
+                                    !model.enabled && missing
+                                      ? `启用前请完成配置：${missing}`
+                                      : undefined
+                                  }
+                                >
+                                  <button
+                                    type="button"
+                                    className="models-switch"
+                                    role="switch"
+                                    aria-checked={model.enabled}
+                                    aria-label={`${model.enabled ? '停用' : '启用'} ${model.display_name}`}
+                                    disabled={
+                                      busy ||
+                                      loading ||
+                                      (!model.enabled && !!missing)
+                                    }
+                                    onClick={() => toggle(model)}
+                                  />
+                                </Tooltip>
+                                <div>
+                                  {model.enabled ? '已启用' : '未启用'}
+                                  {missing && (
+                                    <small className="models-warning">
+                                      {missing}
+                                    </small>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                            <td>
+                              <div className="models-row-actions">
+                                <button
+                                  className="models-link"
+                                  aria-label={`编辑 ${model.display_name}`}
+                                  disabled={busy || loading}
+                                  onClick={() => open('edit', model)}
+                                >
+                                  编辑
+                                </button>
+                                <button
+                                  className="models-link"
+                                  aria-label={`绑定账号 ${model.display_name}`}
+                                  disabled={busy || loading}
+                                  onClick={() => open('bind', model)}
+                                >
+                                  绑定账号
+                                </button>
+                                {model.kind !== 'chat' && (
+                                  <button
+                                    className="models-link"
+                                    aria-label={`配置价格 ${model.display_name}`}
+                                    disabled={busy || loading || !pricing}
+                                    onClick={() => open('price', model)}
+                                  >
+                                    设置价格
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                {!list.length && (
+                  <div className="models-empty">
+                    <Layers3 size={27} />
+                    <h3>
+                      {loading
+                        ? '正在加载模型…'
+                        : searches[item.kind]
+                          ? '没有匹配的模型'
+                          : `暂无${kindNames[item.kind]}模型`}
+                    </h3>
+                    <p>
+                      {searches[item.kind]
+                        ? '试试其他名称或标识。'
+                        : '新增模型后，绑定账号并完成配置即可启用。'}
+                    </p>
+                    {searches[item.kind] && (
                       <button
-                        className="icon-btn"
-                        aria-label={`编辑 ${m.display_name}`}
-                        disabled={busy || loading}
-                        onClick={() => {
-                          setError('');
-                          setPanel({ kind: 'edit', model: m });
-                        }}
-                      >
-                        <Pencil size={15} />
-                      </button>
-                      <button
-                        className="icon-btn"
-                        aria-label={`绑定账号 ${m.display_name}`}
-                        disabled={busy || loading}
-                        onClick={() => {
-                          setError('');
-                          setPanel({ kind: 'bind', model: m });
-                        }}
-                      >
-                        <Link2 size={15} />
-                      </button>
-                      <button
-                        className="icon-btn"
-                        aria-label={`配置价格 ${m.display_name}`}
-                        onClick={() => setTab('pricing')}
-                      >
-                        <Coins size={15} />
-                      </button>
-                      <button
-                        className="icon-btn"
-                        aria-label={`${m.enabled ? '停用' : '启用'} ${m.display_name}`}
-                        disabled={busy || loading}
+                        className="btn btn-light"
                         onClick={() =>
-                          m.enabled
-                            ? setPanel({ kind: 'disable', model: m })
-                            : void act(async () => {
-                                await api.saveModel(
-                                  { ...modelInput(m), enabled: true },
-                                  me.csrf_token,
-                                  true,
-                                );
-                                return '模型已启用，已进入用户模型目录。';
-                              })
+                          setSearches((current) => ({
+                            ...current,
+                            [item.kind]: '',
+                          }))
                         }
                       >
-                        <Power size={15} />
+                        清除搜索
                       </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {!models.length && (
-          <div className="up-empty">
-            {loading
-              ? '正在加载模型…'
-              : error
-                ? '暂时无法加载模型'
-                : '先新建一个模型，逐步配置账号和价格。'}
-          </div>
-        )}
-      </section>
-      <div
-        id="pricing-panel"
+                    )}
+                  </div>
+                )}
+              </div>
+            </section>
+          );
+        })}
+      <section
+        id="model-panel-pricing"
         role="tabpanel"
-        aria-labelledby="pricing-tab"
+        aria-labelledby="model-tab-pricing"
         hidden={tab !== 'pricing'}
       >
         {pricing && (
-          <PriceEditor
+          <MultiplierEditor
             key={pricing.revision}
-            models={models}
             pricing={pricing}
             busy={busy}
             onSave={(body) =>
               void act(async () => {
                 await api.savePricing(body, me.csrf_token);
-                return '积分价格已保存。';
+                return '分辨率倍率已保存。';
               })
             }
           />
         )}
-      </div>
-      <p className="up-note">
-        仅已启用模型会进入用户目录。创作任务与积分结算将在后续阶段接入。
+      </section>
+      <p className="models-footnote">
+        只有已启用模型进入用户目录。固定账号与分组取并集；绑定数量不代表当前可用账号数。
+        <Link to="/admin/accounts">管理上游账号池</Link>
       </p>
       {panel && (
         <AdminDialog
           drawer={panel.kind !== 'disable'}
+          className="models-dialog"
           title={
             panel.kind === 'edit'
               ? panel.model
@@ -340,31 +583,32 @@ function Models(props: AdminProps) {
                 : '新增模型'
               : panel.kind === 'bind'
                 ? '绑定服务账号'
-                : '停用模型？'
+                : panel.kind === 'price'
+                  ? `设置价格 · ${panel.model.display_name}`
+                  : '停用模型？'
           }
           busy={busy}
           onClose={close}
         >
           {error && (
-            <Feedback
-              onDismiss={() => setError('')}
-              className="up-message"
-              variant="error"
-            >
+            <Feedback variant="error" onDismiss={() => setError('')}>
               {error}
             </Feedback>
           )}
           {panel.kind === 'edit' && (
             <ModelForm
+              key={panel.model?.id || 'new'}
               model={panel.model}
+              initialKind={tab === 'pricing' ? 'image' : tab}
               busy={busy}
               onCancel={close}
               onSave={(body) =>
                 void act(async () => {
                   await api.saveModel(body, me.csrf_token, !!panel.model);
+                  setTab(body.kind);
                   return panel.model
                     ? '模型配置已保存。'
-                    : '模型已创建，当前未启用。请绑定账号并配置价格。';
+                    : '模型已创建，当前未启用。请绑定账号并完成计费配置。';
                 })
               }
             />
@@ -378,7 +622,21 @@ function Models(props: AdminProps) {
               onSave={(body) =>
                 void act(async () => {
                   await api.bind(panel.model.id, body, me.csrf_token);
-                  return '路由绑定已保存。请配置积分价格后启用模型。';
+                  return '路由绑定已保存。请完成计费配置后启用模型。';
+                })
+              }
+            />
+          )}
+          {panel.kind === 'price' && pricing && (
+            <ModelPriceEditor
+              model={panel.model}
+              pricing={pricing}
+              busy={busy}
+              onCancel={close}
+              onSave={(body) =>
+                void act(async () => {
+                  await api.savePricing(body, me.csrf_token);
+                  return '积分价格已保存。';
                 })
               }
             />
@@ -386,11 +644,12 @@ function Models(props: AdminProps) {
           {panel.kind === 'disable' && (
             <>
               <p className="up-note">
-                停用“{panel.model.display_name}”后用户将无法发起新请求。
+                停用“{panel.model.display_name}
+                ”后用户将无法发起新请求，已有任务继续按提交时配置处理。
               </p>
               <div className="up-form-footer">
                 <button
-                  className="btn btn-ghost"
+                  className="btn btn-light"
                   data-initial-focus
                   disabled={busy}
                   onClick={close}
@@ -495,17 +754,19 @@ function Choices({
 }
 function ModelForm({
   model: m,
+  initialKind,
   busy,
   onCancel,
   onSave,
 }: {
   model?: Model;
+  initialKind: string;
   busy: boolean;
   onCancel: () => void;
   onSave: (body: Schema['ModelInput']) => void;
 }) {
-  const [kind, setKind] = useState(m?.kind || 'image');
-  const [caps, setCaps] = useState(m?.capabilities || defaultCaps('image'));
+  const [kind, setKind] = useState(m?.kind || initialKind);
+  const [caps, setCaps] = useState(m?.capabilities || defaultCaps(initialKind));
   const [error, setError] = useState('');
   return (
     <form
@@ -615,18 +876,20 @@ function ModelForm({
           placeholder={m ? '已配置，留空保留' : '填写上游接口支持的模型标识'}
         />
       </label>
-      <Choices
-        title="质量档位"
-        options={
-          kind === 'image'
-            ? ['low', 'medium', 'high']
-            : kind === 'video'
-              ? ['standard']
-              : ['message']
-        }
-        values={caps.qualities || []}
-        onChange={(qualities) => setCaps({ ...caps, qualities })}
-      />
+      {kind === 'image' && (
+        <Choices
+          title="质量"
+          options={
+            kind === 'image'
+              ? ['low', 'medium', 'high']
+              : kind === 'video'
+                ? ['standard']
+                : ['message']
+          }
+          values={caps.qualities || []}
+          onChange={(qualities) => setCaps({ ...caps, qualities })}
+        />
+      )}
       {kind !== 'chat' && (
         <Choices
           title="画面比例"
@@ -639,18 +902,25 @@ function ModelForm({
           onChange={(ratios) => setCaps({ ...caps, ratios })}
         />
       )}
-      <Choices
-        title="分辨率"
-        options={
-          kind === 'image'
-            ? ['1K', '2K', '4K']
-            : kind === 'video'
-              ? ['720p', '1080p']
-              : ['text']
-        }
-        values={caps.resolutions || []}
-        onChange={(resolutions) => setCaps({ ...caps, resolutions })}
-      />
+      {kind !== 'chat' && (
+        <Choices
+          title="分辨率"
+          options={
+            kind === 'image'
+              ? ['1K', '2K', '4K']
+              : kind === 'video'
+                ? ['720p', '1080p']
+                : ['text']
+          }
+          values={caps.resolutions || []}
+          onChange={(resolutions) => setCaps({ ...caps, resolutions })}
+        />
+      )}
+      {kind === 'chat' && (
+        <p className="models-form-note">
+          文本模型使用全站统一的完整回复价格，不设置质量和分辨率。
+        </p>
+      )}
       {kind !== 'chat' && (
         <>
           <div className="up-grid">
@@ -825,7 +1095,7 @@ function BindingForm({
     >
       <p className="up-note">
         {model.display_name} ·
-        指定账号与分组取并集；分组中新加入的账号会自动参与路由，停用、冷却、无额度的账号暂不调度。
+        固定账号与分组取并集；分组中新加入的账号会自动参与路由，停用、冷却、无额度的账号暂不调度。
       </p>
       <label>
         动态分组
@@ -838,7 +1108,7 @@ function BindingForm({
         <small>英文逗号分隔，最多 32 个。</small>
       </label>
       <fieldset>
-        <legend>指定账号</legend>
+        <legend>固定账号</legend>
         {loading ? (
           <p role="status">正在加载账号…</p>
         ) : error ? (
@@ -888,208 +1158,6 @@ function BindingForm({
         <button className="btn btn-dark" disabled={busy || loading || !!error}>
           {busy ? '正在保存…' : '保存绑定'}
         </button>
-      </div>
-    </form>
-  );
-}
-function PriceEditor({
-  models,
-  pricing,
-  busy,
-  onSave,
-}: {
-  models: Model[];
-  pricing: Pricing;
-  busy: boolean;
-  onSave: (body: Pricing) => void;
-}) {
-  const [rules, setRules] = useState<
-    Record<string, { base: string; edit: string }>
-  >(() =>
-    Object.fromEntries(
-      pricing.rules.map((r) => [
-        `${r.model_id}/${r.quality}`,
-        { base: String(r.base_credits), edit: String(r.edit_surcharge) },
-      ]),
-    ),
-  );
-  const [multipliers, setMultipliers] = useState(pricing.multipliers);
-  const [error, setError] = useState('');
-  function change(
-    id: string,
-    quality: string,
-    key: 'base' | 'edit',
-    value: string,
-  ) {
-    const k = `${id}/${quality}`;
-    setRules({
-      ...rules,
-      [k]: {
-        base: rules[k]?.base ?? '',
-        edit: rules[k]?.edit ?? '0',
-        [key]: value,
-      },
-    });
-  }
-  return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        const output: Pricing['rules'] = [];
-        for (const m of models)
-          for (const q of m.capabilities.qualities || []) {
-            const r = rules[`${m.id}/${q}`];
-            if (!r || r.base === '') {
-              if (m.enabled) {
-                setError(`${m.display_name} 已启用，必须配置所有质量价格。`);
-                return;
-              }
-              continue;
-            }
-            output.push({
-              model_id: m.id,
-              quality: q,
-              base_credits: Number(r.base),
-              edit_surcharge: m.kind === 'image' ? Number(r.edit || '0') : 0,
-            });
-          }
-        setError('');
-        onSave({ revision: pricing.revision, rules: output, multipliers });
-      }}
-    >
-      <p className="up-note">
-        基础价格 ×
-        分辨率倍率。图片按张，视频按秒；图片编辑附加费在倍率计算后按张增加。未启用模型可留空，0
-        仅适用于对话模型。对话实际按全站统一的每条积分收费，发送前会显示当前价格。这里维护模型启用所需的定价配置，不扣取用户积分。
-      </p>
-      <section className="surface-block up-pricing-section">
-        <div className="surface-title">
-          <strong>分辨率倍率</strong>
-          <span>全局配置 · 版本 {pricing.revision}</span>
-        </div>
-        <div className="up-actions" style={{ padding: 20 }}>
-          {multipliers.map((r, i) => (
-            <label className="up-field" key={r.resolution}>
-              {r.resolution}
-              <input
-                className="up-price-input"
-                aria-label={`${r.resolution} 倍率`}
-                type="number"
-                min={1}
-                max={100}
-                required
-                value={r.multiplier}
-                onChange={(e) =>
-                  setMultipliers(
-                    multipliers.map((v, index) =>
-                      index === i
-                        ? { ...v, multiplier: Number(e.target.value) }
-                        : v,
-                    ),
-                  )
-                }
-              />
-            </label>
-          ))}
-        </div>
-      </section>
-      {models.map((m) => (
-        <section className="surface-block up-pricing-section" key={m.id}>
-          <div className="surface-title">
-            <h3>{m.display_name}</h3>
-            <span>
-              {kindNames[m.kind]} ·{' '}
-              {m.kind === 'video'
-                ? '积分 / 秒'
-                : m.kind === 'image'
-                  ? '积分 / 张'
-                  : '积分 / 条'}
-            </span>
-          </div>
-          <div className="up-table-scroll">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>质量</th>
-                  <th>基础积分</th>
-                  {m.kind === 'image' && <th>编辑附加费</th>}
-                  {m.capabilities.resolutions?.map((res) => (
-                    <th key={res}>{res} 价格</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {m.capabilities.qualities?.map((q) => {
-                  const r = rules[`${m.id}/${q}`];
-                  return (
-                    <tr key={q}>
-                      <td>{q}</td>
-                      <td>
-                        <input
-                          className="up-price-input"
-                          aria-label={`${m.display_name} ${q} 基础积分`}
-                          type="number"
-                          required={m.enabled}
-                          min={m.kind === 'chat' ? 0 : 1}
-                          max={1000000}
-                          value={r?.base ?? ''}
-                          placeholder="未配置"
-                          onChange={(e) =>
-                            change(m.id, q, 'base', e.target.value)
-                          }
-                        />
-                      </td>
-                      {m.kind === 'image' && (
-                        <td>
-                          <input
-                            className="up-price-input"
-                            aria-label={`${m.display_name} ${q} 编辑附加费`}
-                            type="number"
-                            min={0}
-                            max={1000000}
-                            value={r?.edit ?? '0'}
-                            onChange={(e) =>
-                              change(m.id, q, 'edit', e.target.value)
-                            }
-                          />
-                        </td>
-                      )}
-                      {m.capabilities.resolutions?.map((res) => (
-                        <td key={res}>
-                          {r?.base
-                            ? Number(r.base) *
-                              (multipliers.find((v) => v.resolution === res)
-                                ?.multiplier ?? 1)
-                            : '—'}
-                        </td>
-                      ))}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      ))}
-      {!models.length && (
-        <div className="up-empty">添加模型后即可配置积分价格。</div>
-      )}
-      {error && (
-        <Feedback
-          onDismiss={() => setError('')}
-          className="up-message"
-          variant="error"
-        >
-          {error}
-        </Feedback>
-      )}
-      <div className="up-actions">
-        <button className="btn btn-dark" disabled={busy || !models.length}>
-          {busy ? '正在保存…' : '保存全部价格'}
-        </button>
-        <span className="up-note">
-          更改在保存后生效，切换标签不会丢失未保存输入。
-        </span>
       </div>
     </form>
   );
