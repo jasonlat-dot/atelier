@@ -46,6 +46,13 @@ jobs:
       - if: ${{ always() }}
         run: npm audit
         working-directory: apps/web
+      - uses: actions/upload-artifact@v4
+        if: ${{ failure() }}
+        with:
+          name: baseline-browser-failures
+          path: apps/web/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
 
   identity-schema:
     runs-on: ubuntu-24.04
@@ -126,3 +133,10 @@ jobs:
         working-directory: apps/web
       - run: npm run test:e2e:auth
         working-directory: apps/web
+      - uses: actions/upload-artifact@v4
+        if: ${{ failure() }}
+        with:
+          name: auth-browser-failures
+          path: apps/web/test-results/
+          if-no-files-found: ignore
+          retention-days: 7

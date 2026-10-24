@@ -1,8 +1,23 @@
 import { useToast } from '../../components/Toast';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useInfiniteQuery } from '@tanstack/react-query';
-import { Copy, Download, Plus, RefreshCw, Search, Info } from 'lucide-react';
-import Feedback from '../../components/Feedback';
+import {
+  useInfiniteQuery,
+  useQueryClient,
+  type InfiniteData,
+} from '@tanstack/react-query';
+import {
+  Copy,
+  Download,
+  Plus,
+  RefreshCw,
+  Search,
+  Info,
+  LoaderCircle,
+  Pause,
+  Play,
+  Trash2,
+} from 'lucide-react';
+import Feedback, { useConfirmNotice } from '../../components/Feedback';
 import DatePicker from '../../components/DatePicker';
 import Tooltip from '../../components/Tooltip';
 import AdminDialog from '../upstream/AdminDialog';
@@ -14,14 +29,17 @@ import '../upstream/AdminUpstream.css';
 const dateLabel = (value: string) =>
   new Date(value).toLocaleString('zh-CN', { hour12: false });
 const statusOf = (item: CodeInfo) =>
-  item.expires_at && Date.parse(item.expires_at) <= Date.now()
-    ? 'expired'
-    : item.used_count >= item.max_uses
-      ? 'exhausted'
-      : 'available';
+  item.disabled_at
+    ? 'disabled'
+    : item.expires_at && Date.parse(item.expires_at) <= Date.now()
+      ? 'expired'
+      : item.used_count >= item.max_uses
+        ? 'exhausted'
+        : 'available';
 const filters = [
   { value: 'all', label: '全部' },
   { value: 'available', label: '可用' },
+  { value: 'disabled', label: '已停用' },
   { value: 'exhausted', label: '已用完' },
   { value: 'expired', label: '已过期' },
 ];
@@ -55,9 +73,17 @@ export default function AdminRedeemCodes({
   const toast = useToast();
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
-  const [copying, setCopying] = useState<string>();
+  const [copying, setCopying] = useState<Set<string>>(() => new Set());
+  const [managing, setManaging] = useState<{
+    id: string;
+    action: 'disable' | 'enable' | 'delete';
+  }>();
+  const [success, setSuccess] = useState('');
+  const confirm = useConfirmNotice();
+  const queryClient = useQueryClient();
   const [manualCopy, setManualCopy] = useState<{ code: string; id: string }>();
-  const copyLock = useRef(false);
+  const copyLock = useRef(new Set<string>());
+  const manageLock = useRef(false);
   const lock = useRef(false);
   const query = useInfiniteQuery({
     queryKey: ['admin-redeem-codes', me.user.id],
@@ -92,6 +118,7 @@ export default function AdminRedeemCodes({
   }, [query.error, fail]);
   const items = (query.data?.pages.flat() || []).filter(
     (item, index, all) =>
+      !item.deleted_at &&
       all.findIndex((other) => other.id === item.id) === index,
   );
   const visible = items.filter(
@@ -126,9 +153,9 @@ export default function AdminRedeemCodes({
       .toLocaleString('zh-CN');
   };
   const copyCode = async (item: CodeInfo) => {
-    if (copyLock.current || !item.copyable) return;
-    copyLock.current = true;
-    setCopying(item.id);
+    if (copyLock.current.has(item.id) || !item.copyable) return;
+    copyLock.current.add(item.id);
+    setCopying(new Set(copyLock.current));
     try {
       // Deliberately outside React Query: never cache or persist a revealed code.
       const result = await walletApi.copyCode(item.id, me.csrf_token);
@@ -141,8 +168,73 @@ export default function AdminRedeemCodes({
     } catch (failure) {
       fail(failure, '暂时无法复制兑换码，请刷新列表后重试。');
     } finally {
-      copyLock.current = false;
-      setCopying(undefined);
+      copyLock.current.delete(item.id);
+      setCopying(new Set(copyLock.current));
+    }
+  };
+  const manageCode = async (
+    item: CodeInfo,
+    action: 'disable' | 'enable' | 'delete',
+  ) => {
+    if (manageLock.current || !Number.isSafeInteger(item.revision)) return;
+    manageLock.current = true;
+    const label =
+      action === 'delete' ? '删除' : action === 'disable' ? '停用' : '启用';
+    try {
+      const accepted = await confirm(
+        <div className="admin-code-confirm">
+          <code>{item.id}</code>
+          <p>
+            {action === 'delete'
+              ? '删除后将从列表移除，无法恢复或继续兑换。已兑换积分和历史记录保留。'
+              : action === 'disable'
+                ? '停用后不能继续兑换，已兑换积分不受影响；需要时可重新启用。'
+                : '启用后，未过期且仍有剩余次数的兑换码可继续兑换。'}
+          </p>
+        </div>,
+        { title: `确认${label}兑换码？`, confirmLabel: `确认${label}` },
+      );
+      if (!accepted) return;
+      setManaging({ id: item.id, action });
+      const key = ['admin-redeem-codes', me.user.id];
+      await queryClient.cancelQueries({ queryKey: key });
+      const result =
+        action === 'delete'
+          ? await walletApi.deleteCode(item.id, item.revision, me.csrf_token)
+          : await walletApi.updateCode(
+              item.id,
+              item.revision,
+              action === 'disable',
+              me.csrf_token,
+            );
+      // Keep page boundaries/cursors intact; deleted rows stay as hidden metadata until refresh.
+      queryClient.setQueryData<InfiniteData<CodeInfo[]>>(
+        key,
+        (data) =>
+          data && {
+            ...data,
+            pages: data.pages.map((page) =>
+              page.map((row) => (row.id === result.id ? result : row)),
+            ),
+          },
+      );
+      setSuccess(
+        `兑换码已${label}${action === 'delete' ? '，已有兑换和积分记录保留。' : '。'}`,
+      );
+    } catch (failure) {
+      const changed =
+        failure instanceof SessionError &&
+        (failure.status === 409 || failure.status === 404);
+      fail(
+        failure,
+        changed
+          ? '兑换码状态已变化，请刷新列表核对后再操作。'
+          : '操作结果暂未确认，请刷新列表核对状态后再操作。',
+      );
+      void query.refetch();
+    } finally {
+      manageLock.current = false;
+      setManaging(undefined);
     }
   };
   const create = async () => {
@@ -262,8 +354,8 @@ export default function AdminRedeemCodes({
         </div>
         <p className="admin-code-note">
           <Info size={16} aria-hidden="true" />
-          新生成的兑换码可在列表中复制，读取操作会记录审计；旧版仅存哈希的兑换码无法恢复。用户可在“积分与订阅
-          → 积分账本”中兑换。
+          兑换码可在列表中复制，读取和管理操作会记录审计。用户可在“积分与订阅 →
+          积分账本”中兑换。
         </p>
         <p className="admin-code-scope">
           统计、筛选和搜索仅针对已加载的 {items.length} 个兑换码。
@@ -335,11 +427,13 @@ export default function AdminRedeemCodes({
                         !!item.expires_at &&
                         Date.parse(item.expires_at) <= Date.now();
                       const exhausted = item.used_count >= item.max_uses;
-                      const status = expired
-                        ? '已过期'
-                        : exhausted
-                          ? '已用完'
-                          : '可用';
+                      const status = item.disabled_at
+                        ? '已停用'
+                        : expired
+                          ? '已过期'
+                          : exhausted
+                            ? '已用完'
+                            : '可用';
                       return (
                         <tr key={item.id}>
                           <td>
@@ -377,7 +471,7 @@ export default function AdminRedeemCodes({
                           <td>
                             <span
                               className="admin-code-status"
-                              data-active={!expired && !exhausted}
+                              data-active={statusOf(item) === 'available'}
                               data-state={statusOf(item)}
                             >
                               {status}
@@ -385,24 +479,107 @@ export default function AdminRedeemCodes({
                           </td>
                           <td>{dateLabel(item.created_at)}</td>
                           <td>
-                            <Tooltip
-                              content={
-                                !item.copyable
-                                  ? '旧版兑换码仅保存哈希，无法恢复完整内容'
-                                  : '复制完整兑换码，读取操作将记录审计'
-                              }
-                            >
-                              <button
-                                type="button"
-                                className="admin-code-copy"
-                                aria-label={`复制兑换码 ${item.id}`}
-                                disabled={!item.copyable || !!copying}
-                                onClick={() => void copyCode(item)}
+                            <div className="admin-code-actions">
+                              <Tooltip
+                                content={
+                                  !item.copyable
+                                    ? '此兑换码暂不支持复制'
+                                    : '复制完整兑换码，读取操作将记录审计'
+                                }
                               >
-                                <Copy size={14} />
-                                {copying === item.id ? '正在复制…' : '复制'}
-                              </button>
-                            </Tooltip>
+                                <button
+                                  type="button"
+                                  className="admin-code-copy"
+                                  aria-label={`复制兑换码 ${item.id}`}
+                                  disabled={
+                                    !item.copyable ||
+                                    copying.has(item.id) ||
+                                    managing?.id === item.id
+                                  }
+                                  aria-busy={copying.has(item.id)}
+                                  onClick={() => void copyCode(item)}
+                                >
+                                  {copying.has(item.id) ? (
+                                    <LoaderCircle
+                                      size={14}
+                                      className="admin-code-spinner"
+                                    />
+                                  ) : (
+                                    <Copy size={14} />
+                                  )}
+                                  复制
+                                </button>
+                              </Tooltip>
+                              <Tooltip
+                                content={
+                                  !Number.isSafeInteger(item.revision)
+                                    ? '请更新后端后刷新列表'
+                                    : item.disabled_at
+                                      ? '重新启用兑换码'
+                                      : '暂停此码的后续兑换'
+                                }
+                              >
+                                <button
+                                  type="button"
+                                  className="admin-code-action"
+                                  aria-label={`${item.disabled_at ? '启用' : '停用'}兑换码 ${item.id}`}
+                                  disabled={
+                                    !!managing ||
+                                    !Number.isSafeInteger(item.revision)
+                                  }
+                                  onClick={() =>
+                                    void manageCode(
+                                      item,
+                                      item.disabled_at ? 'enable' : 'disable',
+                                    )
+                                  }
+                                >
+                                  {managing?.id === item.id &&
+                                  managing.action !== 'delete' ? (
+                                    <LoaderCircle
+                                      size={14}
+                                      className="admin-code-spinner"
+                                    />
+                                  ) : item.disabled_at ? (
+                                    <Play size={14} />
+                                  ) : (
+                                    <Pause size={14} />
+                                  )}
+                                  {item.disabled_at ? '启用' : '停用'}
+                                </button>
+                              </Tooltip>
+                              <Tooltip
+                                content={
+                                  !Number.isSafeInteger(item.revision)
+                                    ? '请更新后端后刷新列表'
+                                    : '从列表移除并停止兑换，保留已有记录'
+                                }
+                              >
+                                <button
+                                  type="button"
+                                  className="admin-code-action admin-code-delete"
+                                  aria-label={`删除兑换码 ${item.id}`}
+                                  disabled={
+                                    !!managing ||
+                                    !Number.isSafeInteger(item.revision)
+                                  }
+                                  onClick={() =>
+                                    void manageCode(item, 'delete')
+                                  }
+                                >
+                                  {managing?.id === item.id &&
+                                  managing.action === 'delete' ? (
+                                    <LoaderCircle
+                                      size={14}
+                                      className="admin-code-spinner"
+                                    />
+                                  ) : (
+                                    <Trash2 size={14} />
+                                  )}
+                                  删除
+                                </button>
+                              </Tooltip>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -630,6 +807,11 @@ export default function AdminRedeemCodes({
             </footer>
           </div>
         </AdminDialog>
+      )}
+      {success && (
+        <Feedback variant="success" onDismiss={() => setSuccess('')}>
+          {success}
+        </Feedback>
       )}
       {error && (
         <Feedback variant="error" onDismiss={() => setError('')}>

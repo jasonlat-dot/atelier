@@ -22,6 +22,7 @@ impl From<WalletError> for ApiError {
             WalletError::InvalidCode => (StatusCode::UNPROCESSABLE_ENTITY, "INVALID_REDEEM_CODE"),
             WalletError::NotFound => (StatusCode::NOT_FOUND, "NOT_FOUND"),
             WalletError::CodeNotRecoverable => (StatusCode::CONFLICT, "CODE_NOT_RECOVERABLE"),
+            WalletError::CodeChanged => (StatusCode::CONFLICT, "REDEEM_CODE_CHANGED"),
             WalletError::Store => (StatusCode::SERVICE_UNAVAILABLE, "SERVICE_UNAVAILABLE"),
         };
         ApiError::new(status, code, &error.to_string())

@@ -161,6 +161,38 @@ pub async fn copy_code(
         service(&state).reveal_code(actor.user().id, id).await?,
     ))
 }
+
+#[utoipa::path(patch,path="/api/v1/admin/redeem-codes/{id}",params(("id"=Uuid,Path)),request_body=CodeStateRequest,security(("session"=[],"csrf"=[])),responses((status=200,body=CodeInfo),(status=401,body=ErrorResponse),(status=403,body=ErrorResponse),(status=404,body=ErrorResponse),(status=409,body=ErrorResponse),(status=422,body=ErrorResponse),(status=503,body=ErrorResponse)))]
+pub async fn update_code(
+    State(state): State<AppState>,
+    RequireRole(actor): RequireRole<false>,
+    path: Result<Path<Uuid>, PathRejection>,
+    body: Result<Json<CodeStateRequest>, JsonRejection>,
+) -> Result<Json<CodeInfo>, ApiError> {
+    let Path(id) = path.map_err(|_| invalid())?;
+    let Json(body) = body.map_err(|_| invalid())?;
+    Ok(Json(
+        service(&state)
+            .update_code(actor.user().id, id, body)
+            .await?,
+    ))
+}
+
+#[utoipa::path(delete,path="/api/v1/admin/redeem-codes/{id}",params(("id"=Uuid,Path)),request_body=CodeDeleteRequest,security(("session"=[],"csrf"=[])),responses((status=200,body=CodeInfo),(status=401,body=ErrorResponse),(status=403,body=ErrorResponse),(status=404,body=ErrorResponse),(status=409,body=ErrorResponse),(status=422,body=ErrorResponse),(status=503,body=ErrorResponse)))]
+pub async fn delete_code(
+    State(state): State<AppState>,
+    RequireRole(actor): RequireRole<false>,
+    path: Result<Path<Uuid>, PathRejection>,
+    body: Result<Json<CodeDeleteRequest>, JsonRejection>,
+) -> Result<Json<CodeInfo>, ApiError> {
+    let Path(id) = path.map_err(|_| invalid())?;
+    let Json(body) = body.map_err(|_| invalid())?;
+    Ok(Json(
+        service(&state)
+            .delete_code(actor.user().id, id, body.revision)
+            .await?,
+    ))
+}
 #[utoipa::path(get,path="/api/v1/admin/credits/adjustments",security(("session"=[])),responses((status=200,body=Vec<CreditAdjustment>),(status=401,body=ErrorResponse),(status=403,body=ErrorResponse),(status=503,body=ErrorResponse)))]
 pub async fn adjustments(
     State(state): State<AppState>,

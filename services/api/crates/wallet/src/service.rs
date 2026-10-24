@@ -19,6 +19,8 @@ pub enum WalletError {
     NotFound,
     #[error("This legacy redeem code has no recoverable copy")]
     CodeNotRecoverable,
+    #[error("Redeem code changed; refresh before trying again")]
+    CodeChanged,
     #[error("Wallet service unavailable")]
     Store,
 }
@@ -470,7 +472,7 @@ impl WalletService {
         let cipher = self.code_cipher.as_ref().ok_or(WalletError::Store)?;
         let mut tx = self.pool.begin().await?;
         let (encrypted, hash): (Option<Vec<u8>>, Vec<u8>) =
-            sqlx::query_as("SELECT code_enc,code_hash FROM redeem_codes WHERE id=$1")
+            sqlx::query_as("SELECT code_enc,code_hash FROM redeem_codes WHERE id=$1 AND deleted_at IS NULL FOR SHARE")
                 .bind(id)
                 .fetch_optional(&mut *tx)
                 .await?
@@ -493,6 +495,52 @@ impl WalletService {
             id,
             code: code.to_string(),
         })
+    }
+    pub async fn update_code(
+        &self,
+        actor: Uuid,
+        id: Uuid,
+        params: CodeStateRequest,
+    ) -> Result<CodeInfo, WalletError> {
+        self.manage_code(actor, id, params.revision, Some(params.disabled))
+            .await
+    }
+    pub async fn delete_code(
+        &self,
+        actor: Uuid,
+        id: Uuid,
+        revision: i64,
+    ) -> Result<CodeInfo, WalletError> {
+        self.manage_code(actor, id, revision, None).await
+    }
+    async fn manage_code(
+        &self,
+        actor: Uuid,
+        id: Uuid,
+        revision: i64,
+        disabled: Option<bool>,
+    ) -> Result<CodeInfo, WalletError> {
+        if revision < 1 {
+            return Err(WalletError::Validation);
+        }
+        let mut tx = self.pool.begin().await?;
+        // Shares the redemption row lock: once stopped/deleted, no new redemption can commit.
+        let before: CodeInfo = sqlx::query_as("SELECT id,credits,max_uses,used_count,expires_at,created_at,(code_enc IS NOT NULL) AS copyable,disabled_at,deleted_at,revision FROM redeem_codes WHERE id=$1 AND deleted_at IS NULL FOR UPDATE")
+            .bind(id).fetch_optional(&mut *tx).await?.ok_or(WalletError::NotFound)?;
+        if before.revision != revision {
+            return Err(WalletError::CodeChanged);
+        }
+        let action = match disabled {
+            Some(true) => "REDEEM_CODE_DISABLED",
+            Some(false) => "REDEEM_CODE_ENABLED",
+            None => "REDEEM_CODE_DELETED",
+        };
+        let after: CodeInfo = sqlx::query_as("UPDATE redeem_codes SET disabled_at=CASE WHEN $2::boolean IS NULL THEN disabled_at WHEN $2 THEN COALESCE(disabled_at,now()) ELSE NULL END,deleted_at=CASE WHEN $2::boolean IS NULL THEN now() ELSE NULL END,revision=revision+1 WHERE id=$1 RETURNING id,credits,max_uses,used_count,expires_at,created_at,(code_enc IS NOT NULL) AS copyable,disabled_at,deleted_at,revision")
+            .bind(id).bind(disabled).fetch_one(&mut *tx).await?;
+        sqlx::query("INSERT INTO audit_logs(actor_id,action,target_type,target_id,before,after) VALUES($1,$2,'redeem_code',$3,$4,$5)")
+            .bind(actor).bind(action).bind(id.to_string()).bind(json!(before)).bind(json!(after)).execute(&mut *tx).await?;
+        tx.commit().await?;
+        Ok(after)
     }
     pub async fn adjustments(&self) -> Result<Vec<CreditAdjustment>, WalletError> {
         Ok(sqlx::query_as("SELECT a.id,a.target_id AS user_id,u.display_name,u.email,o.email AS operator,(a.after->>'amount')::bigint AS amount,a.after->>'reason' AS reason,a.created_at FROM audit_logs a JOIN users u ON u.id::text=a.target_id JOIN users o ON o.id=a.actor_id WHERE a.action='WALLET_ADJUST' AND a.target_type='wallet' ORDER BY a.id DESC LIMIT 5")

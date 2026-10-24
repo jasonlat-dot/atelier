@@ -6,6 +6,20 @@ export type CodeInfo = components['schemas']['CodeInfo'];
 export type CreateCodesInput = components['schemas']['CreateCodesRequest'];
 export type CreatedCodes = components['schemas']['CreatedCodes'];
 export const walletApi = {
+  updateCode: (id: string, revision: number, disabled: boolean, csrf: string) =>
+    request<CodeInfo>(
+      `/admin/redeem-codes/${encodeURIComponent(id)}`,
+      'PATCH',
+      csrf,
+      { revision, disabled },
+    ),
+  deleteCode: (id: string, revision: number, csrf: string) =>
+    request<CodeInfo>(
+      `/admin/redeem-codes/${encodeURIComponent(id)}`,
+      'DELETE',
+      csrf,
+      { revision },
+    ),
   adjustments: (signal?: AbortSignal) =>
     request<components['schemas']['CreditAdjustment'][]>(
       '/admin/credits/adjustments',

@@ -70,6 +70,9 @@
 .app-tooltip[data-placement='bottom']::after {
   top: -4px;
 }
+.tooltip-trigger:not(.tooltip-disabled-trigger) {
+  display: contents;
+}
 .tooltip-disabled-trigger {
   display: inline-flex;
   align-items: center;

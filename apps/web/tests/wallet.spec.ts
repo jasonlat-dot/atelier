@@ -78,6 +78,9 @@ for (const ambiguous of [false, true]) {
                 expires_at: null,
                 created_at: '2026-10-24T00:00:00Z',
                 copyable: true,
+                revision: 1,
+                disabled_at: null,
+                deleted_at: null,
               }))
             : [],
         });
@@ -334,4 +337,182 @@ test('administrator adjustment confirms reason and preserves retry key', async (
     .click();
   await expect(page.getByText('积分调整已入账，审计记录已保存')).toBeVisible();
   expect(keys[0]).toBe(keys[1]);
+});
+
+test('code copy keeps rows and column widths stable; lifecycle actions require confirmation', async ({
+  page,
+}) => {
+  const id = '1f8848d3-1bd4-4eb3-8c91-a653c27a11a0';
+  const secondId = '2f8848d3-1bd4-4eb3-8c91-a653c27a11a0';
+  const writes: { method: string; body: unknown }[] = [];
+  let listReads = 0;
+  let releaseCopy = () => {};
+  const copyGate = new Promise<void>((resolve) => {
+    releaseCopy = resolve;
+  });
+  let items = [id, secondId].map((id) => ({
+    id,
+    credits: 100,
+    used_count: 0,
+    max_uses: 2,
+    expires_at: null,
+    created_at: '2026-10-24T00:00:00Z',
+    copyable: true,
+    revision: 1,
+    disabled_at: null as string | null,
+    deleted_at: null as string | null,
+  }));
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: async () => {} },
+    });
+  });
+  await page.route('**/api/v1/**', async (route) => {
+    const req = route.request(),
+      path = new URL(req.url()).pathname;
+    if (path === '/api/v1/me')
+      return route.fulfill({
+        json: {
+          user: { ...user, role: 'ADMIN', mfa_enabled: true },
+          csrf_token: 'csrf',
+          mfa_required: false,
+        },
+      });
+    if (path === '/api/v1/wallet')
+      return route.fulfill({ json: { balance: 20, held: 0, available: 20 } });
+    if (path === '/api/v1/admin/redeem-codes') {
+      listReads++;
+      return route.fulfill({ json: items.filter((item) => !item.deleted_at) });
+    }
+    if (path === `/api/v1/admin/redeem-codes/${id}/copy`) {
+      await copyGate;
+      return route.fulfill({ json: { id, code: 'transient-fixture-code' } });
+    }
+    if (path === `/api/v1/admin/redeem-codes/${id}`) {
+      expect(req.headers()['x-csrf-token']).toBe('csrf');
+      const body = req.postDataJSON();
+      writes.push({ method: req.method(), body });
+      expect(body.revision).toBe(items[0].revision);
+      items = items.map((row) =>
+        row.id !== id
+          ? row
+          : {
+              ...row,
+              revision: row.revision + 1,
+              disabled_at:
+                body.disabled === true ? '2026-10-24T01:00:00Z' : null,
+              deleted_at:
+                req.method() === 'DELETE' ? '2026-10-24T02:00:00Z' : null,
+            },
+      );
+      return route.fulfill({ json: items[0] });
+    }
+    return route.fulfill({
+      status: 404,
+      json: { error: { code: 'NOT_FOUND' } },
+    });
+  });
+  await page.goto('/admin/credits?tab=codes');
+  const table = page.locator('.admin-code-table');
+  const copy = page.getByRole('button', {
+    name: `复制兑换码 ${id}`,
+    exact: true,
+  });
+  await expect(copy).toBeVisible();
+  await expect(
+    page.getByText('旧版仅存哈希的兑换码无法恢复。', { exact: false }),
+  ).toHaveCount(0);
+  await copy.evaluate((element) => {
+    element.dataset.identity = 'original';
+  });
+  const widths = await table
+    .locator('th')
+    .evaluateAll((cells) =>
+      cells.map((cell) => cell.getBoundingClientRect().width),
+    );
+  const readsBeforeCopy = listReads;
+  await copy.click();
+  await expect(copy).toHaveAttribute('aria-busy', 'true');
+  await expect(copy).toHaveText('复制');
+  await expect(
+    page.getByRole('button', { name: `复制兑换码 ${secondId}`, exact: true }),
+  ).toBeEnabled();
+  await expect(table.locator('tbody tr')).toHaveCount(2);
+  expect(
+    await table
+      .locator('th')
+      .evaluateAll((cells) =>
+        cells.map((cell) => cell.getBoundingClientRect().width),
+      ),
+  ).toEqual(widths);
+  await expect(copy).toHaveAttribute('data-identity', 'original');
+  expect(listReads).toBe(readsBeforeCopy);
+  releaseCopy();
+  await expect(copy).toHaveAttribute('aria-busy', 'false');
+  await expect(page.locator('.app-toast [role="status"]')).toContainText(
+    '兑换码已复制',
+  );
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
+  const stop = page.getByRole('button', {
+    name: `停用兑换码 ${id}`,
+    exact: true,
+  });
+  await stop.click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: '取消', exact: true })
+    .click();
+  expect(writes).toHaveLength(0);
+  await stop.click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: '确认停用', exact: true })
+    .click();
+  await expect(page.getByRole('alertdialog')).toContainText('兑换码已停用');
+  await dismissFeedback(page);
+  await expect(
+    page.getByRole('button', { name: `启用兑换码 ${id}`, exact: true }),
+  ).toBeVisible();
+  await expect(table.locator('tbody tr').first()).toContainText('已停用');
+  expect(writes[0]).toEqual({
+    method: 'PATCH',
+    body: { revision: 1, disabled: true },
+  });
+  await page
+    .getByRole('button', { name: `启用兑换码 ${id}`, exact: true })
+    .click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: '确认启用', exact: true })
+    .click();
+  await expect(page.getByRole('alertdialog')).toContainText('兑换码已启用');
+  await dismissFeedback(page);
+  expect(writes[1]).toEqual({
+    method: 'PATCH',
+    body: { revision: 2, disabled: false },
+  });
+  await page
+    .getByRole('button', { name: `删除兑换码 ${id}`, exact: true })
+    .click();
+  await expect(page.getByRole('dialog')).toContainText(
+    '已兑换积分和历史记录保留',
+  );
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: '确认删除', exact: true })
+    .click();
+  await expect(page.getByRole('alertdialog')).toContainText('兑换码已删除');
+  await dismissFeedback(page);
+  expect(writes[2]).toEqual({ method: 'DELETE', body: { revision: 3 } });
+  await expect(table.locator('tbody tr')).toHaveCount(1);
+  await expect(page.getByText('已加载 1 个兑换码')).toBeVisible();
+  expect(
+    await page.evaluate(() =>
+      [...Object.values(localStorage), ...Object.values(sessionStorage)].join(
+        ' ',
+      ),
+    ),
+  ).not.toContain('transient-fixture-code');
 });

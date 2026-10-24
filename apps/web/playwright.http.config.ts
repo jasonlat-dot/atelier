@@ -16,6 +16,8 @@ export default defineConfig({
   ],
   workers: 1,
   use: {
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
     baseURL: 'http://127.0.0.1:5173',
     ...devices['Desktop Chrome'],
     channel: process.env.PLAYWRIGHT_CHANNEL || undefined,

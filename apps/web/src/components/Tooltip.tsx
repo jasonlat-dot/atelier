@@ -21,7 +21,7 @@ type Props = {
   wrapperClassName?: string;
 };
 
-/** Uses the same delegated host as data-tip; enabled triggers keep their original DOM layout. */
+/** Keep control identity stable across disabled/loading/hint changes. */
 export default function Tooltip({
   content,
   title,
@@ -33,32 +33,43 @@ export default function Tooltip({
   const child = Children.only(children) as ReactElement<
     Record<string, unknown>
   >;
-  if (!content) return child;
   const attributes = {
-    'data-tip': content,
-    'data-tip-title': title,
+    'data-tip': content || undefined,
+    'data-tip-title': content ? title : undefined,
     'data-tip-placement': placement,
     'data-tip-delay': delay,
   };
-  if (child.props.disabled)
+  const control =
+    typeof child.type === 'string' &&
+    ['button', 'input', 'textarea', 'select', 'a', 'summary'].includes(
+      child.type,
+    );
+  if (control || child.props.disabled) {
+    const disabledHint = !!child.props.disabled && !!content;
     return (
       <span
-        {...attributes}
-        className={`tooltip-disabled-trigger ${wrapperClassName || ''}`}
-        tabIndex={0}
-        role="group"
+        {...(disabledHint ? attributes : {})}
+        className={`tooltip-trigger${disabledHint ? ' tooltip-disabled-trigger' : ''} ${wrapperClassName || ''}`}
+        tabIndex={disabledHint ? 0 : undefined}
+        role={disabledHint ? 'group' : undefined}
         aria-label={
-          typeof child.props['aria-label'] === 'string'
-            ? child.props['aria-label']
-            : content
+          !disabledHint
+            ? undefined
+            : typeof child.props['aria-label'] === 'string'
+              ? child.props['aria-label']
+              : content
         }
-        aria-disabled="true"
-        onClick={(event) => event.stopPropagation()}
-        onPointerDown={(event) => event.stopPropagation()}
+        aria-disabled={disabledHint || undefined}
+        onClick={disabledHint ? (event) => event.stopPropagation() : undefined}
+        onPointerDown={
+          disabledHint ? (event) => event.stopPropagation() : undefined
+        }
       >
-        {child}
+        {cloneElement(child, disabledHint ? {} : attributes)}
       </span>
     );
+  }
+  if (!content) return child;
   const staticElement =
     typeof child.type === 'string' &&
     !['button', 'input', 'textarea', 'select', 'a', 'summary'].includes(

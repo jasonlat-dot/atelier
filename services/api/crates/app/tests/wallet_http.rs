@@ -308,3 +308,161 @@ async fn code_copy_is_admin_csrf_protected_audited_and_excludes_plaintext_from_l
         StatusCode::OK
     );
 }
+
+#[sqlx::test(migrations = "../../migrations")]
+#[ignore = "Requires isolated PostgreSQL and TEST_REDIS_URL"]
+async fn code_lifecycle_http_requires_admin_mfa_csrf_and_current_revision(pool: PgPool) {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    let (_, user) = session(&pool, false).await;
+    let (actor, admin) = session(&pool, true).await;
+    let mut state = AppState::test();
+    state.db = pool.clone();
+    state.auth = SessionService::new(
+        Arc::new(PostgresSessions::new(pool.clone())),
+        PublicOrigin::parse("https://atelier.test").unwrap(),
+    );
+    state.code_cipher =
+        Some(atelier_wallet::RedeemCodeCipher::from_base64(&STANDARD.encode([71; 32])).unwrap());
+    state.limits = Some(Arc::new(
+        RedisTransient::connect(&std::env::var("TEST_REDIS_URL").unwrap())
+            .await
+            .unwrap(),
+    ));
+    let base = "/api/v1/admin/redeem-codes";
+    let (_, created) = call(
+        &state,
+        &admin,
+        "POST",
+        base,
+        true,
+        None,
+        r#"{"count":1,"credits":7,"max_uses":2,"expires_at":null}"#,
+    )
+    .await;
+    let id = created["codes"][0]["id"].as_str().unwrap();
+    let path = format!("{base}/{id}");
+    let stop = r#"{"revision":1,"disabled":true}"#;
+    let delete = r#"{"revision":1}"#;
+    for (method, body) in [("PATCH", stop), ("DELETE", delete)] {
+        assert_eq!(
+            call(&state, &user, method, &path, true, None, body).await.0,
+            StatusCode::FORBIDDEN
+        );
+        assert_eq!(
+            call(&state, &admin, method, &path, false, None, body)
+                .await
+                .0,
+            StatusCode::FORBIDDEN
+        );
+    }
+    sqlx::query("UPDATE sessions SET mfa_verified_at=NULL WHERE user_id=$1")
+        .bind(actor)
+        .execute(&pool)
+        .await
+        .unwrap();
+    for (method, body) in [("PATCH", stop), ("DELETE", delete)] {
+        let (status, error) = call(&state, &admin, method, &path, true, None, body).await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert_eq!(error["error"]["code"], "MFA_REQUIRED");
+    }
+    sqlx::query("UPDATE sessions SET mfa_verified_at=now() WHERE user_id=$1")
+        .bind(actor)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        call(
+            &state,
+            &admin,
+            "PATCH",
+            &path,
+            true,
+            None,
+            r#"{"revision":0,"disabled":true}"#
+        )
+        .await
+        .0,
+        StatusCode::UNPROCESSABLE_ENTITY
+    );
+    let (status, stopped) = call(&state, &admin, "PATCH", &path, true, None, stop).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(stopped["disabled_at"].is_string());
+    assert_eq!(stopped["revision"], 2);
+    let redeem = serde_json::json!({"code":created["codes"][0]["code"]}).to_string();
+    let request = Uuid::new_v4().to_string();
+    assert_eq!(
+        call(
+            &state,
+            &user,
+            "POST",
+            "/api/v1/wallet/redeem",
+            true,
+            Some(&request),
+            &redeem
+        )
+        .await
+        .0,
+        StatusCode::UNPROCESSABLE_ENTITY
+    );
+    let (status, changed) = call(&state, &admin, "DELETE", &path, true, None, delete).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(changed["error"]["code"], "REDEEM_CODE_CHANGED");
+    assert_eq!(
+        call(
+            &state,
+            &admin,
+            "PATCH",
+            &path,
+            true,
+            None,
+            r#"{"revision":2,"disabled":false}"#
+        )
+        .await
+        .0,
+        StatusCode::OK
+    );
+    let (status, removed) = call(
+        &state,
+        &admin,
+        "DELETE",
+        &path,
+        true,
+        None,
+        r#"{"revision":3}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(removed["deleted_at"].is_string());
+    assert_eq!(
+        call(&state, &admin, "GET", base, false, None, "").await.1,
+        serde_json::json!([])
+    );
+    assert_eq!(
+        call(
+            &state,
+            &admin,
+            "POST",
+            &format!("{path}/copy"),
+            true,
+            None,
+            ""
+        )
+        .await
+        .0,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        call(
+            &state,
+            &admin,
+            "PATCH",
+            &path,
+            true,
+            None,
+            r#"{"revision":4,"disabled":false}"#
+        )
+        .await
+        .0,
+        StatusCode::NOT_FOUND
+    );
+}

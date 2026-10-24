@@ -65,6 +65,10 @@ async function workspace(
       return route.fulfill({ json: { items: [], next_cursor: null } });
     if (path === '/api/v1/me/sessions')
       return route.fulfill({ json: { sessions: [] } });
+    if (path === '/api/v1/admin/users')
+      return route.fulfill({ json: { items: [], next_cursor: null } });
+    if (path === '/api/v1/admin/credits/adjustments')
+      return route.fulfill({ json: [] });
     return route.fulfill({
       status: 404,
       json: { error: { code: 'NOT_FOUND' } },
@@ -142,7 +146,11 @@ test('administrator sees operational navigation and reaches the existing credits
   await expect(
     page.getByRole('heading', { name: '积分管理', exact: true }),
   ).toBeVisible();
-  await expect(page.getByLabel('用户 UUID')).toBeVisible();
+  await expect(
+    page.getByRole('combobox', { name: '用户', exact: true }),
+  ).toBeVisible();
+  await expect(page.getByLabel('调整积分', { exact: true })).toBeVisible();
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
   await expect(
     page.getByRole('link', { name: '积分管理', exact: true }),
   ).toHaveAttribute('aria-current', 'page');

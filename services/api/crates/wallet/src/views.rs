@@ -70,7 +70,7 @@ pub struct CreatedCode {
 pub struct CreatedCodes {
     pub codes: Vec<CreatedCode>,
 }
-#[derive(Serialize, sqlx::FromRow, ToSchema)]
+#[derive(Debug, Serialize, sqlx::FromRow, ToSchema)]
 pub struct CodeInfo {
     pub id: Uuid,
     pub credits: i64,
@@ -79,6 +79,22 @@ pub struct CodeInfo {
     pub expires_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub copyable: bool,
+    pub disabled_at: Option<DateTime<Utc>>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub revision: i64,
+}
+
+#[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CodeStateRequest {
+    pub revision: i64,
+    pub disabled: bool,
+}
+
+#[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CodeDeleteRequest {
+    pub revision: i64,
 }
 
 #[derive(Serialize, sqlx::FromRow, ToSchema)]

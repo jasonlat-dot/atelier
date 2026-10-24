@@ -14,11 +14,15 @@
 | POST /wallet/redeem | body: code；必填 UUID Idempotency-Key；返回首次 CreditReceipt；同键异码 422 |
 | POST /admin/users/{id}/credits | ADMIN：amount 非零整数、reason 必填且最多 500 字符；UUID Idempotency-Key；审计与调账同事务 |
 | POST /admin/redeem-codes | ADMIN：count 1–100、credits 正数、max_uses 1–10000、expires_at 可选；生成随机码并加密保存，不自动重试发行请求 |
-| GET /admin/redeem-codes?before=UUID | ADMIN：按创建时间/ID 倒序，最多 50 条；before 为末项 ID。仅元数据及 copyable，不返回完整码、密文或哈希 |
+| GET /admin/redeem-codes?before=UUID | ADMIN：按创建时间/ID 倒序，最多 50 条；before 为末项 ID。仅元数据及 copyable/disabled_at/deleted_at/revision，不返回完整码、密文或哈希；不列出已删除码，停用码保留 |
+| PATCH /admin/redeem-codes/{id} | ADMIN + 有效 MFA + CSRF：body 为 revision（当前正整数版本）、disabled（布尔值）；停用/启用并返回 CodeInfo，审计含前后元数据；过期和已用完条件不会因启用而清除 |
+| DELETE /admin/redeem-codes/{id} | ADMIN + 有效 MFA + CSRF：body 为 revision；逻辑删除并返回含 deleted_at 的 CodeInfo，从列表移除并禁止后续兑换/复制；已有积分、账本与幂等收据保留，不允许恢复 |
 | POST /admin/redeem-codes/{id}/copy | ADMIN + 有效 MFA + CSRF：按需解密返回 CreatedCode（id/code），记录 REDEEM_CODE_REVEALED 审计但不记录完整码；旧哈希码返回 409 CODE_NOT_RECOVERABLE，不存在返回 404；no-store |
 | GET /admin/credits/adjustments | ADMIN：最近 5 条真实人工调整，含目标用户、操作人邮箱、增减金额、原因与时间；只返回 WALLET_ADJUST 摘要，不开放全站审计接口 |
 
 余额不足为 402 INSUFFICIENT_CREDITS；请求键异参为 422 IDEMPOTENCY_CONFLICT；无效/已用/过期兑换码统一为 422 INVALID_REDEEM_CODE；存储故障为 503，限流 429。认证响应均 no-store。资金请求返回的是不可变首次收据，余额应重新 GET /wallet。注册默认赠送 20，只针对 M2 之后成功创建的新身份。
+
+停用、删除的码同样返回 422 INVALID_REDEEM_CODE，不泄露不可用原因。兑换、启停和删除串行锁定同一码；生命周期操作不改余额、已用次数或历史账本。管理版本过时返回 409 REDEEM_CODE_CHANGED，已删除/不存在返回 404；不自动重试未知管理结果，刷新核对。before 指向已逻辑删除码时仍可继续分页。
 
 ## M1 身份接口
 

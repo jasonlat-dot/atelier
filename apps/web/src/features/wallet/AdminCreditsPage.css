@@ -466,7 +466,14 @@
   height: 100%;
   background: #9bb39e;
 }
-.admin-code-copy {
+.admin-code-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 196px;
+}
+.admin-code-copy,
+.admin-code-action {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -476,6 +483,51 @@
   padding: 5px 7px;
   color: #5b7160;
   font-size: 12px;
+  min-width: 60px;
+  min-height: 30px;
+  justify-content: center;
+}
+.admin-code-action {
+  color: #6c706a;
+}
+.admin-code-delete {
+  color: #b54a3d;
+}
+.admin-code-action:hover:not(:disabled) {
+  background: #eeece6;
+  color: #36373e;
+}
+.admin-code-delete:hover:not(:disabled) {
+  background: #faeae5;
+  color: #a1372c;
+}
+.admin-code-status[data-state='disabled'] {
+  background: #ebe9e5;
+  color: #686d70;
+}
+.admin-code-confirm code {
+  display: block;
+  padding: 10px 12px;
+  background: #f6f5f1;
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.admin-code-confirm p {
+  margin: 16px 0 0;
+}
+.admin-code-spinner {
+  animation: admin-code-spin 800ms linear infinite;
+}
+@keyframes admin-code-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .admin-code-spinner {
+    animation: none;
+  }
 }
 .admin-code-copy:hover:not(:disabled) {
   background: #e6ebe3;

@@ -479,6 +479,12 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
       );
     await a.dragTo(b);
   };
+  // Parameters stay open after selecting a generator; explicitly clear the
+  // floating panel before exercising ports underneath it.
+  const parameters = page.getByRole('button', { name: '切换创作参数' });
+  await expect(parameters).toHaveAttribute('aria-expanded', 'true');
+  await parameters.click();
+  await expect(parameters).toHaveAttribute('aria-expanded', 'false');
   await page.getByRole('button', { name: '适应画布', exact: true }).click();
   await linkNodes(textId, generatorId);
   await linkNodes(imageId, generatorId);
@@ -521,6 +527,9 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
       { timeout: 30000 },
     )
     .toBe(1);
+  await expect(parameters).toHaveAttribute('aria-expanded', 'true');
+  await parameters.click();
+  await expect(parameters).toHaveAttribute('aria-expanded', 'false');
   await page.getByRole('button', { name: '适应画布', exact: true }).click();
   const videoNode = (await graphState()).graph.nodes.find(
     (n: { type: string }) => n.type === 'video',

@@ -1,4 +1,4 @@
-use atelier_wallet::{CreateCodesRequest, Operation, WalletError, WalletService};
+use atelier_wallet::{CodeStateRequest, CreateCodesRequest, Operation, WalletError, WalletService};
 use base64::{engine::general_purpose::STANDARD, Engine};
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -19,6 +19,217 @@ async fn user(pool: &PgPool) -> Uuid {
         .await
         .unwrap();
     id
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+#[ignore = "Requires isolated PostgreSQL; run explicitly"]
+async fn code_lifecycle_preserves_credits_receipts_and_deleted_cursors(pool: PgPool) {
+    let actor = user(&pool).await;
+    let owner = user(&pool).await;
+    let other = user(&pool).await;
+    let wallet = recoverable_wallet(pool.clone());
+    let codes = wallet
+        .create_codes(
+            actor,
+            &CreateCodesRequest {
+                count: 52,
+                credits: 7,
+                max_uses: 3,
+                expires_at: None,
+            },
+        )
+        .await
+        .unwrap();
+    let code = &codes.codes[0];
+    let request = Uuid::new_v4();
+    let receipt = wallet.redeem(owner, request, &code.code).await.unwrap();
+    let stopped = wallet
+        .update_code(
+            actor,
+            code.id,
+            CodeStateRequest {
+                revision: 1,
+                disabled: true,
+            },
+        )
+        .await
+        .unwrap();
+    assert!(stopped.disabled_at.is_some());
+    assert_eq!(stopped.used_count, 1);
+    assert_eq!(stopped.revision, 2);
+    assert!(matches!(
+        wallet.redeem(other, Uuid::new_v4(), &code.code).await,
+        Err(WalletError::InvalidCode)
+    ));
+    assert!(matches!(
+        wallet
+            .update_code(
+                actor,
+                code.id,
+                CodeStateRequest {
+                    revision: 1,
+                    disabled: false
+                }
+            )
+            .await,
+        Err(WalletError::CodeChanged)
+    ));
+    let enabled = wallet
+        .update_code(
+            actor,
+            code.id,
+            CodeStateRequest {
+                revision: 2,
+                disabled: false,
+            },
+        )
+        .await
+        .unwrap();
+    assert!(enabled.disabled_at.is_none());
+    wallet
+        .redeem(other, Uuid::new_v4(), &code.code)
+        .await
+        .unwrap();
+    let removed = wallet
+        .delete_code(actor, code.id, enabled.revision)
+        .await
+        .unwrap();
+    assert!(removed.deleted_at.is_some());
+    assert!(matches!(
+        wallet.reveal_code(actor, code.id).await,
+        Err(WalletError::NotFound)
+    ));
+    assert!(matches!(
+        wallet.redeem(actor, Uuid::new_v4(), &code.code).await,
+        Err(WalletError::InvalidCode)
+    ));
+    assert!(matches!(
+        wallet
+            .update_code(
+                actor,
+                code.id,
+                CodeStateRequest {
+                    revision: removed.revision,
+                    disabled: false
+                }
+            )
+            .await,
+        Err(WalletError::NotFound)
+    ));
+    // Retrying an already completed financial request still returns its original receipt.
+    assert_eq!(
+        wallet
+            .redeem(owner, request, &code.code)
+            .await
+            .unwrap()
+            .ledger_id,
+        receipt.ledger_id
+    );
+    assert_eq!(wallet.summary(owner).await.unwrap().balance, 7);
+    assert_eq!(wallet.summary(other).await.unwrap().balance, 7);
+    assert!(wallet.reconcile().await.unwrap().is_empty());
+    let first = wallet.codes(None).await.unwrap();
+    assert_eq!(first.len(), 50);
+    assert!(!first.iter().any(|row| row.id == code.id));
+    let cursor = first.last().unwrap();
+    wallet
+        .delete_code(actor, cursor.id, cursor.revision)
+        .await
+        .unwrap();
+    assert_eq!(wallet.codes(Some(cursor.id)).await.unwrap().len(), 1);
+    let audits: Vec<(String, serde_json::Value, serde_json::Value)> = sqlx::query_as("SELECT action,before,after FROM audit_logs WHERE target_type='redeem_code' AND target_id=$1 ORDER BY id")
+        .bind(code.id.to_string()).fetch_all(&pool).await.unwrap();
+    assert_eq!(audits.len(), 3);
+    assert_eq!(audits[0].0, "REDEEM_CODE_DISABLED");
+    assert_eq!(audits[1].0, "REDEEM_CODE_ENABLED");
+    assert_eq!(audits[2].0, "REDEEM_CODE_DELETED");
+    assert_eq!(audits[0].1["revision"], 1);
+    assert_eq!(audits[0].2["revision"], 2);
+    assert!(!format!("{audits:?}").contains(&code.code));
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+#[ignore = "Requires isolated PostgreSQL; run explicitly"]
+async fn code_management_rolls_back_without_audit_and_serializes_with_redemption(pool: PgPool) {
+    let actor = user(&pool).await;
+    let wallet = recoverable_wallet(pool.clone());
+    let codes = wallet
+        .create_codes(
+            actor,
+            &CreateCodesRequest {
+                count: 1,
+                credits: 7,
+                max_uses: 100,
+                expires_at: None,
+            },
+        )
+        .await
+        .unwrap();
+    let code = &codes.codes[0];
+    sqlx::query("ALTER TABLE audit_logs ADD CONSTRAINT reject_code_management CHECK(action NOT IN ('REDEEM_CODE_DISABLED','REDEEM_CODE_ENABLED','REDEEM_CODE_DELETED')) NOT VALID").execute(&pool).await.unwrap();
+    assert!(matches!(
+        wallet
+            .update_code(
+                actor,
+                code.id,
+                CodeStateRequest {
+                    revision: 1,
+                    disabled: true
+                }
+            )
+            .await,
+        Err(WalletError::Store)
+    ));
+    assert!(matches!(
+        wallet.delete_code(actor, code.id, 1).await,
+        Err(WalletError::Store)
+    ));
+    let unchanged = wallet.codes(None).await.unwrap();
+    assert_eq!(unchanged[0].revision, 1);
+    assert!(unchanged[0].disabled_at.is_none());
+    sqlx::query("ALTER TABLE audit_logs DROP CONSTRAINT reject_code_management")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let mut tasks = Vec::new();
+    let start = std::sync::Arc::new(tokio::sync::Barrier::new(21));
+    for _ in 0..20 {
+        let owner = user(&pool).await;
+        let svc = wallet.clone();
+        let plaintext = code.code.clone();
+        let start = start.clone();
+        tasks.push(tokio::spawn(async move {
+            start.wait().await;
+            svc.redeem(owner, Uuid::new_v4(), &plaintext).await
+        }));
+    }
+    start.wait().await;
+    let stopped = wallet
+        .update_code(
+            actor,
+            code.id,
+            CodeStateRequest {
+                revision: 1,
+                disabled: true,
+            },
+        )
+        .await
+        .unwrap();
+    let mut completed = 0;
+    for task in tasks {
+        match task.await.unwrap() {
+            Ok(_) => completed += 1,
+            Err(WalletError::InvalidCode) => {}
+            other => panic!("Unexpected redemption result: {other:?}"),
+        }
+    }
+    assert_eq!(stopped.used_count, completed);
+    assert!(matches!(
+        wallet.redeem(actor, Uuid::new_v4(), &code.code).await,
+        Err(WalletError::InvalidCode)
+    ));
+    assert_eq!(wallet.codes(None).await.unwrap()[0].used_count, completed);
+    assert!(wallet.reconcile().await.unwrap().is_empty());
 }
 
 #[sqlx::test(migrations = "../../migrations")]

@@ -261,7 +261,7 @@ pub(crate) async fn signup(db: &mut PgConnection, owner: Uuid) -> Result<i64, Wa
         .ok_or(WalletError::Store)
 }
 pub(crate) async fn code(db: &mut PgConnection, hash: &[u8]) -> Result<(Uuid, i64), WalletError> {
-    sqlx::query_as("SELECT id,credits FROM redeem_codes WHERE code_hash=$1 AND used_count<max_uses AND (expires_at IS NULL OR expires_at>now()) FOR UPDATE")
+    sqlx::query_as("SELECT id,credits FROM redeem_codes WHERE code_hash=$1 AND disabled_at IS NULL AND deleted_at IS NULL AND used_count<max_uses AND (expires_at IS NULL OR expires_at>now()) FOR UPDATE")
         .bind(hash).fetch_optional(db).await?.ok_or(WalletError::InvalidCode)
 }
 pub(crate) async fn consume_code(db: &mut PgConnection, code: Uuid) -> Result<(), WalletError> {
@@ -286,7 +286,7 @@ pub(crate) async fn codes(
     db: &mut PgConnection,
     cursor: Option<Uuid>,
 ) -> Result<Vec<crate::CodeInfo>, WalletError> {
-    Ok(sqlx::query_as("SELECT id,credits,max_uses,used_count,expires_at,created_at,(code_enc IS NOT NULL) AS copyable FROM redeem_codes WHERE ($1::uuid IS NULL OR (created_at,id)<(SELECT created_at,id FROM redeem_codes WHERE id=$1)) ORDER BY created_at DESC,id DESC LIMIT 50")
+    Ok(sqlx::query_as("SELECT id,credits,max_uses,used_count,expires_at,created_at,(code_enc IS NOT NULL) AS copyable,disabled_at,deleted_at,revision FROM redeem_codes WHERE deleted_at IS NULL AND ($1::uuid IS NULL OR (created_at,id)<(SELECT created_at,id FROM redeem_codes WHERE id=$1)) ORDER BY created_at DESC,id DESC LIMIT 50")
         .bind(cursor).fetch_all(db).await?)
 }
 pub(crate) async fn reconcile(db: &mut PgConnection) -> Result<Vec<Uuid>, WalletError> {

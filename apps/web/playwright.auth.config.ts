@@ -8,6 +8,9 @@ export default defineConfig({
   testMatch: 'auth-live.spec.ts',
   workers: 1,
   use: {
+    actionTimeout: 30000,
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
     baseURL,
     ...devices['Desktop Chrome'],
     channel: process.env.PLAYWRIGHT_CHANNEL || undefined,

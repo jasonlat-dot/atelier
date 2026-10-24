@@ -199,6 +199,36 @@ export default function Select({
     if (restoreFocus && trigger.current?.isConnected)
       trigger.current.focus({ preventScroll: true });
   }, []);
+  const placeMenu = useCallback(() => {
+    if (!menu.current || !trigger.current || !list.current) return;
+    const popup = menu.current;
+    const bounds = trigger.current.getBoundingClientRect();
+    if (bounds.bottom <= 0 || bounds.top >= window.innerHeight) {
+      close();
+      return;
+    }
+    popup.setAttribute('popover', 'manual');
+    if (!popup.matches(':popover-open')) popup.showPopover();
+    const naturalHeight =
+      Math.min(list.current.scrollHeight, 280) + 14 + (hasSearch ? 44 : 0);
+    const next = selectPosition(
+      bounds,
+      popup.scrollWidth + 2,
+      naturalHeight,
+      window.innerWidth,
+      window.innerHeight,
+    );
+    setPosition((current) =>
+      current &&
+      current.left === next.left &&
+      current.top === next.top &&
+      current.width === next.width &&
+      current.maxHeight === next.maxHeight &&
+      current.placement === next.placement
+        ? current
+        : next,
+    );
+  }, [close, hasSearch]);
   const show = (edge?: 'first' | 'last') => {
     if (disabled || trigger.current?.matches(':disabled')) return;
     closeActive?.();
@@ -269,7 +299,14 @@ export default function Select({
 
   useEffect(() => {
     if (!open) return;
-    const anchorBounds = trigger.current?.getBoundingClientRect();
+    let anchorBounds = trigger.current?.getBoundingClientRect();
+    const anchorMoved = (bounds: DOMRect | undefined) =>
+      !!bounds &&
+      !!anchorBounds &&
+      (Math.abs(bounds.x - anchorBounds.x) > 0.5 ||
+        Math.abs(bounds.y - anchorBounds.y) > 0.5 ||
+        Math.abs(bounds.width - anchorBounds.width) > 0.5 ||
+        Math.abs(bounds.height - anchorBounds.height) > 0.5);
     const dismiss = () => close();
     closeActive = dismiss;
     const contains = (node: EventTarget | null) =>
@@ -280,10 +317,15 @@ export default function Select({
     };
     const scroll = (event: Event) => {
       if (
-        !(event.target instanceof Node) ||
-        !menu.current?.contains(event.target)
+        (!(event.target instanceof Node) ||
+          !menu.current?.contains(event.target)) &&
+        anchorMoved(trigger.current?.getBoundingClientRect())
       )
-        close();
+        followAnchor();
+    };
+    const followAnchor = () => {
+      placeMenu();
+      anchorBounds = trigger.current?.getBoundingClientRect();
     };
     const escape = (event: globalThis.KeyboardEvent) => {
       if (event.key !== 'Escape' || event.isComposing || event.keyCode === 229)
@@ -301,15 +343,10 @@ export default function Select({
         !button.getClientRects().length ||
         button.closest(
           '[hidden], [inert], [aria-hidden="true"], dialog:not([open])',
-        ) ||
-        (bounds &&
-          anchorBounds &&
-          (bounds.x !== anchorBounds.x ||
-            bounds.y !== anchorBounds.y ||
-            bounds.width !== anchorBounds.width ||
-            bounds.height !== anchorBounds.height))
+        )
       )
         close();
+      else if (anchorMoved(bounds)) followAnchor();
     });
     observer.observe(document.body, {
       childList: true,
@@ -341,30 +378,14 @@ export default function Select({
       window.removeEventListener('resize', dismiss);
       window.removeEventListener('blur', dismiss);
     };
-  }, [open, close]);
+  }, [open, close, placeMenu]);
 
   useEffect(() => {
     if (disabled) close();
   }, [disabled, close]);
   useLayoutEffect(() => {
-    if (!open || !menu.current || !trigger.current || !list.current) return;
-    const popup = menu.current;
-    popup.setAttribute('popover', 'manual');
-    if (!popup.matches(':popover-open')) popup.showPopover();
-    const bounds = trigger.current.getBoundingClientRect();
-    const searchHeight = hasSearch ? 44 : 0;
-    const naturalHeight =
-      Math.min(list.current.scrollHeight, 280) + 14 + searchHeight;
-    setPosition(
-      selectPosition(
-        bounds,
-        popup.scrollWidth + 2,
-        naturalHeight,
-        window.innerWidth,
-        window.innerHeight,
-      ),
-    );
-  }, [open, filtered, hasSearch]);
+    if (open) placeMenu();
+  }, [open, filtered, placeMenu]);
   useLayoutEffect(() => {
     if (!open || !position) return;
     const option = activeId ? document.getElementById(activeId) : null;

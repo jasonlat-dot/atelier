@@ -38,7 +38,7 @@ import Tooltip from '../../components/Tooltip';
   data-tip-placement="bottom" data-tip-delay={300}>…</div>
 ```
 
-静态文字触发器应可键盘聚焦。禁用按钮必须使用 Tooltip 包装，不能只把 data-tip 写在 disabled 元素上。不要新增原生 HTML title 悬停提示、页面自制 role=tooltip 节点或 CSS 伪元素气泡；AdminDialog/页面组件的 title 是实际标题，保留其内容语义。
+原生交互控件使用稳定的外层 span；可用时 display:contents 保持布局，禁用且有说明时才成为可聚焦的说明触发器。disabled、loading 或 content 变化不能改变按钮的 DOM 身份，以免丢失焦点、重置表单状态或引起复制闪动。静态文字触发器应可键盘聚焦。禁用按钮必须使用 Tooltip 包装，不能只把 data-tip 写在 disabled 元素上。不要新增原生 HTML title 悬停提示、页面自制 role=tooltip 节点或 CSS 伪元素气泡；AdminDialog/页面组件的 title 是实际标题，保留其内容语义。
 
 全局同一时刻仅一个提示，悬停或聚焦 300ms 后展示；移出、失焦、点击、滚动、缩放、窗口失焦、来源卸载或隐藏后关闭，Esc 优先关闭当前提示。说明不抢焦点，保留已有 aria-describedby；原生弹窗内使用同一提示层，支持 top/bottom 翻转、8px 视口夹紧、箭头定位和减少动态效果偏好。触摸 hover:none 不展示，关键信息仍需在页面直接可见。
 
@@ -71,7 +71,7 @@ import Select from '../../components/Select';
 - 支持 value/defaultValue、name/form、required、disabled、id、aria-label/labelledby/describedby/invalid、`size="md|sm"`（40/32px）、invalid、placeholder、clearable 和 searchable。请选择类空值默认作为占位隐藏；“全部角色/来源/状态”等有效空值保留在菜单中。clearable 会提供返回未选择的入口，超过八项默认出现搜索框，也可显式启用或关闭。
 - 远程搜索可传 `onSearchChange`，展开时收到空串、输入时收到原始搜索词，外层负责防抖、真实 API 查询、AbortSignal 和结果 options；此模式组件不再二次筛选服务端结果。加载期间外层清空旧 options 并设置 `emptyMessage`，可用 `searchPlaceholder` 提示搜索字段；没有该回调时仍沿用本地过滤，不改变现有页面行为。
 - 可用外部 `label htmlFor` 或包裹 label；label 关联可见触发器，不关联隐藏字段。无 aria-label 的现有表单自动读取标签正文，排除控件值和辅助说明。禁用的 fieldset 同样生效，必填校验失败聚焦可见触发器。错误原因/操作结果使用既有 Feedback；不要新增内联操作错误或 Toast。
-- 点击、Enter/空格和方向键展开；菜单内方向键、Home/End 跳过禁用项，Enter/空格选择，600ms 内连续文字跳转。搜索支持选项名称、说明和分组；中文组词不误选择。Esc 只关闭菜单并回到触发器，Tab 继续页面焦点顺序；点外部、外部滚动、窗口缩放/失焦、触发器隐藏/禁用或位置变化时关闭，同一时间仅一个 Select 菜单。
+- 点击、Enter/空格和方向键展开；菜单内方向键、Home/End 跳过禁用项，Enter/空格选择，600ms 内连续文字跳转。搜索支持选项名称、说明和分组；中文组词不误选择。Esc 只关闭菜单并回到触发器，Tab 继续页面焦点顺序；点外部、窗口缩放/失焦、触发器隐藏/禁用或移出视口时关闭；外部滚动和可见锚点位置变化时重新定位，忽略没有实际位移的排队滚动事件，避免浏览器自动滚动导致菜单在点击前消失。菜单内部滚动不关闭，同一时间仅一个 Select 菜单。
 - 菜单使用手动 popover 进入顶层，挂在 body 或所属原生 dialog 中，避开 overflow 与 transform 裁剪；底部空间不足时向上展开，8px 视口夹紧，列表最大 280px，内部滚动不传递到页面。触发器为 combobox、菜单为 listbox，选中与高亮分别通过 aria-selected/activedescendant 表达。保持暖白表面、10px 控件圆角、橙棕聚焦环和对勾，并支持减少动态效果。
 - 悬停说明复用 Tooltip。Select 可置于 Tooltip 内，组件透传同一宿主的说明、标题、方向和延迟；不要使用 HTML title。页面 CSS 仅控制 `.app-select` 的宽度、间距和排列，共享触发器/菜单外观在 Select.css 中维护。
 
