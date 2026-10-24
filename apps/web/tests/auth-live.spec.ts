@@ -1,4 +1,3 @@
-import { chooseSelect } from './selectTestHelpers';
 import { dismissFeedback } from './feedbackTestHelpers';
 import { test, expect, type Page } from '@playwright/test';
 import { createHmac } from 'node:crypto';
@@ -766,10 +765,12 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   await page.getByRole('link', { name: '套餐与订单', exact: true }).click();
   await page.getByRole('button', { name: '新增套餐', exact: true }).click();
   await page.getByLabel('套餐名称', { exact: true }).fill('Live Studio');
-  await chooseSelect(page.getByLabel('类型', { exact: true }), 'MONTHLY');
-  await page.getByLabel('价格（分）', { exact: true }).fill('1900');
+  await page.getByRole('radio', { name: '订阅套餐', exact: true }).check();
+  await page.getByLabel('价格（元）', { exact: true }).fill('19.00');
   await page.getByLabel('发放积分', { exact: true }).fill('100');
-  await page.getByLabel('上架，允许用户创建新订单', { exact: true }).check();
+  await page
+    .getByRole('switch', { name: '上架，允许用户创建新订单', exact: true })
+    .click();
   await page.getByRole('button', { name: '保存套餐', exact: true }).click();
   await expect(page.getByText('套餐已保存', { exact: true })).toBeVisible();
   await dismissFeedback(page);

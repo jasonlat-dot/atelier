@@ -7,6 +7,7 @@ export default function AdminDialog({
   busy = false,
   drawer = false,
   className = '',
+  subtitle,
 }: {
   title: string;
   children: ReactNode;
@@ -14,6 +15,7 @@ export default function AdminDialog({
   busy?: boolean;
   drawer?: boolean;
   className?: string;
+  subtitle?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
@@ -51,7 +53,14 @@ export default function AdminDialog({
       }}
     >
       <header>
-        <h2 id={titleId}>{title}</h2>
+        {subtitle ? (
+          <div>
+            <h2 id={titleId}>{title}</h2>
+            <p className="up-dialog-subtitle">{subtitle}</p>
+          </div>
+        ) : (
+          <h2 id={titleId}>{title}</h2>
+        )}
         <button
           type="button"
           className="icon-btn"

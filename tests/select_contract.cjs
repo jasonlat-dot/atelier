@@ -5,6 +5,7 @@ const vm = require('node:vm');
 const ts = require(require.resolve('typescript', { paths: [path.join(__dirname, '../apps/web')] }));
 const root = path.join(__dirname, '../apps/web/src');
 let shared = 0, native = 0;
+const sharedFiles = new Set();
 const failures = [];
 function scan(dir) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -18,7 +19,7 @@ function scan(dir) {
         const tag = node.tagName.getText(tree);
         const attributes = node.attributes.properties.filter(ts.isJsxAttribute);
         const role = attributes.find((a) => a.name.getText(tree) === 'role')?.initializer;
-        if (tag === 'Select') shared++;
+        if (tag === 'Select') { shared++; sharedFiles.add(path.relative(root, file).split(path.sep).join('/')); }
         if (tag === 'select') {
           native++;
           if (!component) failures.push(`${path.relative(root, file)}: use the shared Select`);
@@ -38,7 +39,14 @@ function scan(dir) {
 scan(root);
 assert.deepEqual(failures, []);
 assert.equal(native, 1, 'one shared form-field implementation');
-assert.ok(shared >= 34, 'production and mock controls must both be migrated');
+// Audit actual dropdown owners rather than a fixed total: the plan type and
+// resolution controls intentionally became native radio groups in the new editor.
+for (const owner of [
+  'features/billing/PlanEditor.tsx', 'features/assets/AssetsPage.tsx',
+  'features/generation/GenerationPage.tsx', 'features/chat/LiveChatPage.tsx',
+  'features/upstream/AdminModelsPage.tsx', 'features/wallet/CreditAdjustmentFields.tsx',
+  'features/canvas/CanvasPage.tsx', 'features/canvas/LiveCanvasEditor.tsx',
+]) assert.ok(sharedFiles.has(owner), `${owner} dropdowns must use the shared Select`);
 const output = { exports: {} };
 const code = ts.transpileModule(fs.readFileSync(path.join(root, 'components/selectBehavior.ts'), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 vm.runInNewContext(`(function(exports){${code}})`, {})(output.exports);

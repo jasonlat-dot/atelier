@@ -1,4 +1,3 @@
-import Select from '../../components/Select';
 import Feedback from '../../components/Feedback';
 import {
   useCallback,
@@ -31,12 +30,12 @@ import {
   orderStatus,
   type Order,
   type Plan,
-  type PlanInput,
   type RefundQuote,
 } from './billingApi';
 import '../upstream/AdminUpstream.css';
 import './Billing.css';
 import './AdminBillingPage.css';
+import PlanEditor from './PlanEditor';
 type Panel =
   | { kind: 'plan'; plan?: Plan }
   | { kind: 'availability'; plan: Plan }
@@ -549,6 +548,9 @@ function BillingAdmin(props: AdminProps) {
         <PlanEditor
           {...props}
           plan={panel.plan}
+          hasKnownOrders={orders.some(
+            (order) => order.plan_id === panel.plan?.id,
+          )}
           onClose={() => setPanel(undefined)}
           onDone={done}
         />
@@ -797,246 +799,6 @@ function OrderDetails({
           </button>
         </footer>
       </div>
-    </AdminDialog>
-  );
-}
-const initial: PlanInput = {
-  name: '',
-  kind: 'PACK',
-  description: '',
-  price_cents: 100,
-  currency: 'CNY',
-  credits: 100,
-  period_days: null,
-  rollover: true,
-  concurrency_limit: 3,
-  max_resolution: '4K',
-  retention_days: 180,
-  active: false,
-};
-function PlanEditor(
-  props: AdminProps & {
-    plan?: Plan;
-    onClose: () => void;
-    onDone: (text: string) => Promise<void>;
-  },
-) {
-  const [p, setP] = useState<PlanInput>(props.plan?.details || initial);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const lock = useRef(false);
-  const patch = (next: Partial<PlanInput>) => setP((a) => ({ ...a, ...next }));
-  return (
-    <AdminDialog
-      title={props.plan ? '编辑套餐' : '新增套餐'}
-      busy={busy}
-      onClose={props.onClose}
-      className="admin-billing-dialog"
-    >
-      <form
-        className="billing-form"
-        onSubmit={async (e) => {
-          e.preventDefault();
-          if (lock.current) return;
-          lock.current = true;
-          setBusy(true);
-          setError('');
-          try {
-            await api.savePlan(p, props.me.csrf_token, props.plan);
-            await props.onDone('套餐已保存');
-          } catch (e) {
-            setError(billingError(e, props));
-          } finally {
-            lock.current = false;
-            setBusy(false);
-          }
-        }}
-      >
-        <fieldset disabled={busy}>
-          <label>
-            套餐名称
-            <input
-              data-initial-focus
-              className="input"
-              required
-              maxLength={80}
-              value={p.name}
-              onChange={(e) => patch({ name: e.target.value })}
-            />
-          </label>
-          <div className="billing-form-grid">
-            <label>
-              类型
-              <Select
-                aria-label="类型"
-
-                value={p.kind}
-                onChange={(e) =>
-                  patch({
-                    kind: e.target.value,
-                    period_days: e.target.value === 'MONTHLY' ? 30 : null,
-                  })
-                }
-              >
-                <option value="PACK">一次性积分包</option>
-                <option value="MONTHLY">订阅套餐</option>
-              </Select>
-            </label>
-            <label>
-              币种
-              <Select
-                aria-label="币种"
-
-                value={p.currency}
-                onChange={(e) => patch({ currency: e.target.value })}
-              >
-                <option>CNY</option>
-                <option>USD</option>
-              </Select>
-            </label>
-            <label>
-              价格（分）
-              <input
-                aria-label="价格（分）"
-                className="input"
-                type="number"
-                min={1}
-                max={100000000}
-                step={1}
-                required
-                value={p.price_cents}
-                onChange={(e) => patch({ price_cents: Number(e.target.value) })}
-              />
-              <small>{money(p.price_cents, p.currency)}</small>
-            </label>
-            <label>
-              发放积分
-              <input
-                className="input"
-                type="number"
-                min={1}
-                max={100000000}
-                step={1}
-                required
-                value={p.credits}
-                onChange={(e) => patch({ credits: Number(e.target.value) })}
-              />
-            </label>
-          </div>
-          <label>
-            套餐说明
-            <textarea
-              className="input"
-              maxLength={2000}
-              value={p.description}
-              onChange={(e) => patch({ description: e.target.value })}
-            />
-          </label>
-          {p.kind === 'MONTHLY' && (
-            <>
-              <div className="billing-form-grid">
-                <label>
-                  周期天数
-                  <input
-                    className="input"
-                    type="number"
-                    min={1}
-                    max={366}
-                    step={1}
-                    required
-                    value={p.period_days ?? 30}
-                    onChange={(e) =>
-                      patch({ period_days: Number(e.target.value) })
-                    }
-                  />
-                </label>
-                <label>
-                  并发任务数
-                  <input
-                    className="input"
-                    type="number"
-                    min={1}
-                    max={64}
-                    step={1}
-                    required
-                    value={p.concurrency_limit}
-                    onChange={(e) =>
-                      patch({ concurrency_limit: Number(e.target.value) })
-                    }
-                  />
-                </label>
-                <label>
-                  最高分辨率
-                  <Select
-                    value={p.max_resolution}
-                    onChange={(e) => patch({ max_resolution: e.target.value })}
-                  >
-                    <option>1K</option>
-                    <option>2K</option>
-                    <option>4K</option>
-                  </Select>
-                </label>
-                <label>
-                  新素材保留天数
-                  <input
-                    className="input"
-                    type="number"
-                    min={1}
-                    max={3650}
-                    step={1}
-                    required
-                    value={p.retention_days}
-                    onChange={(e) =>
-                      patch({ retention_days: Number(e.target.value) })
-                    }
-                  />
-                </label>
-              </div>
-              <label className="billing-check">
-                <input
-                  type="checkbox"
-                  checked={p.rollover}
-                  onChange={(e) => patch({ rollover: e.target.checked })}
-                />
-                周期未用积分可结转至到期后
-              </label>
-              <p className="billing-note">
-                关闭结转时，仅回收本周期未用积分；任务已预占的部分在释放后回收。订阅每次付款购买一个周期，不会自动扣费。
-              </p>
-            </>
-          )}
-          <label className="billing-check">
-            <input
-              type="checkbox"
-              checked={p.active}
-              onChange={(e) => patch({ active: e.target.checked })}
-            />
-            上架，允许用户创建新订单
-          </label>
-        </fieldset>
-        {error && (
-          <Feedback
-            onDismiss={() => setError('')}
-            variant="error"
-            className="up-alert"
-          >
-            {error}
-          </Feedback>
-        )}
-        <div className="billing-actions">
-          <button
-            type="button"
-            className="btn btn-light"
-            disabled={busy}
-            onClick={props.onClose}
-          >
-            取消
-          </button>
-          <button className="btn btn-dark" disabled={busy}>
-            {busy ? '正在保存…' : '保存套餐'}
-          </button>
-        </div>
-      </form>
     </AdminDialog>
   );
 }

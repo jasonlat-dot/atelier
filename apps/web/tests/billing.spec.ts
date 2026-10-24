@@ -1,4 +1,5 @@
 import { dismissFeedback } from './feedbackTestHelpers';
+import { chooseSelect } from './selectTestHelpers';
 import { test, expect, type Page } from '@playwright/test';
 const id = '1f8848d3-1bd4-4eb3-8c91-a653c27a11a0';
 const plan = {
@@ -444,4 +445,173 @@ test('billing orders filter loaded records, keep filters while paging and copy s
   ).toBeVisible();
   await page.getByRole('button', { name: '清除搜索' }).click();
   await expect(rows).toHaveCount(3);
+});
+
+test('plan editor previews exact decimal prices, validates before writing and keeps its save action visible', async ({
+  page,
+}, testInfo) => {
+  await mock(page, true);
+  const writes: unknown[] = [];
+  await page.route('**/api/v1/admin/plans/*', async (route) => {
+    expect(route.request().method()).toBe('PATCH');
+    expect(route.request().headers()['x-csrf-token']).toBe('csrf');
+    const body = route.request().postDataJSON();
+    writes.push(body);
+    return route.fulfill({
+      json: { ...plan, revision: 2, details: body.details },
+    });
+  });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('/admin/plans');
+  await page.getByRole('button', { name: '编辑套餐', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: '编辑套餐', exact: true });
+  const save = editor.getByRole('button', { name: '保存套餐', exact: true });
+  await expect(save).toBeDisabled();
+  await page.screenshot({
+    path: testInfo.outputPath('plan-editor-desktop-top.png'),
+  });
+  await expect(
+    editor.getByRole('radio', { name: '订阅套餐', exact: true }),
+  ).toBeDisabled();
+  const price = editor.getByRole('textbox', {
+    name: '价格（元）',
+    exact: true,
+  });
+  await expect(price).toHaveValue('19.00');
+  await price.fill('12.345');
+  await editor.getByLabel('发放积分', { exact: true }).fill('0');
+  await save.click();
+  await expect(price).toBeFocused();
+  await expect(price).toHaveAttribute('aria-invalid', 'true');
+  await expect(editor.getByLabel('发放积分', { exact: true })).toHaveAttribute(
+    'aria-invalid',
+    'true',
+  );
+  expect(writes).toHaveLength(0);
+  await price.fill('0.29');
+  await editor.getByLabel('发放积分', { exact: true }).fill('1');
+  await expect(editor.getByLabel('套餐实时预览')).toContainText('0.29');
+  await expect(editor.locator('.plan-editor-diff')).toContainText('¥19.00');
+  await expect(editor.locator('.plan-editor-diff')).toContainText('¥0.29');
+  await expect(editor.getByText('= 29 分', { exact: false })).toBeVisible();
+  await chooseSelect(
+    editor.getByRole('combobox', { name: '币种', exact: true }),
+    'USD',
+  );
+  await expect(editor.getByLabel('套餐实时预览')).toContainText('US$0.29');
+  await editor.getByLabel('套餐名称', { exact: true }).fill('更新后的创作订阅');
+  await editor
+    .getByRole('switch', { name: '周期未用积分可结转至到期后' })
+    .click();
+  await editor.getByRole('radio', { name: '2K', exact: true }).check();
+  await page.screenshot({
+    path: testInfo.outputPath('plan-editor-desktop.png'),
+  });
+  const footer = await editor.locator('.plan-editor-footer').boundingBox();
+  expect(footer).not.toBeNull();
+  expect(footer!.y + footer!.height).toBeLessThanOrEqual(1000);
+  const body = await editor.locator('.plan-editor-body').boundingBox();
+  expect(body).not.toBeNull();
+  expect(body!.y + body!.height).toBeLessThanOrEqual(footer!.y + 1);
+  expect(
+    await editor
+      .locator('.plan-editor-body')
+      .evaluate((el) => el.scrollHeight > el.clientHeight),
+  ).toBe(true);
+  await page.keyboard.press('Control+Enter');
+  await expect(page.getByRole('alertdialog')).toContainText('套餐已保存');
+  expect(writes).toEqual([
+    {
+      revision: 1,
+      details: {
+        ...plan.details,
+        name: '更新后的创作订阅',
+        price_cents: 29,
+        currency: 'USD',
+        credits: 1,
+        rollover: false,
+        max_resolution: '2K',
+      },
+    },
+  ]);
+});
+
+test('plan editor confirms every dirty dismissal, retains drafts and fits mobile without a preview', async ({
+  page,
+}, testInfo) => {
+  await mock(page, true);
+  let writes = 0;
+  let saved: Record<string, unknown> | undefined;
+  await page.route('**/api/v1/admin/plans', async (route) => {
+    if (route.request().method() === 'GET')
+      return route.fulfill({ json: [plan] });
+    writes++;
+    saved = route.request().postDataJSON();
+    return route.fulfill({
+      json: { ...plan, details: route.request().postDataJSON() },
+    });
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/admin/plans');
+  await page.getByRole('button', { name: '新增套餐', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: '新增套餐', exact: true });
+  const name = editor.getByLabel('套餐名称', { exact: true });
+  await expect(editor.getByLabel('套餐实时预览')).toBeHidden();
+  await name.fill('手机端测试套餐');
+  await editor.getByRole('radio', { name: '订阅套餐', exact: true }).check();
+  await expect(editor.getByLabel('周期天数', { exact: true })).toBeVisible();
+  for (const action of ['escape', 'cancel', 'close', 'backdrop']) {
+    if (action === 'escape') await page.keyboard.press('Escape');
+    if (action === 'cancel')
+      await editor.getByRole('button', { name: '取消', exact: true }).click();
+    if (action === 'close')
+      await editor
+        .getByRole('button', { name: '关闭弹窗', exact: true })
+        .click();
+    if (action === 'backdrop') await page.mouse.click(3, 3);
+    await expect(
+      editor.getByText('放弃未保存的修改？', { exact: true }),
+    ).toBeVisible();
+    await editor.getByRole('button', { name: '继续编辑', exact: true }).click();
+    await expect(name).toHaveValue('手机端测试套餐');
+  }
+  expect(writes).toBe(0);
+  await editor.getByLabel('并发任务数', { exact: true }).fill('');
+  await editor.getByRole('button', { name: '保存套餐', exact: true }).click();
+  await expect(editor.getByLabel('并发任务数', { exact: true })).toBeFocused();
+  await expect(
+    editor.getByLabel('并发任务数', { exact: true }),
+  ).toHaveAttribute('aria-invalid', 'true');
+  await editor
+    .getByRole('radio', { name: '一次性积分包', exact: true })
+    .check();
+  await expect(editor.getByLabel('周期天数', { exact: true })).toHaveCount(0);
+  await page.screenshot({
+    path: testInfo.outputPath('plan-editor-mobile.png'),
+  });
+  expect(await editor.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(
+    true,
+  );
+  const footer = await editor.locator('.plan-editor-footer').boundingBox();
+  expect(footer).not.toBeNull();
+  expect(footer!.y + footer!.height).toBeLessThanOrEqual(844);
+  const body = await editor.locator('.plan-editor-body').boundingBox();
+  expect(body).not.toBeNull();
+  expect(body!.y + body!.height).toBeLessThanOrEqual(footer!.y + 1);
+  await editor.getByRole('button', { name: '保存套餐', exact: true }).click();
+  await expect(page.getByRole('alertdialog')).toContainText('套餐已保存');
+  expect(writes).toBe(1);
+  expect(saved).toMatchObject({
+    kind: 'PACK',
+    price_cents: 100,
+    period_days: null,
+    concurrency_limit: 3,
+  });
+  await dismissFeedback(page);
+  await page.getByRole('button', { name: '新增套餐', exact: true }).click();
+  await name.fill('未保存的另一个套餐');
+  await page.keyboard.press('Escape');
+  await editor.getByRole('button', { name: '放弃修改', exact: true }).click();
+  await expect(editor).toHaveCount(0);
+  expect(writes).toBe(1);
 });
