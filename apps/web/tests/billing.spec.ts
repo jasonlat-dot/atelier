@@ -207,7 +207,7 @@ test('admin edits a plan, confirms a receipt safely and blocks refunds while cre
   await page.getByRole('button', { name: '保存套餐', exact: true }).click();
   await expect(page.getByText('套餐已保存', { exact: true })).toBeVisible();
   await dismissFeedback(page);
-  await page.getByRole('button', { name: '订单管理', exact: true }).click();
+  await page.getByRole('tab', { name: '订单管理', exact: true }).click();
   await page.getByRole('button', { name: '确认到账', exact: true }).click();
   await expect(
     page.getByRole('button', { name: '确认到账并发放权益' }),
@@ -241,5 +241,207 @@ test('admin edits a plan, confirms a receipt safely and blocks refunds while cre
     .fill('已退回剩余额度对应金额');
   await page.getByRole('checkbox').check();
   await page.getByRole('button', { name: '登记退款并回收权益' }).click();
-  await expect(page.getByText('已退款', { exact: true })).toBeVisible();
+  await expect(page.getByRole('alertdialog')).toContainText('退款已登记');
+  await dismissFeedback(page);
+  await expect(
+    page.getByRole('table').getByText('已退款', { exact: true }),
+  ).toBeVisible();
+});
+
+test('plan availability requires confirmation and preserves the current revision and rights', async ({
+  page,
+}) => {
+  await mock(page, true);
+  let current = structuredClone(plan);
+  const updates: unknown[] = [];
+  await page.route('**/api/v1/admin/plans**', async (route) => {
+    const req = route.request();
+    if (req.method() === 'GET') return route.fulfill({ json: [current] });
+    expect(req.method()).toBe('PATCH');
+    expect(req.headers()['x-csrf-token']).toBe('csrf');
+    const body = req.postDataJSON();
+    updates.push(body);
+    expect(body).toEqual({
+      revision: current.revision,
+      details: { ...current.details, active: !current.details.active },
+    });
+    current = {
+      ...current,
+      revision: current.revision + 1,
+      details: body.details,
+    };
+    return route.fulfill({ json: current });
+  });
+  await page.goto('/admin/plans');
+  const down = page.getByRole('button', { name: '下架 创作订阅' });
+  await down.click();
+  await expect(page.getByRole('dialog', { name: '下架套餐' })).toContainText(
+    '历史订单仍按下单时的价格和权益处理',
+  );
+  await page.getByRole('button', { name: '取消', exact: true }).click();
+  expect(updates).toHaveLength(0);
+  await down.click();
+  await page.getByRole('button', { name: '确认下架', exact: true }).click();
+  await expect(page.getByRole('alertdialog')).toContainText('套餐已下架');
+  await dismissFeedback(page);
+  await page.getByRole('button', { name: '上架 创作订阅' }).click();
+  await page.getByRole('button', { name: '确认上架', exact: true }).click();
+  await expect(page.getByRole('alertdialog')).toContainText('套餐已上架');
+  await dismissFeedback(page);
+  expect(updates).toHaveLength(2);
+  await expect(
+    page.getByRole('button', { name: '下架 创作订阅' }),
+  ).toBeVisible();
+});
+
+test('billing orders filter loaded records, keep filters while paging and copy snapshot ids without a mask', async ({
+  page,
+  context,
+}, testInfo) => {
+  await mock(page, true);
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  const paid = {
+    ...order,
+    id: '3f8848d3-1bd4-4eb3-8c91-a653c27a11a0',
+    status: 'FULFILLED',
+    paid_at: '2026-10-23T02:00:00Z',
+  };
+  await page.route('**/api/v1/admin/plans', (route) =>
+    route.fulfill({
+      json: [
+        {
+          ...plan,
+          details: {
+            ...plan.details,
+            name: '现售新版订阅',
+            price_cents: 2900,
+            credits: 300,
+          },
+        },
+      ],
+    }),
+  );
+  const older = {
+    ...order,
+    id: '4f8848d3-1bd4-4eb3-8c91-a653c27a11a0',
+    status: 'FULFILLED',
+  };
+  let reads = 0;
+  await page.route('**/api/v1/admin/orders**', async (route) => {
+    const url = new URL(route.request().url());
+    expect(route.request().method()).toBe('GET');
+    reads++;
+    const more = url.searchParams.has('before');
+    return route.fulfill({
+      json: {
+        items: more ? [paid, older] : [order, paid],
+        next_cursor: more ? null : paid.id,
+      },
+    });
+  });
+  await page.setViewportSize({ width: 1600, height: 1100 });
+  await page.goto('/admin/plans');
+  await expect(
+    page.getByRole('button', { name: '编辑套餐', exact: true }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath('billing-plans-desktop.png'),
+    fullPage: true,
+  });
+  await page.getByRole('tab', { name: '套餐管理', exact: true }).focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(
+    page.getByRole('tab', { name: '订单管理', exact: true }),
+  ).toBeFocused();
+  const rows = page.locator('.admin-billing-table tbody tr');
+  await expect(rows).toHaveCount(2);
+  const initialReads = reads;
+  await page
+    .getByRole('group', { name: '订单状态' })
+    .getByRole('button', { name: '已到账', exact: true })
+    .click();
+  await expect(rows).toHaveCount(1);
+  await page.getByRole('button', { name: '加载更多订单' }).click();
+  await expect(rows).toHaveCount(2);
+  await expect(page.getByText('已加载 3 条订单 · 符合条件 2 条')).toBeVisible();
+  expect(reads).toBe(initialReads + 1);
+  await page.getByRole('textbox', { name: '搜索订单' }).fill(paid.id);
+  await page.getByRole('button', { name: '搜索', exact: true }).click();
+  await expect(rows).toHaveCount(1);
+  const copy = page.getByRole('button', {
+    name: `复制订单号 ${paid.id}`,
+    exact: true,
+  });
+  const node = await copy.elementHandle();
+  await copy.click();
+  await expect(page.getByRole('status')).toContainText('订单号已复制');
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(await copy.evaluate((el, previous) => el === previous, node)).toBe(
+    true,
+  );
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+    paid.id,
+  );
+  expect(reads).toBe(initialReads + 1);
+  await page.screenshot({
+    path: testInfo.outputPath('billing-orders-desktop.png'),
+    fullPage: true,
+  });
+  await page.getByRole('button', { name: '关闭提示', exact: true }).click();
+  await page
+    .getByRole('button', { name: `详情 ${paid.id}`, exact: true })
+    .click();
+  const details = page.getByRole('dialog', { name: '订单详情', exact: true });
+  await expect(details).toContainText(paid.id);
+  await expect(details).toContainText('创作订阅');
+  await expect(details).toContainText('200 积分');
+  await expect(details).toContainText('19.00');
+  await expect(details).toContainText('到账已确认');
+  await expect(details.getByRole('button', { name: '关闭订单' })).toHaveCount(
+    0,
+  );
+  await page.screenshot({
+    path: testInfo.outputPath('billing-details-desktop.png'),
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({
+    path: testInfo.outputPath('billing-details-mobile.png'),
+  });
+  expect(await details.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(
+    true,
+  );
+  await page.getByRole('button', { name: '关闭详情' }).click();
+  await page.getByRole('button', { name: '收起导航', exact: true }).click();
+  await page.screenshot({
+    path: testInfo.outputPath('billing-orders-mobile.png'),
+    fullPage: true,
+  });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.getByRole('tab', { name: '套餐管理', exact: true }).click();
+  await page.screenshot({
+    path: testInfo.outputPath('billing-plans-mobile.png'),
+    fullPage: true,
+  });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.getByRole('tab', { name: '订单管理', exact: true }).click();
+  await expect(page.getByRole('textbox', { name: '搜索订单' })).toHaveValue(
+    paid.id,
+  );
+  await expect(rows).toHaveCount(1);
+  await page.getByRole('textbox', { name: '搜索订单' }).fill('没有这个套餐');
+  await page.getByRole('button', { name: '搜索', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: '暂无符合条件的订单' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: '清除搜索' }).click();
+  await expect(rows).toHaveCount(3);
 });

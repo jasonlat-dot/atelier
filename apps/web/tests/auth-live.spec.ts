@@ -796,7 +796,7 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   await page.getByRole('button', { name: '我的订单', exact: true }).click();
   await expect(page.getByText('待付款', { exact: true })).toBeVisible();
   await page.getByRole('link', { name: '套餐与订单', exact: true }).click();
-  await page.getByRole('button', { name: '订单管理', exact: true }).click();
+  await page.getByRole('tab', { name: '订单管理', exact: true }).click();
   await page.getByRole('button', { name: '确认到账', exact: true }).click();
   await page
     .getByLabel('收款凭证号', { exact: true })
@@ -847,7 +847,7 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
     fullPage: true,
   });
   await page.getByRole('link', { name: '套餐与订单', exact: true }).click();
-  await page.getByRole('button', { name: '订单管理', exact: true }).click();
+  await page.getByRole('tab', { name: '订单管理', exact: true }).click();
   await page.getByRole('button', { name: '办理退款', exact: true }).click();
   await expect(page.getByRole('dialog')).toContainText('19.00');
   await page
@@ -859,7 +859,9 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
     .click();
   await expect(page.getByRole('alertdialog')).toContainText('退款已登记');
   await dismissFeedback(page);
-  await expect(page.getByText('已退款', { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('table').getByText('已退款', { exact: true }),
+  ).toBeVisible();
   expect(
     (await (await page.request.get('/api/v1/wallet')).json()).balance,
   ).toBe(beforePurchase);
