@@ -110,7 +110,7 @@ const CanvasNodeView = memo(function CanvasNodeView({
           {node.type === 'text' && (
             <button
               onClick={() => actions.edit(node.id)}
-              title="双击文字也可编辑"
+              data-tip="双击文字也可编辑"
             >
               <Pencil size={14} />
               编辑文字
@@ -246,7 +246,7 @@ const CanvasNodeView = memo(function CanvasNodeView({
               <Sparkles size={14} />
               {job ? statuses[job.status] : '准备生成'}
             </div>
-            <p title={node.data.prompt || ''}>
+            <p tabIndex={0} data-tip={node.data.prompt || ''}>
               {node.data.prompt || '连接文字与参考图，或打开参数填写描述'}
             </p>
             <div className="config-summary">
@@ -340,11 +340,12 @@ const CanvasNodeView = memo(function CanvasNodeView({
       </div>
       {node.type !== 'text' && (
         <Handle
+          tabIndex={0}
           className="node-port"
           type="target"
           aria-label="输入端口"
           data-port-label="输入"
-          title={
+          data-tip={
             node.type === 'generate'
               ? '输入：连接文字提示词或参考图'
               : '输入：连接生成结果'
@@ -355,6 +356,7 @@ const CanvasNodeView = memo(function CanvasNodeView({
       )}
       {node.type !== 'video' && (
         <Handle
+          tabIndex={0}
           className="node-port"
           type="source"
           aria-label="输出端口"
@@ -365,7 +367,7 @@ const CanvasNodeView = memo(function CanvasNodeView({
                 ? '参考图'
                 : '结果'
           }
-          title={
+          data-tip={
             node.type === 'generate'
               ? '输出：生成结果'
               : node.type === 'text'

@@ -1,6 +1,13 @@
 use atelier_wallet::{CreateCodesRequest, Operation, WalletError, WalletService};
+use base64::{engine::general_purpose::STANDARD, Engine};
 use sqlx::PgPool;
 use uuid::Uuid;
+
+fn recoverable_wallet(pool: PgPool) -> WalletService {
+    WalletService::new(pool).with_code_cipher(
+        atelier_wallet::RedeemCodeCipher::from_base64(&STANDARD.encode([71; 32])).unwrap(),
+    )
+}
 
 async fn user(pool: &PgPool) -> Uuid {
     let id = Uuid::new_v4();
@@ -18,7 +25,7 @@ async fn user(pool: &PgPool) -> Uuid {
 #[ignore = "Requires isolated PostgreSQL; run explicitly"]
 async fn redeem_capacity_retries_expiry_and_pagination_are_atomic(pool: PgPool) {
     let actor = user(&pool).await;
-    let wallet = WalletService::new(pool.clone());
+    let wallet = recoverable_wallet(pool.clone());
     let codes = wallet
         .create_codes(
             actor,
@@ -97,13 +104,81 @@ async fn redeem_capacity_retries_expiry_and_pagination_are_atomic(pool: PgPool) 
             .await
             .unwrap();
     assert_ne!(stored, code);
+    let recovered = wallet.reveal_code(actor, codes.codes[0].id).await.unwrap();
+    assert_eq!(recovered.code, code);
+    let listed = wallet.codes(None).await.unwrap();
+    assert!(listed
+        .iter()
+        .any(|item| item.id == codes.codes[0].id && item.copyable));
+    let metadata = serde_json::to_string(&listed).unwrap();
+    assert!(!metadata.contains(&code));
+    let log: serde_json::Value = sqlx::query_scalar(
+        "SELECT after FROM audit_logs WHERE action='REDEEM_CODE_REVEALED' AND target_id=$1",
+    )
+    .bind(codes.codes[0].id.to_string())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(!log.to_string().contains(&code));
+    sqlx::query("UPDATE redeem_codes SET code_enc=NULL WHERE id=$1")
+        .bind(codes.codes[0].id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        wallet.reveal_code(actor, codes.codes[0].id).await.err(),
+        Some(WalletError::CodeNotRecoverable)
+    );
+    wallet
+        .create_codes(
+            actor,
+            &CreateCodesRequest {
+                count: 52,
+                credits: 1,
+                max_uses: 1,
+                expires_at: None,
+            },
+        )
+        .await
+        .unwrap();
+    let latest = wallet
+        .create_codes(
+            actor,
+            &CreateCodesRequest {
+                count: 1,
+                credits: 1,
+                max_uses: 1,
+                expires_at: None,
+            },
+        )
+        .await
+        .unwrap();
+    let first = wallet.codes(None).await.unwrap();
+    assert_eq!(first.len(), 50);
+    assert_eq!(
+        first[0].id, latest.codes[0].id,
+        "newly issued codes must appear first, independently of random UUID ordering"
+    );
+    let rest = wallet.codes(Some(first.last().unwrap().id)).await.unwrap();
+    let total = first.len() + rest.len();
+    let ids: std::collections::HashSet<_> = first
+        .iter()
+        .chain(rest.iter())
+        .map(|item| item.id)
+        .collect();
+    assert_eq!(ids.len(), total, "no duplicate code across cursor pages");
+    let stored_count: i64 = sqlx::query_scalar("SELECT count(*) FROM redeem_codes")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(total as i64, stored_count);
 }
 
 #[sqlx::test(migrations = "../../migrations")]
 #[ignore = "Requires isolated PostgreSQL; run explicitly"]
 async fn checkin_uses_database_local_day_and_streak_settings(pool: PgPool) {
     let owner = user(&pool).await;
-    let wallet = WalletService::new(pool.clone());
+    let wallet = recoverable_wallet(pool.clone());
     sqlx::query("UPDATE system_settings SET value='\"Pacific/Kiritimati\"' WHERE key='checkin_tz'")
         .execute(&pool)
         .await
@@ -141,7 +216,7 @@ async fn checkin_uses_database_local_day_and_streak_settings(pool: PgPool) {
 #[ignore = "Requires isolated PostgreSQL; run explicitly"]
 async fn different_jobs_cannot_spend_each_others_holds_and_cancel_race_is_safe(pool: PgPool) {
     let owner = user(&pool).await;
-    let wallet = WalletService::new(pool.clone());
+    let wallet = recoverable_wallet(pool.clone());
     wallet.grant(owner, 100, "fund").await.unwrap();
     let a = Uuid::new_v4();
     let b = Uuid::new_v4();
@@ -162,7 +237,7 @@ async fn different_jobs_cannot_spend_each_others_holds_and_cancel_race_is_safe(p
 #[ignore = "Requires isolated PostgreSQL; run explicitly"]
 async fn hundred_retries_hold_once_conflict_and_insufficient_rollback(pool: PgPool) {
     let owner = user(&pool).await;
-    let wallet = WalletService::new(pool.clone());
+    let wallet = recoverable_wallet(pool.clone());
     wallet.grant(owner, 100, "test:grant").await.unwrap();
     let job = Uuid::new_v4();
     let mut tasks = Vec::new();
@@ -197,6 +272,29 @@ async fn hundred_retries_hold_once_conflict_and_insufficient_rollback(pool: PgPo
         result.await.unwrap();
     }
     wallet.release(owner, job, 30).await.unwrap();
+    let ledger = wallet.ledger(owner, None, 50).await.unwrap();
+    let job_id = job.to_string();
+    let related: Vec<_> = ledger
+        .items
+        .iter()
+        .filter(|entry| entry.ref_id.as_deref() == Some(job_id.as_str()))
+        .collect();
+    assert_eq!(related.len(), 3);
+    assert!(related
+        .iter()
+        .all(|entry| entry.ref_type.as_deref() == Some("job")));
+    assert_eq!(
+        related.iter().map(|entry| entry.balance_delta).sum::<i64>(),
+        -10
+    );
+    assert_eq!(related.iter().map(|entry| entry.held_delta).sum::<i64>(), 0);
+    let other = user(&pool).await;
+    assert!(wallet
+        .ledger(other, None, 50)
+        .await
+        .unwrap()
+        .items
+        .is_empty());
     assert!(wallet.settle(owner, job, 1, 1).await.is_err());
     assert!(wallet.release(owner, job, 30).await.is_ok());
     assert!(wallet.reconcile().await.unwrap().is_empty());
@@ -243,7 +341,7 @@ async fn ledger_foreign_keys_work_after_runtime_restriction(pool: PgPool) {
         "Run permission regressions as a non-superuser database owner"
     );
     let owner = user(&pool).await;
-    let wallet = WalletService::new(pool.clone());
+    let wallet = recoverable_wallet(pool.clone());
     wallet.restrict_ledger().await.unwrap();
     wallet.restrict_ledger().await.unwrap();
     let broad_update: bool =
@@ -318,7 +416,7 @@ async fn ledger_foreign_keys_work_after_runtime_restriction(pool: PgPool) {
 #[ignore = "Requires isolated PostgreSQL; run explicitly"]
 async fn concurrent_checkin_is_once_and_ledger_is_immutable(pool: PgPool) {
     let owner = user(&pool).await;
-    let wallet = WalletService::new(pool.clone());
+    let wallet = recoverable_wallet(pool.clone());
     wallet.restrict_ledger().await.unwrap();
     let mut tasks = Vec::new();
     for _ in 0..100 {
@@ -354,7 +452,7 @@ async fn concurrent_checkin_is_once_and_ledger_is_immutable(pool: PgPool) {
 async fn adjustment_audit_atomic_and_cross_user_key_conflicts(pool: PgPool) {
     let owner = user(&pool).await;
     let actor = user(&pool).await;
-    let wallet = WalletService::new(pool.clone());
+    let wallet = recoverable_wallet(pool.clone());
     let request = Uuid::new_v4();
     wallet
         .adjust(actor, owner, request, 30, "support credit")
@@ -386,6 +484,15 @@ async fn adjustment_audit_atomic_and_cross_user_key_conflicts(pool: PgPool) {
     assert_eq!(wallet.summary(owner).await.unwrap().balance, 30);
     assert!(wallet.reconcile().await.unwrap().is_empty());
     // Generic operation is validated even before contacting the database.
+    let recent = wallet.adjustments().await.unwrap();
+    assert_eq!(
+        recent.len(),
+        1,
+        "idempotent retries must not duplicate recent records"
+    );
+    assert_eq!(recent[0].user_id, owner.to_string());
+    assert_eq!(recent[0].amount, 30);
+    assert_eq!(recent[0].reason, "support credit");
     assert!(wallet
         .apply(
             owner,

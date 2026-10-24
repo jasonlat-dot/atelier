@@ -20,6 +20,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/credits/adjustments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["adjustments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/dashboard": {
         parameters: {
             query?: never;
@@ -318,6 +334,22 @@ export interface paths {
         get: operations["codes"];
         put?: never;
         post: operations["create_codes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/redeem-codes/{id}/copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["copy_code"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1489,6 +1521,10 @@ export interface components {
             reason: string;
         };
         AdminJobPage: {
+            /** @description Counts by status, plus ALL, within q/owner scope; independent of status/cursor. */
+            counts: {
+                [key: string]: number;
+            };
             items: components["schemas"]["AdminJob"][];
             /** Format: uuid */
             next_cursor?: string | null;
@@ -1627,6 +1663,7 @@ export interface components {
             adjust_limit: number;
             jobs: components["schemas"]["AdminJob"][];
             ledger: components["schemas"]["LedgerPage"];
+            pending_review: boolean;
             sessions: components["schemas"]["AdminSession"][];
             user: components["schemas"]["AdminUser"];
         };
@@ -1815,6 +1852,7 @@ export interface components {
             order: components["schemas"]["OrderView"];
         };
         CodeInfo: {
+            copyable: boolean;
             /** Format: date-time */
             created_at: string;
             /** Format: int64 */
@@ -1877,6 +1915,19 @@ export interface components {
         };
         CreatedCodes: {
             codes: components["schemas"]["CreatedCode"][];
+        };
+        CreditAdjustment: {
+            /** Format: int64 */
+            amount: number;
+            /** Format: date-time */
+            created_at: string;
+            display_name: string;
+            email: string;
+            /** Format: int64 */
+            id: number;
+            operator: string;
+            reason: string;
+            user_id: string;
         };
         CreditReceipt: {
             /** Format: int64 */
@@ -2096,6 +2147,8 @@ export interface components {
             /** Format: int64 */
             id: number;
             reason?: string | null;
+            ref_id?: string | null;
+            ref_type?: string | null;
             type: string;
         };
         LedgerPage: {
@@ -2506,6 +2559,49 @@ export interface operations {
                 };
             };
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    adjustments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreditAdjustment"][];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4236,6 +4332,67 @@ export interface operations {
                 };
             };
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    copy_code: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedCode"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

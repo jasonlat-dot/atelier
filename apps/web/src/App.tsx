@@ -204,10 +204,10 @@ export default function App() {
               <kbd>⌘ K</kbd>
             </div>
             <span className="demo-label">MOCK DEMO</span>
-            <button className="icon-btn" title="主题切换将在下一阶段接入">
+            <button className="icon-btn" data-tip="主题切换将在下一阶段接入">
               <Sun size={16} />
             </button>
-            <button className="icon-btn" title="通知">
+            <button className="icon-btn" data-tip="通知">
               <Bell size={17} />
             </button>
             <span className="avatar tiny">{user.avatar}</span>

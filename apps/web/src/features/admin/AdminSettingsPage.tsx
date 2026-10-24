@@ -1,4 +1,5 @@
-import Feedback from '../../components/Feedback';
+import { useToast } from '../../components/Toast';
+import Select from '../../components/Select';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AdminProps } from '../upstream/upstreamApi';
@@ -111,7 +112,7 @@ function SettingsForm(props: AdminProps & { settings: Settings }) {
   const [reason, setReason] = useState('');
   const [error, setError] = useState<unknown>();
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState('');
+  const toast = useToast();
   const client = useQueryClient();
   const changed = Object.keys(values).filter(
     (k) =>
@@ -120,7 +121,6 @@ function SettingsForm(props: AdminProps & { settings: Settings }) {
   );
   function change<K extends keyof Values>(key: K, value: Values[K]) {
     setValues((v) => ({ ...v, [key]: value }));
-    setMessage('');
   }
   async function save() {
     setBusy(true);
@@ -259,14 +259,13 @@ function SettingsForm(props: AdminProps & { settings: Settings }) {
             </label>
             <label>
               免费分辨率上限
-              <select
-                className="input"
+              <Select
                 value={values.free_max_resolution}
                 onChange={(e) => change('free_max_resolution', e.target.value)}
               >
                 <option value="1K">1K</option>
                 <option value="2K">2K</option>
-              </select>
+              </Select>
               <small>模型能力和定价仍需在模型管理中配置。</small>
             </label>
           </div>
@@ -325,8 +324,7 @@ function SettingsForm(props: AdminProps & { settings: Settings }) {
                     </label>
                     {rate && (
                       <>
-                        <select
-                          className="input"
+                        <Select
                           aria-label={`${m.display_name} 成本币种`}
                           value={rate.currency}
                           onChange={(e) =>
@@ -342,7 +340,7 @@ function SettingsForm(props: AdminProps & { settings: Settings }) {
                         >
                           <option>CNY</option>
                           <option>USD</option>
-                        </select>
+                        </Select>
                         <input
                           className="input"
                           aria-label={`${m.display_name} 成本单价`}
@@ -395,7 +393,7 @@ function SettingsForm(props: AdminProps & { settings: Settings }) {
             onClick={() => {
               setValues(structuredClone(original));
               setWhitelist(original.registration_whitelist.join('\n'));
-              setMessage('已撤销本次未保存修改。');
+              toast('已撤销本次未保存修改。', 'info');
             }}
           >
             撤销修改
@@ -404,11 +402,6 @@ function SettingsForm(props: AdminProps & { settings: Settings }) {
             核对并保存
           </button>
         </div>
-        {message && (
-          <Feedback onDismiss={() => setMessage('')} variant="success">
-            {message}
-          </Feedback>
-        )}
       </form>
       {open && (
         <AdminDialog

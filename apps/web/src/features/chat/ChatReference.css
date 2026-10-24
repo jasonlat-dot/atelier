@@ -387,7 +387,9 @@
   gap: 12px;
   flex-wrap: wrap;
 }
-.live-chat .composer-actions select {
+.live-chat .composer-actions > .app-select {
+  flex: 0 1 210px;
+  width: auto;
   height: 36px;
   max-width: 210px;
   min-width: 76px;
@@ -644,7 +646,7 @@
 }
 .live-chat button:focus-visible,
 .live-chat a:focus-visible,
-.live-chat select:focus-visible {
+.live-chat .app-select:focus-visible {
   outline: 2px solid #c2410c;
   outline-offset: 3px;
 }
@@ -780,7 +782,7 @@
   .live-chat .composer-actions > div {
     gap: 6px;
   }
-  .live-chat .composer-actions select {
+  .live-chat .composer-actions .app-select {
     font-size: 12px;
     max-width: 150px;
   }

@@ -1,3 +1,5 @@
+import Select from '../../components/Select';
+import Tooltip from '../../components/Tooltip';
 import Feedback from '../../components/Feedback';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -436,8 +438,7 @@ export default function AssetsPage({
             onChange={(event) => setDraft(event.target.value)}
           />
         </div>
-        <select
-          className="input"
+        <Select
           aria-label="素材来源"
           value={filters.source}
           onChange={(event) =>
@@ -450,9 +451,8 @@ export default function AssetsPage({
           <option value="">全部来源</option>
           <option value="upload">上传的素材</option>
           <option value="generated">生成的素材</option>
-        </select>
-        <select
-          className="input"
+        </Select>
+        <Select
           aria-label="素材排序"
           aria-describedby={cursor ? 'assets-sort-scope' : undefined}
           value={sort}
@@ -461,11 +461,11 @@ export default function AssetsPage({
           <option value="date">最近添加</option>
           <option value="name">名称</option>
           <option value="size">文件大小（大到小）</option>
-        </select>
+        </Select>
         <div className="assets-view-switch" role="group" aria-label="素材视图">
           <button
             aria-label="网格视图"
-            title="网格视图"
+            data-tip="网格视图"
             aria-pressed={view === 'grid'}
             onClick={() => setView('grid')}
           >
@@ -474,7 +474,7 @@ export default function AssetsPage({
           </button>
           <button
             aria-label="列表视图"
-            title="列表视图"
+            data-tip="列表视图"
             aria-pressed={view === 'list'}
             onClick={() => setView('list')}
           >
@@ -636,18 +636,21 @@ export default function AssetsPage({
                     {(asset.duration_ms / 1000).toFixed(1)} 秒
                   </span>
                 )}
-                <button
-                  className="asset-card-delete"
-                  aria-label={`删除 ${asset.name}`}
-                  title="删除素材"
-                  disabled={busy}
-                  onClick={() => setDeleting([asset.id])}
-                >
-                  <Trash2 size={15} />
-                </button>
+                <Tooltip content="删除素材">
+                  <button
+                    className="asset-card-delete"
+                    aria-label={`删除 ${asset.name}`}
+                    disabled={busy}
+                    onClick={() => setDeleting([asset.id])}
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </Tooltip>
               </div>
               <div className="asset-info">
-                <strong title={asset.name}>{asset.name}</strong>
+                <strong tabIndex={0} data-tip={asset.name}>
+                  {asset.name}
+                </strong>
                 <span className="asset-dimensions">
                   {asset.width && asset.height
                     ? `${asset.width} × ${asset.height} · `
@@ -663,8 +666,11 @@ export default function AssetsPage({
                     {asset.source === 'upload' ? '已上传' : '生成结果'}
                   </small>
                   <time
+                    tabIndex={0}
                     dateTime={asset.created_at}
-                    title={new Date(asset.created_at).toLocaleString('zh-CN')}
+                    data-tip={new Date(asset.created_at).toLocaleString(
+                      'zh-CN',
+                    )}
                   >
                     {new Date(asset.created_at).toLocaleDateString('zh-CN', {
                       month: 'long',

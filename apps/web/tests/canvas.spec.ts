@@ -1,3 +1,4 @@
+import { chooseSelect } from './selectTestHelpers';
 import { dismissFeedback } from './feedbackTestHelpers';
 import { test, expect, type Page } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
@@ -265,6 +266,11 @@ test('canvas edits autosave, survive reload, undo and redo with the prototype la
   await expect(page.getByLabel('画布创作参数')).not.toBeVisible();
   await page.getByRole('button', { name: '切换创作参数' }).click();
   await expect(page.getByLabel('画布创作参数')).toBeVisible();
+  await page.locator('.react-flow__pane').click({ position: { x: 80, y: 80 } });
+  await expect(page.getByLabel('画布创作参数')).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: '切换创作参数' }),
+  ).toHaveAttribute('aria-expanded', 'true');
   await expect(page.getByLabel('画布检查器')).not.toBeVisible();
   await page.getByRole('button', { name: '打开属性面板' }).click();
   await expect(page.getByLabel('画布检查器')).toBeVisible();
@@ -281,7 +287,7 @@ test('canvas edits autosave, survive reload, undo and redo with the prototype la
   await page.getByRole('button', { name: '重做', exact: true }).click();
   await expect(page.getByLabel('节点文字')).toHaveCount(2);
   await page.getByRole('button', { name: '打开属性面板' }).click();
-  await page.getByLabel('画布背景').selectOption('lines');
+  await chooseSelect(page.getByLabel('画布背景'), 'lines');
   await page.getByRole('link', { name: '我的素材库', exact: true }).click();
   await expect(page).toHaveURL(/\/assets$/);
   expect(api.saved().background).toBe('lines');
@@ -545,7 +551,7 @@ test('ports connect by clicking, selected curves disconnect by Delete, and undo 
   await page.locator('[data-id="generator"] .graph-head').click();
   await expect(page.getByLabel('画布创作参数')).toBeVisible();
   await page.locator('[data-id="reference-image"] .source').click();
-  await expect(page.getByLabel('画布创作参数')).not.toBeVisible();
+  await expect(page.getByLabel('画布创作参数')).toBeVisible();
   await page.locator('[data-id="generator"] .target').click();
   await expect.poll(() => api.saved().edges.length).toBe(1);
   const edge = page.locator('.react-flow__edge');
@@ -579,10 +585,10 @@ test('right click creation, zoom controls and quick-reference action stay usable
     .poll(() => api.saved().edges.some((e) => e.role === 'reference'))
     .toBe(true);
   expect(api.writes.includes('/api/v1/generation/jobs')).toBe(false);
-  await expect(page.getByRole('alertdialog')).toContainText(
+  await expect(page.locator('.app-toast [role="status"]')).toContainText(
     '已连接所选提示词与参考图',
   );
-  await dismissFeedback(page);
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
   await page.getByRole('button', { name: '切换创作参数' }).click();
   await expect(page.getByLabel('画布创作参数')).not.toBeVisible();
   const pane = page.locator('.react-flow__pane'),
@@ -672,15 +678,15 @@ test('dragging an output to blank space preserves its preview and creates the ch
   await draw();
   await menu.getByRole('menuitem', { name: /图片生成/ }).click();
   await expect.poll(() => api.saved().nodes.length).toBe(2);
-  await expect(page.getByRole('alertdialog')).toContainText(
+  await expect(page.locator('.app-toast [role="status"]')).toContainText(
     '已连接所选提示词与参考图',
   );
-  await dismissFeedback(page);
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
   expect(api.saved().edges).toHaveLength(1);
   expect(api.saved().edges[0].role).toBe('prompt');
   const panel = page.getByLabel('画布创作参数');
   await expect(panel).toBeVisible();
-  await expect(page.getByLabel('生成模型')).toHaveValue('image');
+  await expect(page.getByLabel('生成模型')).toContainText('Canvas Image');
   const box = (await panel.boundingBox())!;
   expect(box.x).toBeGreaterThan(300);
   expect(box.y + box.height).toBeLessThanOrEqual(1000);

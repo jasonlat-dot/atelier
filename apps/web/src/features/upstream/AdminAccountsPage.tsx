@@ -1,3 +1,5 @@
+import Tooltip from '../../components/Tooltip';
+import DatePicker from '../../components/DatePicker';
 import Feedback from '../../components/Feedback';
 import {
   useCallback,
@@ -356,19 +358,20 @@ function Accounts(props: AdminProps) {
                       ].map(([label, Icon, action]) => {
                         const I = Icon as typeof Pencil;
                         return (
-                          <button
-                            key={String(label)}
-                            className="icon-btn"
-                            aria-label={`${label} ${a.name}`}
-                            title={String(label)}
-                            disabled={busy || loading}
-                            onClick={() => {
-                              setError('');
-                              (action as () => void)();
-                            }}
-                          >
-                            <I size={15} />
-                          </button>
+                          <Tooltip key={String(label)} content={String(label)}>
+                            <button
+                              key={String(label)}
+                              className="icon-btn"
+                              aria-label={`${label} ${a.name}`}
+                              disabled={busy || loading}
+                              onClick={() => {
+                                setError('');
+                                (action as () => void)();
+                              }}
+                            >
+                              <I size={15} />
+                            </button>
+                          </Tooltip>
                         );
                       })}
                     </div>
@@ -734,8 +737,11 @@ function AccountForm({
       ) : (
         <label>
           额度重置时间（可选）
-          <input name="reset" type="datetime-local" />
-          <small>仅在明确的周期重置时间填写，到期探测正常后恢复总额度。</small>
+          <DatePicker name="reset" />
+          <small>
+            按本地时间选择，保存为
+            UTC。仅在明确的周期重置时间填写，到期探测正常后恢复总额度。
+          </small>
         </label>
       )}
       <label className="up-check">
@@ -808,7 +814,8 @@ function QuotaForm({
       <QuotaFields account={a} />
       <label>
         额度重置时间（可选）
-        <input name="reset" type="datetime-local" defaultValue={local} />
+        <DatePicker name="reset" defaultValue={local} />
+        <small>按本地时间选择，保存为 UTC。</small>
       </label>
       <Footer busy={busy} onCancel={onCancel} label="更新额度" />
     </form>

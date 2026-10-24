@@ -13,8 +13,10 @@
 | POST /wallet/checkin | Redis 10 次/分钟/用户；自然日一次。返回 local_date、streak、credits、already_checked_in，重复签到不发积分 |
 | POST /wallet/redeem | body: code；必填 UUID Idempotency-Key；返回首次 CreditReceipt；同键异码 422 |
 | POST /admin/users/{id}/credits | ADMIN：amount 非零整数、reason 必填且最多 500 字符；UUID Idempotency-Key；审计与调账同事务 |
-| POST /admin/redeem-codes | ADMIN：count 1–100、credits 正数、max_uses 1–10000、expires_at 可选；随机明文仅本次返回，不自动重试 |
-| GET /admin/redeem-codes?before=UUID | ADMIN：按 UUID 倒序，最多 50 条；before 为末项 ID。仅元数据，不返回明文或哈希 |
+| POST /admin/redeem-codes | ADMIN：count 1–100、credits 正数、max_uses 1–10000、expires_at 可选；生成随机码并加密保存，不自动重试发行请求 |
+| GET /admin/redeem-codes?before=UUID | ADMIN：按创建时间/ID 倒序，最多 50 条；before 为末项 ID。仅元数据及 copyable，不返回完整码、密文或哈希 |
+| POST /admin/redeem-codes/{id}/copy | ADMIN + 有效 MFA + CSRF：按需解密返回 CreatedCode（id/code），记录 REDEEM_CODE_REVEALED 审计但不记录完整码；旧哈希码返回 409 CODE_NOT_RECOVERABLE，不存在返回 404；no-store |
+| GET /admin/credits/adjustments | ADMIN：最近 5 条真实人工调整，含目标用户、操作人邮箱、增减金额、原因与时间；只返回 WALLET_ADJUST 摘要，不开放全站审计接口 |
 
 余额不足为 402 INSUFFICIENT_CREDITS；请求键异参为 422 IDEMPOTENCY_CONFLICT；无效/已用/过期兑换码统一为 422 INVALID_REDEEM_CODE；存储故障为 503，限流 429。认证响应均 no-store。资金请求返回的是不可变首次收据，余额应重新 GET /wallet。注册默认赠送 20，只针对 M2 之后成功创建的新身份。
 
@@ -178,7 +180,7 @@ SSE `delta` 为 `{turn_id,text}`，`intent` 为六类枚举字符串，`action` 
 | POST `/admin/users/{id}/disable`、`/enable`、`/revoke-sessions`、`/review` | revision + reason，review 只标记通知已复核 |
 | POST `/admin/users/{id}/role` | SUPER_ADMIN；revision + reason + role |
 | POST `/admin/users/{id}/credits` | amount 正负整数 + reason，UUID Idempotency-Key；沿用 M2 回执 |
-| GET `/admin/jobs?q=&status=&user_id=&before=UUID` | 安全任务元数据，25 条，不返回提示词、上游地址或真实模型 |
+| GET `/admin/jobs?q=&status=&user_id=&before=UUID` | 安全任务元数据，25 条；附 counts 状态汇总，不返回提示词、上游地址或真实模型 |
 | POST `/admin/jobs/{id}/cancel` | reason + UUID Idempotency-Key，排队立即取消，运行任务标记取消 |
 | POST `/admin/jobs/{id}/refund` | reason + expected_credits + UUID Idempotency-Key；仅补偿实际结算全额一次 |
 | GET / PUT `/admin/settings` | SUPER_ADMIN；读取 revision/values/公开模型；写入 revision + values + reason |
@@ -192,3 +194,8 @@ SSE `delta` 为 `{turn_id,text}`，`intent` 为六类枚举字符串，`action` 
 ADMIN 只能修改 USER，不能处置其他管理员的积分、身份或任务。自我禁用被拒绝；最后一个有效超级管理员不能被降权或禁用。409 ADMIN_CONFLICT 表示版本、状态或幂等内容已变化，应重新读取；409 LAST_SUPER_ADMIN 表示最后管理员保护；422 VALIDATION 表示参数无效。审计与业务写入同事务，失败不提交。
 
 任务补偿为独立积分来源，不修改生成结果/终态，不恢复原订单现金退款份额。未知网络结果的金融请求重试必须保留原键和正文。邀请码创建没有自动重试，结果不明时先查询备注/末四位并撤销无法取回的记录，避免发出多个未知有效码。成本估算单价整数 `unit_cost_micros` 表示百万分之一货币单位，按公开模型、图片张数/视频秒数/成功对话条数分别估计，币种 CNY/USD；缺价与真实供应商费用未计入，详见 PR_M9。
+
+
+### 任务列表状态数量
+
+GET `/api/v1/admin/jobs` 的 `AdminJobPage` 增加 `counts` 字典，固定包含 `ALL` 以及 QUEUED、ROUTING、RUNNING、STORING、SUCCEEDED、PARTIAL、CANCELLED、FAILED。数量应用当前 q 搜索和 user_id 用户范围，忽略 status 和 before；全部任务包含八种状态，部分完成单独统计。计数与分页列表来自同一个只读、可重复读数据库快照；真实零返回 0，无须迁移。原管理员/MFA 校验、列表筛选和游标排序不变，既有只读任务元数据权限不扩大。旧后端缺少字段时前端显示“—”，重启后端加载新响应后显示真实数量。

@@ -1,3 +1,4 @@
+import Select from '../../components/Select';
 import Feedback from '../../components/Feedback';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -494,11 +495,10 @@ function CanvasEditor({
             <label className="field-label" htmlFor="quality">
               画质与分辨率
             </label>
-            <select
+            <Select
               id="quality"
               value={quality}
               onChange={(e) => setQuality(e.target.value)}
-              className="select"
             >
               {(kind === 'image'
                 ? ['low', 'medium', 'high']
@@ -506,7 +506,7 @@ function CanvasEditor({
               ).map((x) => (
                 <option key={x}>{x}</option>
               ))}
-            </select>
+            </Select>
             <label className="field-label" htmlFor="ratio">
               画幅比例
             </label>
@@ -526,9 +526,9 @@ function CanvasEditor({
                 <label className="field-label" htmlFor="duration">
                   视频时长
                 </label>
-                <select
+                <Select
                   id="duration"
-                  className="select"
+
                   value={duration}
                   onChange={(e) => setDuration(Number(e.target.value))}
                 >
@@ -537,16 +537,16 @@ function CanvasEditor({
                       {v} 秒
                     </option>
                   ))}
-                </select>
+                </Select>
               </>
             ) : (
               <>
                 <label className="field-label" htmlFor="count">
                   生成数量
                 </label>
-                <select
+                <Select
                   id="count"
-                  className="select"
+
                   value={count}
                   onChange={(e) => setCount(Number(e.target.value))}
                 >
@@ -555,15 +555,15 @@ function CanvasEditor({
                       {v} 张
                     </option>
                   ))}
-                </select>
+                </Select>
               </>
             )}
             <label className="field-label" htmlFor="reference">
               参考素材
             </label>
-            <select
+            <Select
               id="reference"
-              className="select"
+
               value={reference}
               onChange={(e) => setReference(e.target.value)}
             >
@@ -573,7 +573,7 @@ function CanvasEditor({
                   {a.kind === 'video' ? '🎬' : '▧'} {a.name}
                 </option>
               ))}
-            </select>
+            </Select>
             <div className="subtle-hint">
               选择画布素材后，正式版将以资产 ID 作为参考。视频支持首帧 /
               尾帧输入。
@@ -917,7 +917,7 @@ function CanvasEditor({
             {assets.slice(0, 5).map((a) => (
               <button
                 key={a.id}
-                title={`添加到画布：${a.name}`}
+                data-tip={`添加到画布：${a.name}`}
                 onClick={() => insertAsset(a)}
               >
                 {a.kind === 'video' ? (
@@ -938,7 +938,6 @@ function CanvasEditor({
           <Feedback
             onDismiss={() => setMessage('')}
             variant={message.startsWith('任务已提交') ? 'success' : 'info'}
-            className="toast-message"
             onClick={() => setMessage('')}
           >
             {message}

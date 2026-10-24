@@ -3,6 +3,7 @@ const path = require('node:path');
 const ts = require(require.resolve('typescript', { paths: [path.join(__dirname, '../apps/web')] }));
 const root = path.join(__dirname, '../apps/web/src');
 const violations = [];
+let toastHosts = 0;
 function scan(directory) {
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
     const file = path.join(directory, entry.name);
@@ -18,6 +19,12 @@ function scan(directory) {
     }
     collect(tree);
     function visit(node) {
+      if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+        if (node.tagName.getText(tree) === 'ToastHost') toastHosts++;
+        const className = node.attributes.properties.find((a) => ts.isJsxAttribute(a) && a.name.getText(tree) === 'className')?.initializer;
+        if (className && ts.isStringLiteral(className) && /\bapp-toast(?:-|\b)/.test(className.text) && path.relative(root, file) !== path.join('components', 'Toast.tsx'))
+          violations.push(`${path.relative(root, file)}: custom toast instead of shared Toast`);
+      }
       if (ts.isCallExpression(node) && /^(?:(?:window|globalThis)\.)?(?:alert|confirm)$/.test(node.expression.getText(tree)) && !customConfirms.has(node.expression.getText(tree)))
         violations.push(`${path.relative(root, file)}: native browser prompt`);
       if (ts.isJsxElement(node)) {
@@ -25,9 +32,9 @@ function scan(directory) {
           ts.isJsxAttribute(attribute) && attribute.name.getText(tree) === 'role');
         const literal = role?.initializer;
         if (literal && ts.isStringLiteral(literal)) {
-          if (literal.text === 'alert') violations.push(`${path.relative(root, file)}: inline error notice`);
+          if (literal.text === 'alert' && path.relative(root, file) !== path.join('components', 'Toast.tsx')) violations.push(`${path.relative(root, file)}: inline error notice`);
           const content = node.children.map((child) => child.getText(tree)).join(' ');
-          if (literal.text === 'status' && /\{\s*(?:message|notice|feedback|copied|copyMessage)\s*\}/.test(content))
+          if (literal.text === 'status' && /\{\s*(?:item\.)?(?:message|notice|feedback|copied|copyMessage)\s*\}/.test(content) && path.relative(root, file) !== path.join('components', 'Toast.tsx'))
             violations.push(`${path.relative(root, file)}: inline operation result`);
         }
       }
@@ -37,5 +44,6 @@ function scan(directory) {
   }
 }
 scan(root);
-if (violations.length) throw new Error(`Use the shared Feedback dialog:\n${violations.join('\n')}`);
-console.log('Global feedback contract passed: no native prompts or inline operation results/errors');
+if (toastHosts !== 1) violations.push('mount exactly one shared ToastHost');
+if (violations.length) throw new Error(`Use shared Feedback dialogs or lightweight Toast:\n${violations.join('\n')}`);
+console.log('Global feedback contract passed: one shared Toast host, no native prompts or custom inline operation results/errors');

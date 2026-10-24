@@ -24,3 +24,8 @@ m.switchUser('admin-demo');
 for(const delta of [NaN,Infinity,100001,-100001]){let rejected=false;try{m.addCredits('user-demo',delta);}catch{rejected=true;}check(rejected,'invalid mock adjustment');}
 console.log('Mock checkin and admin permission regressions passed');
 require('./feedback_contract.cjs');
+require('./user_ledger_contract.cjs');
+require('./tooltip_contract.cjs');
+require('./select_contract.cjs');
+require('./datepicker_contract.cjs');
+require('./toast_contract.cjs');

@@ -199,6 +199,9 @@ test('admin edits a plan, confirms a receipt safely and blocks refunds while cre
 }) => {
   const { keys, release } = await mock(page, true);
   await page.goto('/admin/plans');
+  await expect(
+    page.getByRole('button', { name: '积分调整', exact: true }),
+  ).toHaveCount(0);
   await page.getByRole('button', { name: '编辑套餐', exact: true }).click();
   await page.getByLabel('套餐名称', { exact: true }).fill('更新后的套餐');
   await page.getByRole('button', { name: '保存套餐', exact: true }).click();

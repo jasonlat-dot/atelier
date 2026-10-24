@@ -32,6 +32,7 @@ pub struct AppState {
     pub generation: Option<atelier_generation::GenerationService>,
     pub canvas: Option<atelier_canvas::CanvasService>,
     pub chat: Option<atelier_chat::ChatService>,
+    pub code_cipher: Option<atelier_wallet::RedeemCodeCipher>,
     pub trusted_proxy_ips: Arc<std::collections::HashSet<std::net::IpAddr>>,
 }
 
@@ -54,6 +55,7 @@ impl AppState {
             generation: None,
             canvas: None,
             chat: None,
+            code_cipher: None,
             trusted_proxy_ips: Arc::new(std::collections::HashSet::new()),
             db,
             web_dir: "__no_static_assets__".into(),

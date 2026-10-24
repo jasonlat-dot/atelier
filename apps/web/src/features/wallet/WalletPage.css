@@ -100,7 +100,7 @@
   color: #fff;
 }
 .wallet-page .btn-dark:hover:not(:disabled) {
-  background: #33312c;
+  background: var(--control-hover-ink);
 }
 .wallet-page .btn-dark:disabled {
   background: #d9d7d0;
@@ -157,8 +157,8 @@
   border-color: #55534d;
   color: #fff;
 }
-.wallet-balance .btn-light:hover {
-  background: #2c2b28;
+.wallet-page .wallet-balance .btn-light:hover:not(:disabled) {
+  background: var(--control-hover-ink);
 }
 .wallet-checkin .checkin-heading p {
   margin: 0;

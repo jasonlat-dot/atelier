@@ -1,3 +1,6 @@
+import { useToast } from '../../components/Toast';
+import Select from '../../components/Select';
+import Tooltip from '../../components/Tooltip';
 import Feedback from '../../components/Feedback';
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -307,11 +310,15 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
       setBusy(false);
     }
   };
-  const copy = (text: string) =>
-    void navigator.clipboard
-      .writeText(text)
-      .then(() => setNotice('已复制回复。'))
-      .catch(() => setError('复制未完成，请选择文字手动复制。'));
+  const toast = useToast();
+  const copy = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast('已复制回复');
+    } catch {
+      toast.error('复制未完成', { description: '请选择文字手动复制。' });
+    }
+  };
   const card = (action: S['CanvasAction']) =>
     action.type === 'open_canvas' && (
       <div className="live-chat-action">
@@ -358,23 +365,24 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
       >
         <div className="mini-head">
           <strong>历史对话</strong>
-          <button
-            className="icon-btn"
-            aria-label="新建对话"
-            title="新建对话"
-            disabled={busy}
-            onClick={() => {
-              navigate('/chat');
-              setCreated(undefined);
-              setInput('');
-              setStreaming(undefined);
-              setUncertain(false);
-              submission.current = undefined;
-              setError('');
-            }}
-          >
-            <Plus size={17} />
-          </button>
+          <Tooltip content="新建对话">
+            <button
+              className="icon-btn"
+              aria-label="新建对话"
+              disabled={busy}
+              onClick={() => {
+                navigate('/chat');
+                setCreated(undefined);
+                setInput('');
+                setStreaming(undefined);
+                setUncertain(false);
+                submission.current = undefined;
+                setError('');
+              }}
+            >
+              <Plus size={17} />
+            </button>
+          </Tooltip>
           <button
             className="icon-btn chat-history-close"
             aria-label="关闭对话列表"
@@ -459,7 +467,7 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
             <PanelLeft size={17} />
           </button>
           <div>
-            <strong title={view.data?.conversation.title}>
+            <strong tabIndex={0} data-tip={view.data?.conversation.title}>
               {view.data?.conversation.title || '新的创作讨论'}
             </strong>
             <p>实时流式对话 · 仅本人可见</p>
@@ -467,27 +475,29 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
           <div className="gen-actions">
             {effective && (
               <>
-                <button
-                  className="icon-btn"
-                  aria-label="重命名对话"
-                  title="重命名对话"
-                  disabled={busy}
-                  onClick={() => {
-                    setTitle(view.data?.conversation.title || '新对话');
-                    setDialog('rename');
-                  }}
-                >
-                  <Pencil size={15} />
-                </button>
-                <button
-                  className="icon-btn"
-                  aria-label="删除当前对话"
-                  title="删除当前对话"
-                  disabled={busy}
-                  onClick={() => setDialog('delete')}
-                >
-                  <Trash2 size={15} />
-                </button>
+                <Tooltip content="重命名对话">
+                  <button
+                    className="icon-btn"
+                    aria-label="重命名对话"
+                    disabled={busy}
+                    onClick={() => {
+                      setTitle(view.data?.conversation.title || '新对话');
+                      setDialog('rename');
+                    }}
+                  >
+                    <Pencil size={15} />
+                  </button>
+                </Tooltip>
+                <Tooltip content="删除当前对话">
+                  <button
+                    className="icon-btn"
+                    aria-label="删除当前对话"
+                    disabled={busy}
+                    onClick={() => setDialog('delete')}
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </Tooltip>
               </>
             )}
             <button
@@ -495,7 +505,7 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
               onClick={() => setContextOpen(!contextOpen)}
               aria-expanded={contextOpen}
               aria-label={contextOpen ? '收起智能上下文' : '展开智能上下文'}
-              title={contextOpen ? '收起智能上下文' : '展开智能上下文'}
+              data-tip={contextOpen ? '收起智能上下文' : '展开智能上下文'}
             >
               <PanelRightClose size={15} />
               智能上下文
@@ -748,7 +758,8 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
             />
             <div className="composer-actions">
               <div>
-                <select
+                <Select
+                  size="sm"
                   aria-label="对话模型"
                   value={model}
                   disabled={busy || uncertain}
@@ -760,7 +771,7 @@ export default function LiveChatPage({ me, onExpired, onReload }: Props) {
                       {m.display_name}
                     </option>
                   ))}
-                </select>
+                </Select>
                 <span id="chat-composer-hint">
                   {config.data
                     ? `完整回复 ${config.data.credits_per_message} 积分 · 失败/中断不扣`

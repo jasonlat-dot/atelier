@@ -95,16 +95,16 @@
   background: #1b1b1a;
   color: #fff;
 }
-.app-feedback-actions .app-feedback-primary:hover {
-  background: #33312c;
+.app-feedback-actions .app-feedback-primary:hover:not(:disabled) {
+  background: var(--control-hover-ink);
 }
 .app-feedback-actions .app-feedback-secondary {
   background: #fff;
   border-color: #dedbd4;
   color: #33312c;
 }
-.app-feedback-actions .app-feedback-secondary:hover {
-  background: #f5f4f0;
+.app-feedback-actions .app-feedback-secondary:hover:not(:disabled) {
+  background: var(--control-hover-surface);
 }
 .app-feedback :is(button, a):focus-visible {
   outline: 2px solid #a64c25;

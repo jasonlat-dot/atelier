@@ -62,12 +62,12 @@
 .usage-controls label {
   white-space: nowrap;
 }
-.usage-page :is(button, select) {
+.usage-page :is(button, .app-select) {
   font: inherit;
   color: var(--usage-text);
   cursor: pointer;
 }
-.usage-controls :is(button, select) {
+.usage-controls :is(button, .app-select) {
   min-height: 40px;
   border: 1px solid var(--usage-border);
   border-radius: 10px;
@@ -75,7 +75,8 @@
   padding: 9px 12px;
   white-space: nowrap;
 }
-.usage-controls select {
+.usage-controls .app-select {
+  width: auto;
   min-width: 120px;
 }
 .usage-refresh {
@@ -88,7 +89,7 @@
   cursor: wait;
   opacity: 0.55;
 }
-.usage-page :is(button, a, select, [tabindex]):focus-visible {
+.usage-page :is(button, a, .app-select, [tabindex]):focus-visible {
   outline: 2px solid var(--usage-ink);
   outline-offset: 3px;
 }
@@ -256,35 +257,6 @@
 }
 .usage-bar-column:is(:hover, :focus-visible) .usage-bar {
   background: #7e9a83;
-}
-.usage-bar-tooltip {
-  position: absolute;
-  z-index: 2;
-  top: 6px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 7px 10px;
-  background: var(--usage-ink);
-  color: #fff;
-  border-radius: 7px;
-  font-size: 11px;
-  line-height: 1.6;
-  text-align: center;
-  white-space: nowrap;
-  opacity: 0;
-  pointer-events: none;
-}
-.usage-bar-column:first-child .usage-bar-tooltip {
-  left: 0;
-  transform: none;
-}
-.usage-bar-column:last-child .usage-bar-tooltip {
-  left: auto;
-  right: 0;
-  transform: none;
-}
-.usage-bar-column:is(:hover, :focus-visible) .usage-bar-tooltip {
-  opacity: 1;
 }
 .usage-chart figcaption {
   display: flex;
@@ -473,7 +445,7 @@
   font-size: 13px;
 }
 .usage-primary:hover {
-  background: #33352f;
+  background: var(--control-hover-ink);
 }
 .usage-skeleton {
   display: block;
@@ -557,7 +529,7 @@
   .usage-controls label {
     width: 100%;
   }
-  .usage-controls select {
+  .usage-controls .app-select {
     flex: 1;
   }
   .usage-card {

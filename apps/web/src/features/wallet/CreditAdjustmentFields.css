@@ -1,0 +1,292 @@
+.admin-credit-field {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 18px;
+  min-width: 0;
+}
+.admin-credit-field > label {
+  font-size: 13px;
+  color: #6b6f6a;
+}
+.admin-credit-field .input {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 14px;
+  border: 1px solid #e8e5de;
+  border-radius: 10px;
+  background: #fbfaf8;
+  color: #1b1d1f;
+  font: inherit;
+}
+.admin-credit-field textarea {
+  resize: vertical;
+  min-height: 90px;
+}
+.admin-credit-field .input:focus-visible {
+  outline: none;
+  border-color: #b5461f;
+  box-shadow: 0 0 0 3px #b5461f24;
+}
+.admin-credit-field small {
+  color: #9a9d97;
+  line-height: 1.7;
+  font-size: 12px;
+}
+.admin-credit-amount-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.admin-credit-amount-row .input {
+  flex: 1;
+  width: 150px;
+  min-width: 100px;
+}
+.admin-credit-direction {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 10px;
+  background: #f0eee8;
+  gap: 2px;
+}
+.admin-credit-direction button {
+  border: 0;
+  background: none;
+  padding: 6px 18px;
+  border-radius: 8px;
+  color: #6b6f6a;
+}
+.admin-credit-direction button:hover:not(:disabled) {
+  color: #1b1d1f;
+}
+.admin-credit-direction button[aria-pressed='true'] {
+  color: #1b1d1f;
+  background: #fff;
+  box-shadow: 0 1px 2px #17181d0d;
+  font-weight: 600;
+}
+.admin-credit-quick-amounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.admin-credit-quick-amounts button {
+  border: 1px solid #e8e5de;
+  border-radius: 99px;
+  padding: 4px 12px;
+  background: #fff;
+  color: #6b6f6a;
+  font-size: 12px;
+}
+.admin-credit-quick-amounts button:hover:not(:disabled) {
+  color: #b5461f;
+  border-color: #b5461f;
+}
+.admin-credit-preview,
+.admin-code-issuance {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 20px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #f5e4da;
+  color: #6b6f6a;
+}
+.admin-credit-preview small {
+  display: block;
+  margin-top: 4px;
+  color: #a08a7d;
+  font-size: 11px;
+}
+.admin-credit-preview > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.admin-credit-preview strong,
+.admin-code-issuance strong {
+  font-size: 22px;
+  color: #1b1d1f;
+  overflow-wrap: anywhere;
+}
+.credit-adjustment-fields [data-direction='increase'] {
+  color: #2f7d4f;
+}
+.credit-adjustment-fields [data-direction='decrease'],
+.credit-adjustment-fields [data-direction='invalid'] {
+  color: #c0392b;
+}
+.credit-adjust-confirm {
+  display: grid;
+  gap: 16px;
+  text-align: left;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #3f434a;
+}
+.credit-confirm-details {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+.credit-confirm-details > div {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 12px;
+}
+.credit-confirm-details dt {
+  color: #8b8982;
+  font-size: 12px;
+}
+.credit-confirm-details dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.credit-confirm-details dd > strong {
+  color: #1b1d1f;
+  font-weight: 600;
+}
+.credit-confirm-email {
+  display: block;
+  margin-top: 2px;
+  color: #7a7872;
+  font-size: 12px;
+}
+.credit-confirm-details code {
+  color: #8b8982;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+}
+.credit-confirm-summary {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid #e8e5de;
+  border-radius: 12px;
+  background: #f7f6f2;
+  font-variant-numeric: tabular-nums;
+}
+.credit-confirm-amount,
+.credit-confirm-balance {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.credit-confirm-amount > span {
+  color: #6b6f6a;
+  font-size: 13px;
+}
+.credit-confirm-amount > strong {
+  color: #2f7d4f;
+  font-size: 26px;
+  font-weight: 650;
+  line-height: 1.3;
+}
+.credit-confirm-summary[data-direction='decrease']
+  .credit-confirm-amount
+  > strong {
+  color: #c0392b;
+}
+.credit-confirm-amount small {
+  margin-left: 5px;
+  font-size: 12px;
+  font-weight: 400;
+}
+.credit-confirm-balance {
+  color: #8b8982;
+  font-size: 12px;
+}
+.credit-confirm-balance > div {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.credit-confirm-balance strong {
+  color: #1b1d1f;
+  font-size: 15px;
+  font-weight: 600;
+}
+.credit-confirm-note {
+  white-space: pre-wrap;
+  max-height: 120px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.credit-confirm-note:focus-visible {
+  outline: 2px solid #b5461f;
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.credit-adjust-confirm .credit-confirm-footnote {
+  margin: 0;
+  padding-top: 12px;
+  border-top: 1px solid #eeece6;
+  color: #7a7872;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.user-management .user-credit-dialog {
+  width: min(620px, calc(100vw - 32px));
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+}
+.user-credit-dialog .credit-adjustment-fields {
+  margin-top: 2px;
+}
+.user-management .user-credit-dialog .admin-credit-field > label {
+  display: block;
+  font-size: 13px;
+  font-weight: 400;
+}
+.user-credit-dialog .credit-adjustment-fields button {
+  transition:
+    background var(--control-hover-duration, 140ms),
+    border-color var(--control-hover-duration, 140ms);
+}
+.credit-adjustment-fields button:where(:hover:not(:disabled)) {
+  background: var(--control-hover-surface);
+}
+.credit-adjustment-fields button[aria-pressed='true']:hover:not(:disabled) {
+  background: #fff;
+}
+.credit-adjustment-fields button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.credit-adjustment-fields button:focus-visible {
+  outline: 2px solid #b5461f;
+  outline-offset: 3px;
+}
+.credit-adjustment-fields .admin-credit-preview {
+  font-size: 13px;
+}
+.user-credit-dialog .credit-confirm-footnote {
+  margin: 0;
+}
+
+.user-management .user-credit-dialog .admin-credit-amount-row .input {
+  width: 0;
+  flex: 1 1 120px;
+  min-width: 100px;
+}
+.user-credit-dialog .admin-credit-field {
+  margin-bottom: 14px;
+}
+.user-credit-dialog .admin-credit-field:last-child {
+  margin-bottom: 0;
+}
+.user-credit-dialog .admin-credit-preview {
+  margin-bottom: 14px;
+}
+.user-credit-dialog .admin-confirm-target {
+  overflow-wrap: anywhere;
+}

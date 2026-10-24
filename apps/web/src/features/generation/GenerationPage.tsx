@@ -1,3 +1,5 @@
+import { useToast } from '../../components/Toast';
+import Select from '../../components/Select';
 import Feedback from '../../components/Feedback';
 import {
   useCallback,
@@ -137,6 +139,7 @@ export default function GenerationPage(props: Props) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [actionError, setActionError] = useState('');
+  const toast = useToast();
   const [feedback, setFeedback] = useState('');
   const [quote, setQuote] = useState<Schema['Quote']>();
   const [quoteError, setQuoteError] = useState('');
@@ -506,7 +509,7 @@ export default function GenerationPage(props: Props) {
         ),
       );
       setActionError('');
-      setFeedback('参数已填入，请检查报价后点击生成。');
+      toast.info('参数已填入', { description: '请检查报价后点击生成。' });
       document.getElementById('generation-prompt')?.focus();
     } catch (e) {
       if (mounted.current) setActionError(errorText(e));
@@ -618,7 +621,7 @@ export default function GenerationPage(props: Props) {
                 </div>
                 <label>
                   生成模型
-                  <select
+                  <Select
                     value={form.model_id}
                     onChange={(e) => changeModel(e.target.value)}
                   >
@@ -629,7 +632,7 @@ export default function GenerationPage(props: Props) {
                           {m.display_name}
                         </option>
                       ))}
-                  </select>
+                  </Select>
                 </label>
                 {maxRefs > 0 &&
                   (form.kind === 'video' ||
@@ -731,7 +734,7 @@ export default function GenerationPage(props: Props) {
                 <div className="gen-options">
                   <label>
                     质量
-                    <select
+                    <Select
                       value={form.quality}
                       onChange={(e) => edit({ quality: e.target.value })}
                     >
@@ -740,22 +743,22 @@ export default function GenerationPage(props: Props) {
                           {qualityNames[q] || q}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   </label>
                   <label>
                     画面比例
-                    <select
+                    <Select
                       value={form.ratio}
                       onChange={(e) => edit({ ratio: e.target.value })}
                     >
                       {model?.capabilities.ratios?.map((r) => (
                         <option key={r}>{r}</option>
                       ))}
-                    </select>
+                    </Select>
                   </label>
                   <label>
                     分辨率
-                    <select
+                    <Select
                       value={form.resolution}
                       onChange={(e) => edit({ resolution: e.target.value })}
                     >
@@ -769,12 +772,12 @@ export default function GenerationPage(props: Props) {
                         .map((r) => (
                           <option key={r}>{r}</option>
                         ))}
-                    </select>
+                    </Select>
                   </label>
                   {form.kind === 'image' ? (
                     <label>
                       生成数量
-                      <select
+                      <Select
                         value={form.n}
                         onChange={(e) => edit({ n: Number(e.target.value) })}
                       >
@@ -788,12 +791,12 @@ export default function GenerationPage(props: Props) {
                             </option>
                           ),
                         )}
-                      </select>
+                      </Select>
                     </label>
                   ) : (
                     <label>
                       视频时长
-                      <select
+                      <Select
                         value={form.seconds}
                         onChange={(e) =>
                           edit({ seconds: Number(e.target.value) })
@@ -804,7 +807,7 @@ export default function GenerationPage(props: Props) {
                             {s} 秒
                           </option>
                         ))}
-                      </select>
+                      </Select>
                     </label>
                   )}
                 </div>
@@ -1145,7 +1148,7 @@ export default function GenerationPage(props: Props) {
                   className={`gen-task ${selected?.id === job.id ? 'selected' : ''}`}
                   data-status={job.status}
                   aria-pressed={selected?.id === job.id}
-                  title={job.prompt}
+                  data-tip={job.prompt}
                   onKeyDown={(event) => {
                     if (
                       event.key === 'ContextMenu' ||
@@ -1195,7 +1198,7 @@ export default function GenerationPage(props: Props) {
                 <button
                   className="gen-task-more"
                   aria-label={`记录操作 ${job.prompt}`}
-                  title="记录操作"
+                  data-tip="记录操作"
                   aria-haspopup="menu"
                   aria-expanded={historyMenu?.job.id === job.id}
                   onClick={(event) => {

@@ -1,6 +1,6 @@
+import Select from '../../components/Select';
 import Feedback from '../../components/Feedback';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { Plus, RefreshCw } from 'lucide-react';
 import AdminDialog from '../upstream/AdminDialog';
 import type { AdminProps } from '../upstream/upstreamApi';
@@ -34,7 +34,7 @@ function BillingAdmin(props: AdminProps) {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [cursor, setCursor] = useState<string | null>();
-  const [tab, setTab] = useState('plans');
+  const [tab, setTab] = useState<'plans' | 'orders'>('plans');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -99,7 +99,6 @@ function BillingAdmin(props: AdminProps) {
         >
           订单管理
         </button>
-        <Link to="/admin/credits">兑换码与积分调整</Link>
       </nav>
       {error && (
         <Feedback
@@ -336,9 +335,9 @@ function PlanEditor(
           <div className="billing-form-grid">
             <label>
               类型
-              <select
+              <Select
                 aria-label="类型"
-                className="input"
+
                 value={p.kind}
                 onChange={(e) =>
                   patch({
@@ -349,19 +348,19 @@ function PlanEditor(
               >
                 <option value="PACK">一次性积分包</option>
                 <option value="MONTHLY">订阅套餐</option>
-              </select>
+              </Select>
             </label>
             <label>
               币种
-              <select
+              <Select
                 aria-label="币种"
-                className="input"
+
                 value={p.currency}
                 onChange={(e) => patch({ currency: e.target.value })}
               >
                 <option>CNY</option>
                 <option>USD</option>
-              </select>
+              </Select>
             </label>
             <label>
               价格（分）
@@ -436,15 +435,14 @@ function PlanEditor(
                 </label>
                 <label>
                   最高分辨率
-                  <select
-                    className="input"
+                  <Select
                     value={p.max_resolution}
                     onChange={(e) => patch({ max_resolution: e.target.value })}
                   >
                     <option>1K</option>
                     <option>2K</option>
                     <option>4K</option>
-                  </select>
+                  </Select>
                 </label>
                 <label>
                   新素材保留天数

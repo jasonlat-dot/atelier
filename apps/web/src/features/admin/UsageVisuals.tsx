@@ -109,6 +109,7 @@ export default function UsageVisuals({
                   key={day.day}
                   tabIndex={0}
                   aria-label={`${day.day}：${integer(day[metric])} ${metric === 'jobs' ? '个任务' : '积分'}`}
+                  data-tip={`${day.day}：${integer(day[metric])} ${metric === 'jobs' ? '个任务' : '积分'}`}
                   style={
                     {
                       '--usage-bar-height': `${(day[metric] / max) * 100}%`,
@@ -117,12 +118,6 @@ export default function UsageVisuals({
                 >
                   <span className="usage-bar">
                     <b>{day[metric] > 0 ? integer(day[metric]) : ''}</b>
-                  </span>
-                  <span className="usage-bar-tooltip">
-                    {day.day}
-                    <br />
-                    {integer(day[metric])}{' '}
-                    {metric === 'jobs' ? '个任务' : '积分'}
                   </span>
                 </div>
               ))}

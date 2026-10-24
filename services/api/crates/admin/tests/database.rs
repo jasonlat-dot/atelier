@@ -377,6 +377,7 @@ async fn violation_threshold_disables_and_notifies_but_preserves_last_active_sup
     let s = AdminService::new(db.clone());
     let d = s.user_detail(owner).await.unwrap();
     assert_eq!(d.user.status, "DISABLED");
+    assert!(d.pending_review);
     assert!(d.sessions.is_empty());
     assert!(s.jobs("", None, Some(owner), None).await.unwrap().items[0].cancel_requested);
     for _ in 0..5 {
@@ -403,6 +404,7 @@ async fn violation_threshold_disables_and_notifies_but_preserves_last_active_sup
         "ACTIVE"
     );
     assert_eq!(s.dashboard(7).await.unwrap().pending_reviews, 1);
+    assert!(!s.user_detail(owner).await.unwrap().pending_review);
     assert!(sqlx::query_scalar::<_, bool>(
         "SELECT cancel_requested FROM generation_jobs WHERE id=$1"
     )
@@ -664,4 +666,83 @@ async fn personal_usage_reports_real_period_totals_and_bounded_visible_history(d
         service.usage(owner, 0).await,
         Err(AdminError::Validation)
     ));
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+#[ignore = "Requires isolated PostgreSQL"]
+async fn job_status_counts_follow_search_and_owner_but_not_status_or_cursor(db: PgPool) {
+    let owner = user(&db, "USER").await;
+    let other = user(&db, "USER").await;
+    model(&db).await;
+    let statuses = [
+        "QUEUED",
+        "ROUTING",
+        "RUNNING",
+        "STORING",
+        "SUCCEEDED",
+        "PARTIAL",
+        "CANCELLED",
+        "FAILED",
+    ];
+    for (index, status) in statuses.iter().enumerate() {
+        let count = if index == 0 { 26 } else { 1 };
+        let terminal = index >= 4;
+        let settled = match *status {
+            "SUCCEEDED" => 10,
+            "PARTIAL" => 5,
+            _ => 0,
+        };
+        let released = if terminal { 10 - settled } else { 0 };
+        sqlx::query("INSERT INTO generation_jobs(owner_id,model_id,kind,model_revision,prompt,params,size,cost_per_output,n,cost,idempotency_key,request_hash,status,settled,released,finished_at) SELECT $1,'admin-fixture','image',1,'private prompt','{}','1024x1024',10,1,10,gen_random_uuid(),$2,$3,$4,$5,CASE WHEN $6 THEN now() ELSE NULL END FROM generate_series(1,$7::int)")
+            .bind(owner).bind(vec![3u8;32]).bind(status).bind(settled as i64).bind(released as i64).bind(terminal).bind(count)
+            .execute(&db).await.unwrap();
+    }
+    job(&db, other).await;
+    let service = AdminService::new(db);
+    let first = service
+        .jobs("PUBLIC fixture", None, Some(owner), None)
+        .await
+        .unwrap();
+    assert_eq!(first.items.len(), 25);
+    assert_eq!(first.counts["ALL"], 33);
+    assert_eq!(first.counts["QUEUED"], 26);
+    for status in &statuses[1..] {
+        assert_eq!(first.counts[*status], 1);
+    }
+    let second = service
+        .jobs("PUBLIC fixture", None, Some(owner), first.next_cursor)
+        .await
+        .unwrap();
+    assert_eq!(second.items.len(), 8);
+    assert_eq!(second.counts, first.counts);
+    assert!(second.next_cursor.is_none());
+    assert!(second
+        .items
+        .iter()
+        .all(|j| first.items.iter().all(|other| other.id != j.id)));
+    let failed = service
+        .jobs("PUBLIC fixture", Some("FAILED"), Some(owner), None)
+        .await
+        .unwrap();
+    assert_eq!(failed.items.len(), 1);
+    assert_eq!(failed.items[0].status, "FAILED");
+    assert_eq!(failed.counts, first.counts);
+    let one = service
+        .jobs(&failed.items[0].id.to_string(), None, None, None)
+        .await
+        .unwrap();
+    assert_eq!(one.counts["ALL"], 1);
+    assert_eq!(one.counts["FAILED"], 1);
+    assert_eq!(one.counts["QUEUED"], 0);
+    let empty = service
+        .jobs(&failed.items[0].id.to_string(), None, Some(other), None)
+        .await
+        .unwrap();
+    assert!(empty.items.is_empty());
+    assert_eq!(empty.counts.len(), 9);
+    assert!(empty.counts.values().all(|count| *count == 0));
+    assert_eq!(
+        service.jobs("", None, None, None).await.unwrap().counts["ALL"],
+        34
+    );
 }

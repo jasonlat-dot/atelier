@@ -15,3 +15,5 @@ test-results/
 *.tsbuildinfo
 services/api/data/
 /apps/web/public/ui-register/
+/apps/web/public/assets/登录页@2x.png
+/apps/web/public/assets/管理员身份验证.png

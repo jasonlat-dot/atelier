@@ -1,4 +1,6 @@
+import { useToast } from '../../components/Toast';
 import Feedback from '../../components/Feedback';
+import DatePicker from '../../components/DatePicker';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AdminProps } from '../upstream/upstreamApi';
@@ -495,7 +497,7 @@ function InviteForm(
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
   const [code, setCode] = useState('');
-  const [copied, setCopied] = useState('');
+  const toast = useToast();
   const [uncertain, setUncertain] = useState(false);
   async function save() {
     setBusy(true);
@@ -566,21 +568,20 @@ function InviteForm(
           </label>
           <button
             className="btn btn-dark"
-            onClick={() =>
-              void navigator.clipboard
-                .writeText(code)
-                .then(() => setCopied('已复制'))
-                .catch(() => setCopied('复制失败，请选中上方内容手动复制。'))
-            }
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(code);
+                toast('邀请码已复制');
+              } catch {
+                toast.error('复制失败', {
+                  description: '请选中邀请码手动复制。',
+                });
+              }
+            }}
           >
             复制邀请码
           </button>
-          <Feedback
-            onDismiss={() => setCopied('')}
-            variant={copied === '已复制' ? 'success' : 'error'}
-          >
-            {copied}
-          </Feedback>
+
           <button className="btn btn-light" onClick={props.onClose}>
             已保存，关闭
           </button>
@@ -628,14 +629,15 @@ function InviteForm(
               </label>
               <label>
                 过期时间（本地时间）
-                <input
-                  className="input"
-                  type="datetime-local"
+                <DatePicker
                   value={expiry}
                   onChange={(e) => setExpiry(e.target.value)}
                   disabled={uncertain}
                 />
-                <small>留空表示长期有效；设置时必须晚于当前时间。</small>
+                <small>
+                  按本地时间选择，保存为
+                  UTC；留空长期有效，设置时必须晚于当前时间。
+                </small>
               </label>
             </>
           )}

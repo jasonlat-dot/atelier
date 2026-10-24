@@ -73,7 +73,7 @@ test('settings uses server session, sends CSRF, confirms revocation and clears l
   await page.getByLabel('显示名').fill('Renamed');
   await page.getByRole('button', { name: '保存资料' }).click();
   await expect(page.getByText('显示名已更新')).toBeVisible();
-  await dismissFeedback(page);
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
   await expect(
     page.getByText('Current browser', { exact: true }),
   ).toBeVisible();

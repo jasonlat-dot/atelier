@@ -1,3 +1,4 @@
+import Select from '../../components/Select';
 import Feedback from '../../components/Feedback';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -577,7 +578,7 @@ function ModelForm({
       <div className="up-grid">
         <label>
           模型类型
-          <select
+          <Select
             value={kind}
             disabled={!!m}
             onChange={(e) => {
@@ -590,7 +591,7 @@ function ModelForm({
                 {n}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         <label>
           排序值
@@ -700,13 +701,13 @@ function ModelForm({
           )}
           <label>
             尺寸模式
-            <select
+            <Select
               value={caps.size_mode}
               onChange={(e) => setCaps({ ...caps, size_mode: e.target.value })}
             >
               <option value="flex">按比例计算尺寸</option>
               <option value="enum">固定尺寸集合</option>
-            </select>
+            </Select>
           </label>
           {caps.size_mode === 'enum' && (
             <label>

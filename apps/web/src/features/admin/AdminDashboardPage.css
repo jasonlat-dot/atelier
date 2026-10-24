@@ -69,7 +69,7 @@
   color: var(--ops-secondary);
   font-size: 12px;
 }
-.ops-page .ops-controls select,
+.ops-page .ops-controls .app-select,
 .ops-page .ops-button {
   min-height: 39px;
   padding: 9px 14px;
@@ -81,6 +81,9 @@
   font-size: 13px;
   white-space: nowrap;
   cursor: pointer;
+}
+.ops-controls .app-select {
+  width: auto;
 }
 .ops-page .ops-button {
   display: inline-flex;
@@ -101,7 +104,7 @@
   cursor: not-allowed;
   opacity: 0.45;
 }
-.ops-page :is(button, select, a, [tabindex]):focus-visible {
+.ops-page :is(button, .app-select, a, [tabindex]):focus-visible {
   outline: 2px solid var(--ops-ink);
   outline-offset: 3px;
 }
@@ -195,12 +198,35 @@
 }
 .ops-page .ops-metrics {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr) minmax(
+      0,
+      1.2fr
+    );
+  align-items: stretch;
   gap: 16px;
   margin-bottom: 16px;
 }
 .ops-page .ops-metric {
-  padding: 20px;
+  padding: 18px;
+}
+.ops-page .ops-user-metrics {
+  display: grid;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+.ops-page .ops-metric-compact {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  align-content: center;
+  gap: 4px 10px;
+  padding: 14px 16px;
+}
+.ops-page .ops-main-column {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
 }
 .ops-page .ops-metric h2 {
   display: flex;
@@ -233,6 +259,24 @@
 .ops-page .ops-metric-highlight {
   background: #f5e4da;
   border-color: #ebd3c5;
+}
+.ops-page .ops-metric-compact h2 {
+  grid-column: 1;
+  font-size: 12px;
+}
+.ops-page .ops-metric-compact h2 svg {
+  display: none;
+}
+.ops-page .ops-metric-compact > strong {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  margin: 0;
+  font-size: 28px;
+  text-align: right;
+}
+.ops-page .ops-metric-compact p {
+  grid-column: 1;
+  margin: 0;
 }
 .ops-page .ops-task-stack {
   display: flex;
@@ -335,35 +379,6 @@
 .ops-page .ops-bar-column:is(:hover, :focus-visible) .ops-bar {
   background: #7e9a83;
 }
-.ops-page .ops-bar-tooltip {
-  position: absolute;
-  z-index: 2;
-  top: 6px;
-  left: 50%;
-  transform: translateX(-50%);
-  border-radius: 7px;
-  padding: 7px 10px;
-  background: var(--ops-ink);
-  color: #fff;
-  font-size: 11px;
-  line-height: 1.6;
-  text-align: center;
-  white-space: nowrap;
-  opacity: 0;
-  pointer-events: none;
-}
-.ops-page .ops-bar-column:is(:hover, :focus-visible) .ops-bar-tooltip {
-  opacity: 1;
-}
-.ops-page .ops-bar-column:first-child .ops-bar-tooltip {
-  left: 0;
-  transform: none;
-}
-.ops-page .ops-bar-column:last-child .ops-bar-tooltip {
-  left: auto;
-  right: 0;
-  transform: none;
-}
 .ops-page .ops-chart figcaption {
   display: flex;
   justify-content: space-between;
@@ -384,6 +399,31 @@
 .ops-page .ops-distribution h3 {
   margin-bottom: 16px;
   color: var(--ops-secondary);
+  font-weight: 500;
+}
+.ops-page .ops-metrics .ops-distribution {
+  padding: 18px;
+}
+.ops-page .ops-metrics .ops-distribution .ops-card-heading {
+  margin-bottom: 12px;
+}
+.ops-page .ops-metrics .ops-distribution h2 {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ops-secondary);
+}
+.ops-page .ops-metrics .ops-distribution .ops-card-heading p {
+  font-size: 11px;
+  color: var(--ops-tertiary);
+}
+.ops-page .ops-metrics .ops-qualities {
+  gap: 12px;
+}
+.ops-page .ops-metrics .ops-quality > div {
+  font-size: 12px;
+}
+.ops-page .ops-metrics .ops-quality strong {
+  font-size: 11px;
   font-weight: 500;
 }
 .ops-page .ops-qualities {
@@ -630,6 +670,13 @@
   }
   .ops-page .ops-metric > strong {
     font-size: 30px;
+  }
+  .ops-page .ops-metric-compact {
+    padding: 12px;
+    column-gap: 6px;
+  }
+  .ops-page .ops-metric-compact > strong {
+    font-size: 26px;
   }
   .ops-page .ops-review {
     padding: 18px;

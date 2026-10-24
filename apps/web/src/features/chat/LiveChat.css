@@ -148,7 +148,7 @@
   min-width: 0;
   flex-wrap: wrap;
 }
-.live-chat .composer-actions select {
+.live-chat .composer-actions .app-select {
   max-width: 160px;
   border: 0;
   background: #eff2ec;

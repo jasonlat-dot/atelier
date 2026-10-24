@@ -1,3 +1,4 @@
+import Tooltip from '../../components/Tooltip';
 import { useEffect, useState } from 'react';
 import {
   ArrowDown,
@@ -128,10 +129,12 @@ export default function WalletLedger({
               {daily.map((day, i) => {
                 const height = (day.consumed / max) * 52;
                 return (
-                  <g key={day.day}>
-                    <title>
-                      {day.day}：{integer(day.consumed)} 积分
-                    </title>
+                  <g
+                    key={day.day}
+                    tabIndex={0}
+                    data-tip={`${day.day}：${integer(day.consumed)} 积分`}
+                    aria-label={`${day.day}：${integer(day.consumed)} 积分`}
+                  >
                     <rect
                       x={i * 32 + 5}
                       y={56 - height}
@@ -172,15 +175,16 @@ export default function WalletLedger({
             </button>
           ))}
         </div>
-        <button
-          className="wallet-refresh icon-btn"
-          title="刷新积分"
-          aria-label="刷新积分"
-          disabled={busy || loading}
-          onClick={onRefresh}
-        >
-          <RefreshCw size={15} />
-        </button>
+        <Tooltip content="刷新积分">
+          <button
+            className="wallet-refresh icon-btn"
+            aria-label="刷新积分"
+            disabled={busy || loading}
+            onClick={onRefresh}
+          >
+            <RefreshCw size={15} />
+          </button>
+        </Tooltip>
       </div>
       <p className="wallet-ledger-scope">
         {cursor

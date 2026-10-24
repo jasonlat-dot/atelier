@@ -1,3 +1,4 @@
+import { chooseSelect, selectOptions } from './selectTestHelpers';
 import { dismissFeedback } from './feedbackTestHelpers';
 import { test, expect, type Page } from '@playwright/test';
 const png =
@@ -479,11 +480,13 @@ test('authoritative quote, tier and model capabilities drive an idempotent submi
   page,
 }) => {
   const f = await fixture(page);
-  await expect(page.getByLabel('分辨率').locator('option')).toHaveText([
+  await expect(await selectOptions(page.getByLabel('分辨率'))).toHaveText([
     '1K',
     '2K',
   ]);
-  await expect(page.getByLabel('生成数量').locator('option')).toHaveCount(3);
+  await page.keyboard.press('Escape');
+  await expect(await selectOptions(page.getByLabel('生成数量'))).toHaveCount(3);
+  await page.keyboard.press('Escape');
   await page.getByLabel('画面描述').fill('海边日落');
   const submit = page.getByRole('button', { name: '生成图片', exact: true });
   await expect(submit).toBeEnabled();
@@ -532,10 +535,11 @@ test('reference selection and video parameters obey actual model capabilities', 
     { asset_id: image.id, role: 'reference' },
   ]);
   await page.getByRole('button', { name: '视频', exact: true }).click();
-  await expect(page.getByLabel('视频时长').locator('option')).toHaveText([
+  await expect(await selectOptions(page.getByLabel('视频时长'))).toHaveText([
     '4 秒',
     '8 秒',
   ]);
+  await page.keyboard.press('Escape');
   await expect(page.getByLabel('生成数量')).toHaveCount(0);
   await expect(page.locator('.gen-ref-list img')).toHaveCount(0);
 });
@@ -544,7 +548,7 @@ test('SSE refreshes partial results and wallet, preview downloads use stored med
 }, info) => {
   const f = await fixture(page);
   await page.getByLabel('画面描述').fill('海边日落');
-  await page.getByLabel('生成数量').selectOption('3');
+  await chooseSelect(page.getByLabel('生成数量'), '3');
   await page.getByRole('button', { name: '生成图片', exact: true }).click();
   await expect(page.getByRole('button', { name: '取消任务' })).toBeVisible();
   f.state.jobs[0] = {
@@ -575,8 +579,10 @@ test('SSE refreshes partial results and wallet, preview downloads use stored med
   );
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: '复用参数' }).click();
-  await expect(page.getByRole('alertdialog')).toContainText('参数已填入');
-  await dismissFeedback(page);
+  await expect(page.locator('.app-toast [role="status"]')).toContainText(
+    '参数已填入',
+  );
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
   expect(f.writes).toHaveLength(1);
   await page.setViewportSize({ width: 1440, height: 950 });
   await page.locator('.app-content').evaluate((el) => {
@@ -660,7 +666,7 @@ test('quote failures use an overlay and retry only refreshes the price', async (
     }
     return route.fallback();
   });
-  await page.getByLabel('生成数量').selectOption('2');
+  await chooseSelect(page.getByLabel('生成数量'), '2');
   const feedback = page.getByRole('alertdialog');
   await expect(feedback).toContainText('暂时无法获取报价');
   await expect(

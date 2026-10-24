@@ -113,8 +113,8 @@
 }
 
 .account-settings .settings-button-primary:hover:not(:disabled) {
-  border-color: #34363b;
-  background: #34363b;
+  border-color: var(--control-hover-ink);
+  background: var(--control-hover-ink);
 }
 
 .account-settings .settings-button:disabled {

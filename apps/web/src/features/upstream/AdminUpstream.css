@@ -177,7 +177,7 @@
   color: #565a61;
 }
 .up-form input:not([type='checkbox']),
-.up-form select,
+.up-form .app-select,
 .up-form textarea,
 .up-price-input {
   border: 1px solid #deded8;
@@ -191,7 +191,7 @@
   font: inherit;
 }
 .up-form input:focus,
-.up-form select:focus,
+.up-form .app-select:focus,
 .up-form textarea:focus,
 .up-price-input:focus {
   outline: 2px solid #90ab9c;

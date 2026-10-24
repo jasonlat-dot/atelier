@@ -1,5 +1,5 @@
 use crate::{LedgerEntry, WalletError};
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::NaiveDate;
 use serde_json::Value;
 use sqlx::{Connection, PgConnection, Row};
 use uuid::Uuid;
@@ -243,7 +243,7 @@ pub(crate) async fn ledger(
     cursor: Option<i64>,
     limit: i64,
 ) -> Result<Vec<LedgerEntry>, WalletError> {
-    Ok(sqlx::query_as("SELECT id,type,balance_delta,held_delta,reason,created_at FROM credit_ledger WHERE user_id=$1 AND ($2::bigint IS NULL OR id<$2) ORDER BY id DESC LIMIT $3")
+    Ok(sqlx::query_as("SELECT id,type,balance_delta,held_delta,ref_type,ref_id,reason,created_at FROM credit_ledger WHERE user_id=$1 AND ($2::bigint IS NULL OR id<$2) ORDER BY id DESC LIMIT $3")
         .bind(owner).bind(cursor).bind(limit).fetch_all(db).await?)
 }
 pub(crate) async fn signup(db: &mut PgConnection, owner: Uuid) -> Result<i64, WalletError> {
@@ -273,20 +273,20 @@ pub(crate) async fn consume_code(db: &mut PgConnection, code: Uuid) -> Result<()
 }
 pub(crate) async fn insert_code(
     db: &mut PgConnection,
+    id: Uuid,
     actor: Uuid,
     hash: &[u8],
-    credits: i64,
-    uses: i32,
-    expires: Option<DateTime<Utc>>,
+    encrypted: &[u8],
+    params: &crate::CreateCodesRequest,
 ) -> Result<Uuid, WalletError> {
-    Ok(sqlx::query_scalar("INSERT INTO redeem_codes(code_hash,credits,max_uses,expires_at,created_by) VALUES($1,$2,$3,$4,$5) RETURNING id")
-        .bind(hash).bind(credits).bind(uses).bind(expires).bind(actor).fetch_one(db).await?)
+    Ok(sqlx::query_scalar("INSERT INTO redeem_codes(id,code_hash,code_enc,credits,max_uses,expires_at,created_by) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id")
+        .bind(id).bind(hash).bind(encrypted).bind(params.credits).bind(params.max_uses).bind(params.expires_at).bind(actor).fetch_one(db).await?)
 }
 pub(crate) async fn codes(
     db: &mut PgConnection,
     cursor: Option<Uuid>,
 ) -> Result<Vec<crate::CodeInfo>, WalletError> {
-    Ok(sqlx::query_as("SELECT id,credits,max_uses,used_count,expires_at,created_at FROM redeem_codes WHERE ($1::uuid IS NULL OR id<$1) ORDER BY id DESC LIMIT 50")
+    Ok(sqlx::query_as("SELECT id,credits,max_uses,used_count,expires_at,created_at,(code_enc IS NOT NULL) AS copyable FROM redeem_codes WHERE ($1::uuid IS NULL OR (created_at,id)<(SELECT created_at,id FROM redeem_codes WHERE id=$1)) ORDER BY created_at DESC,id DESC LIMIT 50")
         .bind(cursor).fetch_all(db).await?)
 }
 pub(crate) async fn reconcile(db: &mut PgConnection) -> Result<Vec<Uuid>, WalletError> {

@@ -51,43 +51,83 @@ const personal = [
   { path: '/usage', label: '用量分析', icon: ChartColumn, ready: true },
   { path: '/settings', label: '账号设置', icon: Settings, ready: true },
 ];
-const admin = [
-  { path: '/admin', label: '运营总览', icon: ChartColumn, ready: true },
-  { path: '/admin/users', label: '用户管理', icon: Users, ready: true },
+type NavigationGroup = {
+  label: string;
+  items: typeof creation;
+  requiredRole?: 'ADMIN' | 'SUPER_ADMIN';
+};
+const adminGroups: NavigationGroup[] = [
   {
-    path: '/admin/plans',
-    label: '套餐与订单',
-    icon: CircleDollarSign,
-    ready: true,
-  },
-  { path: '/admin/jobs', label: '任务管理', icon: Sparkles, ready: true },
-  {
-    path: '/admin/policy',
-    label: '内容与邀请',
-    icon: ShieldCheck,
-    ready: true,
-  },
-  { path: '/admin/settings', label: '平台设置', icon: Settings, ready: true },
-  { path: '/admin/audit', label: '审计日志', icon: ShieldCheck, ready: true },
-  {
-    path: '/admin/credits',
-    label: '积分管理',
-    icon: CircleDollarSign,
-    ready: true,
+    label: '运营管理',
+    requiredRole: 'ADMIN',
+    items: [
+      { path: '/admin', label: '运营总览', icon: ChartColumn, ready: true },
+      { path: '/admin/users', label: '用户管理', icon: Users, ready: true },
+      { path: '/admin/jobs', label: '任务管理', icon: Sparkles, ready: true },
+      {
+        path: '/admin/policy',
+        label: '内容与邀请',
+        icon: ShieldCheck,
+        ready: true,
+      },
+    ],
   },
   {
-    path: '/admin/models',
-    label: '模型与定价',
-    icon: SlidersHorizontal,
-    ready: true,
+    label: '财务管理',
+    requiredRole: 'ADMIN',
+    items: [
+      {
+        path: '/admin/plans',
+        label: '套餐与订单',
+        icon: CircleDollarSign,
+        ready: true,
+      },
+      {
+        path: '/admin/credits',
+        label: '积分管理',
+        icon: CircleDollarSign,
+        ready: true,
+      },
+    ],
   },
   {
-    path: '/admin/accounts',
-    label: '上游账号池',
-    icon: ShieldCheck,
-    ready: true,
+    label: '生成服务',
+    requiredRole: 'ADMIN',
+    items: [
+      {
+        path: '/admin/models',
+        label: '模型与定价',
+        icon: SlidersHorizontal,
+        ready: true,
+      },
+      {
+        path: '/admin/accounts',
+        label: '上游账号池',
+        icon: ShieldCheck,
+        ready: true,
+      },
+    ],
+  },
+  {
+    label: '系统管理',
+    requiredRole: 'SUPER_ADMIN',
+    items: [
+      {
+        path: '/admin/settings',
+        label: '平台设置',
+        icon: Settings,
+        ready: true,
+      },
+      {
+        path: '/admin/audit',
+        label: '审计日志',
+        icon: ShieldCheck,
+        ready: true,
+      },
+    ],
   },
 ];
+const admin = adminGroups.flatMap((group) => group.items);
 
 export default function WorkspaceShell({
   me,
@@ -105,11 +145,6 @@ export default function WorkspaceShell({
   const [failed, setFailed] = useState(false);
   const version = useRef(0);
   const location = useLocation();
-  const adminMore = useRef<HTMLDetailsElement>(null);
-  useEffect(() => {
-    if (admin.slice(3).some((item) => item.path === location.pathname))
-      adminMore.current?.setAttribute('open', '');
-  }, [location.pathname]);
   const update = useCallback((value: Summary) => {
     ++version.current;
     setSummary(value);
@@ -139,22 +174,17 @@ export default function WorkspaceShell({
   const closeOnMobile = () => {
     if (window.innerWidth <= 900) setOpen(false);
   };
-  const groups = [
-    ['创作空间', creation],
-    ['账户与资产', personal],
+  const groups: NavigationGroup[] = [
+    { label: '创作空间', items: creation },
+    { label: '账户与资产', items: personal },
     ...(me.user.role === 'USER'
       ? []
-      : [
-          [
-            '运营管理',
-            admin.filter(
-              (item) =>
-                me.user.role === 'SUPER_ADMIN' ||
-                !['/admin/settings', '/admin/audit'].includes(item.path),
-            ),
-          ],
-        ]),
-  ] as [string, typeof creation][];
+      : adminGroups.filter(
+          (group) =>
+            me.user.role === 'SUPER_ADMIN' ||
+            (me.user.role === 'ADMIN' && group.requiredRole === 'ADMIN'),
+        )),
+  ];
   const initial = me.user.display_name.trim().slice(0, 1).toUpperCase();
   return (
     <BalanceContext.Provider value={update}>
@@ -200,59 +230,43 @@ export default function WorkspaceShell({
             新建创作空间
           </Link>
           <nav className="navigation" aria-label="主导航">
-            {groups.map(([label, items]) => (
-              <section key={label}>
-                <div className="nav-group">{label}</div>
-                {items
-                  .slice(0, label === '运营管理' ? 3 : items.length)
-                  .map((item) =>
-                    item.ready ? (
-                      <NavLink
-                        key={item.path}
-                        end
-                        to={item.path}
-                        className={({ isActive }) =>
-                          `nav-link ${isActive ? 'active' : ''}`
-                        }
-                        onClick={closeOnMobile}
-                      >
-                        <item.icon size={16} />
-                        <span>{item.label}</span>
-                      </NavLink>
-                    ) : (
-                      <span
-                        key={item.path}
-                        className="nav-link nav-pending"
-                        aria-disabled="true"
-                      >
-                        <item.icon size={16} />
-                        <span>{item.label}</span>
-                        <small>待开放</small>
-                      </span>
-                    ),
+            {groups.map(({ label, items, requiredRole }) => (
+              <section key={label} aria-label={label}>
+                <div className="nav-group">
+                  <span>{label}</span>
+                  {requiredRole && (
+                    <span className="nav-role-badge" data-role={requiredRole}>
+                      {requiredRole === 'SUPER_ADMIN'
+                        ? '超级管理员专属'
+                        : '管理员专属'}
+                    </span>
                   )}
-                {label === '运营管理' && items.length > 3 && (
-                  <details className="workspace-more" ref={adminMore}>
-                    <summary aria-label="更多管理功能">
-                      更多 {items.length - 3} 项<ChevronRight size={14} />
-                    </summary>
-                    <div>
-                      {items.slice(3).map((item) => (
-                        <NavLink
-                          key={item.path}
-                          end
-                          to={item.path}
-                          className={({ isActive }) =>
-                            `nav-link ${isActive ? 'active' : ''}`
-                          }
-                          onClick={closeOnMobile}
-                        >
-                          <item.icon size={16} />
-                          <span>{item.label}</span>
-                        </NavLink>
-                      ))}
-                    </div>
-                  </details>
+                </div>
+                {items.map((item) =>
+                  item.ready ? (
+                    <NavLink
+                      key={item.path}
+                      end
+                      to={item.path}
+                      className={({ isActive }) =>
+                        `nav-link ${isActive ? 'active' : ''}`
+                      }
+                      onClick={closeOnMobile}
+                    >
+                      <item.icon size={16} />
+                      <span>{item.label}</span>
+                    </NavLink>
+                  ) : (
+                    <span
+                      key={item.path}
+                      className="nav-link nav-pending"
+                      aria-disabled="true"
+                    >
+                      <item.icon size={16} />
+                      <span>{item.label}</span>
+                      <small>待开放</small>
+                    </span>
+                  ),
                 )}
               </section>
             ))}
@@ -324,9 +338,10 @@ export default function WorkspaceShell({
             </div>
             <div className="topbar-right">
               <div
+                tabIndex={0}
                 className="topbar-search"
                 aria-disabled="true"
-                title="搜索即将开放"
+                data-tip="搜索即将开放"
               >
                 <Search size={15} />
                 <span>搜索项目、素材与功能</span>

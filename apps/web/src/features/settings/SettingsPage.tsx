@@ -1,3 +1,4 @@
+import { useToast } from '../../components/Toast';
 import Feedback, { useConfirmNotice } from '../../components/Feedback';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -17,36 +18,7 @@ import {
   type Me,
 } from '../auth/sessionApi';
 import './SettingsPage.css';
-
-function deviceDetails(agent: string | null | undefined) {
-  const ua = agent || '';
-  const browser = [
-    ['Edge', /Edg(?:e|A|iOS)?\/([\d.]+)/],
-    ['Opera', /(?:OPR|Opera)\/([\d.]+)/],
-    ['Firefox', /(?:Firefox|FxiOS)\/([\d.]+)/],
-    ['Chrome', /(?:Chrome|CriOS)\/([\d.]+)/],
-    ['Safari', /Version\/([\d.]+).*Safari/],
-  ] as const;
-  const detected = browser.find(([, pattern]) => pattern.test(ua));
-  const version = detected?.[1].exec(ua)?.[1].split('.')[0];
-  const os = /Android/i.test(ua)
-    ? 'Android'
-    : /iPhone|iPad|iPod/i.test(ua)
-      ? 'iOS'
-      : /Windows/i.test(ua)
-        ? 'Windows'
-        : /Macintosh|Mac OS X/i.test(ua)
-          ? 'macOS'
-          : /Linux/i.test(ua)
-            ? 'Linux'
-            : '';
-  return {
-    title: detected
-      ? `${detected[0]}${version ? ` ${version}` : ''}${os ? ` · ${os}` : ''}`
-      : ua || '未知设备',
-    mobile: /Android|iPhone|iPad|iPod|Mobile/i.test(ua),
-  };
-}
+import { deviceDetails } from '../auth/deviceDetails';
 
 export default function SettingsPage({
   me,
@@ -64,6 +36,7 @@ export default function SettingsPage({
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const toast = useToast();
   const [message, setMessage] = useState('');
   const confirm = useConfirmNotice();
   const confirming = useRef(false);
@@ -122,7 +95,7 @@ export default function SettingsPage({
       const updated = await sessionApi.rename(name.trim(), me.csrf_token);
       onChange(updated);
       setName(updated.user.display_name);
-      setMessage('显示名已更新');
+      toast('显示名已更新');
     } catch (error) {
       failed(error);
     } finally {
@@ -330,7 +303,10 @@ export default function SettingsPage({
                     </span>
                     <div className="settings-device-info">
                       <div className="settings-device-title">
-                        <strong title={device.user_agent || '未知设备'}>
+                        <strong
+                          tabIndex={0}
+                          data-tip={device.user_agent || '未知设备'}
+                        >
                           {detail.title}
                         </strong>
                         {device.current && (

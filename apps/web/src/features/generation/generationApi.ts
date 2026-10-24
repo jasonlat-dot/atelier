@@ -69,15 +69,22 @@ export const statuses: Record<string, string> = {
 export const failures: Record<string, string> = {
   CONTENT_POLICY: '内容未通过审核，请修改描述后重新生成。',
   NO_CAPACITY: '暂时没有可用账号，请稍后再试。',
-  TIMEOUT: '生成超时，未产出的积分已退回。',
-  WORKER_LOST: '任务执行中断，未产出的积分已退回。',
-  STORAGE_FAILED: '结果保存失败，未产出的积分已退回。',
+  TIMEOUT: '生成超时，请稍后重试。',
+  WORKER_LOST: '任务执行中断，请稍后重试。',
+  STORAGE_FAILED: '结果保存失败，请稍后重试。',
   ACCOUNT_INVALID: '生成服务暂不可用，请稍后再试。',
-  UPSTREAM_ERROR: '生成服务暂时异常，未产出的积分已退回。',
+  UPSTREAM_ERROR: '生成服务暂时异常，请稍后重试。',
   RATE_LIMITED: '生成服务繁忙，请稍后再试。',
   MODEL_UNAVAILABLE: '模型配置已变更或暂不可用，请重新选择模型。',
   ASSET_UNAVAILABLE: '参考图片已删除或过期，请重新选择。',
-  LOCAL_ERROR: '生成处理暂时失败，未产出的积分已退回。',
+  LOCAL_ERROR: '生成处理暂时失败，请稍后重试。',
+  ACCOUNT_DISABLED: '账号已被停用，任务已停止。',
   MODEL_CHANGED: '模型配置已更新，请重新选择模型。',
   BAD_REQUEST: '模型不支持当前参数，请调整后重试。',
 };
+
+export function failureDescription(code?: string | null): string {
+  return code && Object.prototype.hasOwnProperty.call(failures, code)
+    ? failures[code]
+    : '任务未能完成，请稍后重试或联系管理员。';
+}

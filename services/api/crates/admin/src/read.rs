@@ -101,17 +101,40 @@ impl AdminService {
         }) {
             return Err(AdminError::Validation);
         }
+        let mut tx = self.db.begin().await?;
+        sqlx::query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
+            .execute(&mut *tx)
+            .await?;
+        let rows: Vec<(String, i64)> = sqlx::query_as("SELECT j.status,count(*) FROM generation_jobs j JOIN users u ON u.id=j.owner_id JOIN models m ON m.id=j.model_id WHERE strpos(lower(j.id::text||' '||u.email||' '||m.display_name),lower($1))>0 AND ($2::uuid IS NULL OR j.owner_id=$2) GROUP BY j.status")
+            .bind(q).bind(owner).fetch_all(&mut *tx).await?;
+        let mut counts: std::collections::BTreeMap<String, i64> = [
+            "ALL",
+            "QUEUED",
+            "ROUTING",
+            "RUNNING",
+            "STORING",
+            "SUCCEEDED",
+            "PARTIAL",
+            "CANCELLED",
+            "FAILED",
+        ]
+        .into_iter()
+        .map(|status| (status.into(), 0))
+        .collect();
+        let total = rows.iter().map(|(_, count)| count).sum();
+        counts.extend(rows);
+        counts.insert("ALL".into(), total);
         let mut query = sqlx::QueryBuilder::<sqlx::Postgres>::new(JOB_SELECT);
-        query.push(" ");
-        query.push("WHERE strpos(lower(j.id::text||' '||u.email||' '||m.display_name),lower($1))>0 AND ($2::text IS NULL OR j.status=$2) AND ($3::uuid IS NULL OR j.owner_id=$3) AND ($4::uuid IS NULL OR (j.created_at,j.id)<(SELECT created_at,id FROM generation_jobs WHERE id=$4)) ORDER BY j.created_at DESC,j.id DESC LIMIT 26");
+        query.push(" WHERE strpos(lower(j.id::text||' '||u.email||' '||m.display_name),lower($1))>0 AND ($2::text IS NULL OR j.status=$2) AND ($3::uuid IS NULL OR j.owner_id=$3) AND ($4::uuid IS NULL OR (j.created_at,j.id)<(SELECT created_at,id FROM generation_jobs WHERE id=$4)) ORDER BY j.created_at DESC,j.id DESC LIMIT 26");
         let mut items: Vec<AdminJob> = query
             .build_query_as()
             .bind(q)
             .bind(status)
             .bind(owner)
             .bind(before)
-            .fetch_all(&self.db)
+            .fetch_all(&mut *tx)
             .await?;
+        tx.commit().await?;
         let more = items.len() > 25;
         items.truncate(25);
         let next_cursor = if more {
@@ -119,7 +142,11 @@ impl AdminService {
         } else {
             None
         };
-        Ok(AdminJobPage { items, next_cursor })
+        Ok(AdminJobPage {
+            items,
+            next_cursor,
+            counts,
+        })
     }
     pub async fn audit_logs(
         &self,

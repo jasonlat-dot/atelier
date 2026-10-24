@@ -1,3 +1,5 @@
+import { useToast } from '../../components/Toast';
+import Select from '../../components/Select';
 import Feedback from '../../components/Feedback';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from 'zustand';
@@ -118,6 +120,7 @@ export default function LiveCanvasEditor({
   const [status, setStatus] = useState<SaveStatus>('saved'),
     [error, setError] = useState(''),
     [notice, setNotice] = useState('');
+  const toast = useToast();
   const [readonly, setReadonly] = useState(window.innerWidth < 1024),
     [pan, setPan] = useState(true),
     [space, setSpace] = useState(false);
@@ -179,11 +182,11 @@ export default function LiveCanvasEditor({
             ? data.n
             : 1,
       });
-      setNotice('已填入对话草稿，请核对参数后点击生成。');
+      toast.info('已填入对话草稿', { description: '请核对参数后点击生成。' });
     } catch {
       setError('对话草稿格式无效，请重新输入描述。');
     }
-  }, [search]);
+  }, [search, toast]);
   const [busy, setBusy] = useState(false),
     [picker, setPicker] = useState(false),
     [preview, setPreview] = useState<Asset>();
@@ -597,7 +600,9 @@ export default function LiveCanvasEditor({
       (n) => ids.includes(n.id) && (n.type === 'text' || n.type === 'image'),
     );
     if (!inputs.length) {
-      setNotice('选择文字或图片，再创建关联的生成节点。');
+      toast.info('请先选择参考内容', {
+        description: '选择文字或图片，再创建关联的生成节点。',
+      });
       return;
     }
     const catalog = queries.getQueryData<Schema['Catalog']>(['canvas-catalog']);
@@ -636,11 +641,14 @@ export default function LiveCanvasEditor({
     store.getState().select([id]);
     setCreatorOpen(true);
     setMenu(undefined);
-    setNotice(
-      kind && !model
-        ? `已连接节点；请先在模型管理中配置${kind === 'video' ? '视频' : '图片'}模型。`
-        : '已连接所选提示词与参考图。核对参数和积分后点击生成。',
-    );
+    toast.show({
+      title: kind && !model ? '已连接节点' : '已连接所选提示词与参考图',
+      description:
+        kind && !model
+          ? `请先在模型管理中配置${kind === 'video' ? '视频' : '图片'}模型。`
+          : '核对参数和积分后点击生成。',
+      type: kind && !model ? 'warning' : 'info',
+    });
     void flow.fitView({
       nodes: inputs.map((n) => ({ id: n.id })).concat({ id }),
       padding: 0.22,
@@ -747,7 +755,6 @@ export default function LiveCanvasEditor({
         void queries.invalidateQueries({
           queryKey: ['canvas-jobs', me.user.id, info.id],
         });
-        setCreatorOpen(false);
         setNotice('生成任务已提交，结果会自动连回画布。');
       } catch (e) {
         if (e instanceof SessionError && e.status < 500)
@@ -886,14 +893,12 @@ export default function LiveCanvasEditor({
         });
       if (!e.ctrlKey && !e.metaKey && e.shiftKey && e.key === '!') {
         e.preventDefault();
-        setCreatorOpen(false);
         void flow.fitView({ padding: 0.2, duration: 200 });
         return;
       }
       if (e.shiftKey && (e.code === 'Digit1' || e.code === 'Digit0')) {
         e.preventDefault();
         if (e.code === 'Digit1') {
-          setCreatorOpen(false);
           void flow.fitView({ padding: 0.2, duration: 200 });
         } else void flow.zoomTo(1, { duration: 160 });
         return;
@@ -1105,7 +1110,6 @@ export default function LiveCanvasEditor({
       edit: setEditingNode,
       derive: (id: string) => derive([id]),
       info: (id: string) => {
-        setCreatorOpen(false);
         store.getState().select([id]);
         setTab('properties');
         setInspector(true);
@@ -1175,7 +1179,9 @@ export default function LiveCanvasEditor({
       link.download = `${info.name.replace(/[\\/:*?"<>|]/g, '_')}.zip`;
       link.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-      setNotice('项目 ZIP 已导出，包含图数据与可用素材原文件。');
+      toast.success('项目 ZIP 已导出', {
+        description: '包含图数据与可用素材原文件。',
+      });
     });
   const saveCopy = () =>
     void action(async () => {
@@ -1280,7 +1286,8 @@ export default function LiveCanvasEditor({
               无限画布
             </Link>
             <span className="slash">/</span>
-            <select
+            <Select
+              size="sm"
               aria-label="切换画布"
               className="live-project-switch"
               value={info.id}
@@ -1294,7 +1301,7 @@ export default function LiveCanvasEditor({
                     {p.name}
                   </option>
                 ))}
-            </select>
+            </Select>
             <button
               aria-label="重命名当前画布"
               onClick={() => setRename(info.name)}
@@ -1450,9 +1457,7 @@ export default function LiveCanvasEditor({
               onNodeDragStop={() => store.getState().end()}
               onConnect={onConnect}
               onEdgeClick={() => store.getState().select([])}
-              onClickConnectStart={() => setCreatorOpen(false)}
               onConnectStart={(event) => {
-                setCreatorOpen(false);
                 const p = 'touches' in event ? event.touches[0] : event;
                 if (p) connectStart.current = { x: p.clientX, y: p.clientY };
               }}
@@ -1467,9 +1472,10 @@ export default function LiveCanvasEditor({
                     state.fromHandle?.type === 'target'
                       ? state.fromNode.id
                       : state.toNode.id;
-                  setNotice(
+                  toast(
                     connectionIssue(store.getState().graph, source, target) ||
                       '请连接对应的输入和输出端口。',
+                    'info',
                   );
                   return;
                 }
@@ -1575,10 +1581,9 @@ export default function LiveCanvasEditor({
                   (event.target as HTMLElement).closest('.react-flow__handle')
                 )
                   return;
-                setCreatorOpen(node.data.node.type === 'generate');
+                if (node.data.node.type === 'generate') setCreatorOpen(true);
               }}
               onPaneClick={() => {
-                setCreatorOpen(false);
                 store.getState().select([]);
                 setEdgeSelection([]);
                 setMenu(undefined);
@@ -1698,7 +1703,6 @@ export default function LiveCanvasEditor({
                   className="icon-btn"
                   aria-label="适应画布"
                   onClick={() => {
-                    setCreatorOpen(false);
                     void flow.fitView({ padding: 0.2 });
                   }}
                 >
@@ -1707,7 +1711,7 @@ export default function LiveCanvasEditor({
                 <button
                   className="icon-btn"
                   aria-label="100%"
-                  title="回到 100%（Shift+0）"
+                  data-tip="回到 100%（Shift+0）"
                   onClick={() => void flow.zoomTo(1)}
                 >
                   <RotateCcw size={14} />
@@ -1932,7 +1936,7 @@ export default function LiveCanvasEditor({
                               : [...current, n.id]
                             : [n.id],
                         );
-                      setCreatorOpen(n.type === 'generate');
+                      if (n.type === 'generate') setCreatorOpen(true);
                       void flow.setCenter(
                         n.position.x + n.size.width / 2,
                         n.position.y + n.size.height / 2,
@@ -2079,8 +2083,9 @@ export default function LiveCanvasEditor({
                                 );
                                 if (asset) {
                                   addGenerator(quick, [asset]);
-                                  setNotice(
+                                  toast(
                                     '参考图已连接到新的生成节点，请选择参数后生成。',
+                                    'info',
                                   );
                                 }
                               }}
@@ -2132,9 +2137,9 @@ export default function LiveCanvasEditor({
               <label className="field-label" htmlFor="canvas-background">
                 画布背景
               </label>
-              <select
+              <Select
                 id="canvas-background"
-                className="select"
+
                 value={graph.background}
                 disabled={readonly}
                 onChange={(e) =>
@@ -2147,7 +2152,7 @@ export default function LiveCanvasEditor({
                 <option value="dots">点阵</option>
                 <option value="lines">网格</option>
                 <option value="none">无背景</option>
-              </select>
+              </Select>
               {selectedNode &&
                 graph.edges.some(
                   (e) =>
@@ -2175,9 +2180,9 @@ export default function LiveCanvasEditor({
                             )}
                           </span>
                           {['reference', 'first', 'last'].includes(e.role) && (
-                            <select
+                            <Select
                               aria-label="参考帧用途"
-                              className="select"
+
                               value={e.role}
                               disabled={readonly}
                               onChange={(ev) =>
@@ -2198,7 +2203,7 @@ export default function LiveCanvasEditor({
                               <option value="reference">参考图</option>
                               <option value="first">首帧</option>
                               <option value="last">尾帧（暂不可用）</option>
-                            </select>
+                            </Select>
                           )}
                           <button
                             className="icon-btn"

@@ -1,0 +1,260 @@
+.app-select {
+  --select-surface: #fff;
+  --select-muted: #f0eee8;
+  --select-border: #e8e5de;
+  --select-text: #1b1d1f;
+  --select-secondary: #9a9d97;
+  --select-accent: #b5461f;
+  position: relative;
+  display: inline-flex;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  vertical-align: middle;
+  color: var(--select-text);
+  font: inherit;
+}
+/* Legacy page classes provide layout only; the shared trigger owns its appearance. */
+.app-select.app-select.app-select {
+  height: auto;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  min-height: 0;
+  box-shadow: none;
+}
+.app-select.app-select .app-select-trigger.app-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  height: 100%;
+  margin: 0;
+  padding: 9px 10px 9px 14px;
+  border: 1px solid var(--select-border);
+  border-radius: 10px;
+  background: var(--select-surface);
+  color: var(--select-text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    border-color 150ms,
+    box-shadow 150ms;
+}
+.app-select.app-select .app-select-trigger:hover:not(:disabled) {
+  border-color: #d8cfc4;
+}
+.app-select.app-select .app-select-trigger:focus-visible,
+.app-select.app-select[data-open='true'] .app-select-trigger {
+  outline: none;
+  border-color: var(--select-accent);
+  box-shadow: 0 0 0 3px #b5461f24;
+}
+.app-select.app-select[data-size='sm'] .app-select-trigger {
+  min-height: 32px;
+  padding: 5px 8px 5px 12px;
+  font-size: 13px;
+}
+.app-select.app-select[data-invalid='true'] .app-select-trigger {
+  border-color: #c0392b;
+}
+.app-select.app-select[data-invalid='true'] .app-select-trigger:focus-visible,
+.app-select.app-select[data-invalid='true'][data-open='true']
+  .app-select-trigger {
+  box-shadow: 0 0 0 3px #c0392b24;
+}
+.app-select.app-select .app-select-trigger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--select-muted);
+}
+.app-select.app-select .app-select-value {
+  display: block;
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+}
+.app-select.app-select .app-select-value[data-placeholder='true'] {
+  color: var(--select-secondary);
+}
+.app-select .app-select-arrow {
+  flex: 0 0 16px;
+  color: var(--select-secondary);
+  transition: transform 150ms;
+}
+.app-select[data-open='true'] .app-select-arrow {
+  transform: rotate(180deg);
+  color: var(--select-text);
+}
+.app-select-native[hidden] {
+  display: none !important;
+}
+.app-select > .tooltip-disabled-trigger {
+  width: 100%;
+}
+.app-select-menu {
+  position: fixed;
+  inset: auto;
+  z-index: 1100;
+  display: none;
+  flex-direction: column;
+  width: max-content;
+  max-width: calc(100vw - 16px);
+  max-height: 338px;
+  margin: 0;
+  padding: 6px;
+  border: 1px solid #e8e5de;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 12px 32px #17181d24;
+  color: #1b1d1f;
+  font:
+    14px/1.5 Inter,
+    'Noto Sans SC',
+    'PingFang SC',
+    'Microsoft YaHei',
+    system-ui,
+    sans-serif;
+  overflow: hidden;
+  box-sizing: border-box;
+  overscroll-behavior: contain;
+}
+.app-select-menu:popover-open {
+  display: flex;
+}
+.app-select-menu[data-ready='false'] {
+  visibility: hidden;
+}
+.app-select-menu[data-ready='true'] {
+  animation: select-enter 120ms ease-out;
+}
+.app-select-menu[data-placement='top'] {
+  --select-offset: 4px;
+}
+.app-select-menu[data-placement='bottom'] {
+  --select-offset: -4px;
+}
+@keyframes select-enter {
+  from {
+    opacity: 0;
+    transform: translateY(var(--select-offset));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.app-select-menu .app-select-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 280px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.app-select-menu .app-select-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+  margin-bottom: 6px;
+  padding: 0 10px;
+  border: 1px solid #e8e5de;
+  border-radius: 8px;
+  background: #fbfaf8;
+  color: #9a9d97;
+}
+.app-select-menu .app-select-search-wrap:focus-within {
+  border-color: #b5461f;
+}
+.app-select-menu .app-select-search {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  margin: 0;
+  padding: 6px 0;
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  box-shadow: none;
+  background: transparent;
+  color: #1b1d1f;
+  font: inherit;
+}
+.app-select-menu .app-select-group {
+  padding: 8px 10px 4px;
+  color: #9a9d97;
+  font-size: 12px;
+  font-weight: 600;
+}
+.app-select-menu .app-select-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.app-select-menu .app-select-option[data-active='true'] {
+  background: #f0eee8;
+}
+.app-select-menu .app-select-option[aria-selected='true'] {
+  font-weight: 600;
+}
+.app-select-menu .app-select-option[aria-disabled='true'] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.app-select-menu .app-select-option-label {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.app-select-menu .app-select-description {
+  flex-shrink: 0;
+  max-width: 45%;
+  color: #9a9d97;
+  font-size: 12px;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+.app-select-menu .app-select-check {
+  flex-shrink: 0;
+  color: #b5461f;
+  visibility: hidden;
+}
+.app-select-menu .app-select-option[aria-selected='true'] .app-select-check {
+  visibility: visible;
+}
+.app-select-menu .app-select-empty {
+  padding: 14px 10px;
+  color: #9a9d97;
+  font-size: 13px;
+  text-align: center;
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-select-menu[data-ready='true'] {
+    animation: none;
+  }
+  .app-select.app-select .app-select-trigger,
+  .app-select .app-select-arrow {
+    transition: none;
+  }
+}

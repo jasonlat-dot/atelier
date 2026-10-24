@@ -1,0 +1,101 @@
+.app-tooltip {
+  --tooltip-ink: #17181d;
+  --tooltip-title: #fff;
+  --tooltip-description: #d9dbd6;
+  --tooltip-radius: 10px;
+  --tooltip-shadow: 0 8px 24px rgb(23 24 29 / 22%);
+  --tooltip-font:
+    Inter, 'Noto Sans SC', 'Microsoft YaHei', 'PingFang SC', system-ui,
+    sans-serif;
+  position: fixed;
+  inset: auto;
+  left: 0;
+  top: 0;
+  z-index: 1000;
+  width: max-content;
+  max-width: min(280px, calc(100vw - 16px));
+  margin: 0;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: var(--tooltip-radius);
+  background: var(--tooltip-ink);
+  color: var(--tooltip-title);
+  font: 12.5px/1.5 var(--tooltip-font);
+  text-align: left;
+  box-shadow: var(--tooltip-shadow);
+  box-sizing: border-box;
+  overflow: visible;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity 150ms ease,
+    transform 150ms ease;
+}
+.app-tooltip[data-placement='bottom'] {
+  transform: translateY(-4px);
+}
+.app-tooltip[data-ready='true'] {
+  opacity: 1;
+  transform: none;
+}
+.app-tooltip-content {
+  max-height: calc(100dvh - 32px);
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+.app-tooltip b {
+  display: block;
+  margin: 0 0 2px;
+  font-size: inherit;
+  font-weight: 600;
+  color: var(--tooltip-title);
+}
+.app-tooltip b + span {
+  color: var(--tooltip-description);
+}
+.app-tooltip::after {
+  content: '';
+  position: absolute;
+  left: var(--tooltip-arrow, 50%);
+  width: 8px;
+  height: 8px;
+  background: var(--tooltip-ink);
+  transform: translateX(-50%) rotate(45deg);
+}
+.app-tooltip[data-placement='top']::after {
+  bottom: -4px;
+}
+.app-tooltip[data-placement='bottom']::after {
+  top: -4px;
+}
+.tooltip-disabled-trigger {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  vertical-align: middle;
+  cursor: not-allowed;
+}
+.tooltip-disabled-trigger > :disabled {
+  pointer-events: none;
+}
+.tooltip-disabled-trigger:focus-visible {
+  outline: 2px solid #17181d;
+  outline-offset: 3px;
+  border-radius: 10px;
+}
+.tooltip-hint {
+  border-bottom: 1px dashed #9a9d97;
+  cursor: help;
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-tooltip {
+    transition: none;
+  }
+}
+@media (hover: none) {
+  .app-tooltip {
+    display: none;
+  }
+}

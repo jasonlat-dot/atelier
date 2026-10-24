@@ -6,12 +6,14 @@ export default function AdminDialog({
   onClose,
   busy = false,
   drawer = false,
+  className = '',
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   busy?: boolean;
   drawer?: boolean;
+  className?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
@@ -28,7 +30,7 @@ export default function AdminDialog({
   return (
     <dialog
       ref={ref}
-      className={`up-dialog ${drawer ? 'up-drawer' : ''}`}
+      className={`up-dialog ${drawer ? 'up-drawer' : ''} ${className}`}
       aria-labelledby={titleId}
       aria-modal="true"
       aria-busy={busy}

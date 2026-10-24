@@ -155,7 +155,7 @@
 }
 
 .mfa-card .btn-dark:hover:not(:disabled) {
-  background: #344354;
+  background: #334151;
 }
 
 .mfa-card .btn:active:not(:disabled) {
@@ -446,8 +446,8 @@
   color: #fff;
 }
 
-.mfa-feedback-actions .btn-dark:hover {
-  background: #303030;
+.mfa-feedback-actions .btn-dark:hover:not(:disabled) {
+  background: var(--control-hover-ink);
 }
 
 @media (max-width: 600px) {

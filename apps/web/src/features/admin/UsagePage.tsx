@@ -1,3 +1,4 @@
+import Select from '../../components/Select';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
@@ -12,7 +13,11 @@ function Delta({ current, previous }: { current: number; previous?: number }) {
   if (!previous || current === previous) return null;
   const change = ((current - previous) / previous) * 100;
   return (
-    <span className="usage-delta" title="与上一个等长 UTC 时段比较">
+    <span
+      tabIndex={0}
+      className="usage-delta"
+      data-tip="与上一个等长 UTC 时段比较"
+    >
       {change > 0 ? '↑' : '↓'}{' '}
       {Math.abs(change).toLocaleString('zh-CN', { maximumFractionDigits: 1 })}%
     </span>
@@ -77,7 +82,7 @@ export default function UsagePage(props: AdminProps) {
         </div>
         <div className="usage-controls">
           <label htmlFor="usage-period">统计时段</label>
-          <select
+          <Select
             id="usage-period"
             value={days}
             onChange={(event) => setDays(Number(event.target.value))}
@@ -86,7 +91,7 @@ export default function UsagePage(props: AdminProps) {
             <option value={14}>最近 14 天</option>
             <option value={30}>最近 30 天</option>
             <option value={90}>最近 90 天</option>
-          </select>
+          </Select>
           <button
             className="usage-refresh"
             disabled={query.isFetching}
@@ -188,10 +193,14 @@ export default function UsagePage(props: AdminProps) {
                       </time>
                     </td>
                     <td className="usage-prompt">
-                      <span title={task.prompt}>{task.prompt}</span>
+                      <span tabIndex={0} data-tip={task.prompt}>
+                        {task.prompt}
+                      </span>
                     </td>
                     <td className="usage-model">
-                      <span title={task.display_name}>{task.display_name}</span>
+                      <span tabIndex={0} data-tip={task.display_name}>
+                        {task.display_name}
+                      </span>
                     </td>
                     <td>{qualityLabel(task.quality)}</td>
                     <td>
@@ -201,7 +210,11 @@ export default function UsagePage(props: AdminProps) {
                         {statuses[task.status] || task.status}
                       </span>
                     </td>
-                    <td className="usage-num" title="已结算积分">
+                    <td
+                      tabIndex={0}
+                      className="usage-num"
+                      data-tip="已结算积分"
+                    >
                       {integer(task.settled)}
                     </td>
                   </tr>

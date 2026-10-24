@@ -74,6 +74,7 @@ export function AdminFrame({
   onRefresh,
   children,
   tools,
+  className = '',
 }: {
   title: string;
   description: string;
@@ -81,9 +82,10 @@ export function AdminFrame({
   onRefresh?: () => void;
   children: ReactNode;
   tools?: ReactNode;
+  className?: string;
 }) {
   return (
-    <main className="page-padding admin-console">
+    <main className={`page-padding admin-console ${className}`}>
       <header className="admin-title">
         <div>
           <div className="eyebrow">ATELIER / MANAGEMENT</div>

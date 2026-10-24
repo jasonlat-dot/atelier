@@ -288,7 +288,7 @@
   min-width: 100px;
   overflow-wrap: anywhere;
 }
-.live-edge-row .select {
+.live-edge-row .app-select {
   width: auto;
   font-size: 11px;
   padding: 5px;
@@ -596,25 +596,6 @@
   box-shadow: 0 0 0 2px #5c927d40;
   border-radius: 50%;
 }
-.live-canvas .node-port::after {
-  content: attr(data-port-label);
-  display: none;
-  position: absolute;
-  top: -27px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 3px 6px;
-  border-radius: 4px;
-  background: #263b30;
-  color: #fff;
-  font-size: 11px;
-  line-height: 18px;
-  white-space: nowrap;
-  pointer-events: none;
-}
-.live-canvas .node-port:hover::after {
-  display: block;
-}
 .live-canvas .react-flow__edge.selected .react-flow__edge-path {
   stroke: #345e4a;
 }
@@ -883,38 +864,7 @@
   position: relative;
   overflow: visible;
 }
-.canvas-tool-hint {
-  position: absolute;
-  bottom: calc(100% + 12px);
-  left: 50%;
-  transform: translateX(-50%);
-  border: 1px solid #e1e5df;
-  border-radius: 7px;
-  background: #fff;
-  box-shadow: 0 3px 12px #142a1c14;
-  color: #3b493f;
-  padding: 6px 9px;
-  font-size: 11px;
-  font-weight: 400;
-  line-height: 1.4;
-  white-space: nowrap;
-  pointer-events: none;
-  visibility: hidden;
-  opacity: 0;
-  transition: opacity 100ms;
-  z-index: 50;
-}
-.canvas-hint-button:hover .canvas-tool-hint,
-.canvas-hint-button:focus-visible .canvas-tool-hint {
-  visibility: visible;
-  opacity: 1;
-  transition-delay: 200ms;
-}
-@media (prefers-reduced-motion: reduce) {
-  .canvas-tool-hint {
-    transition: none;
-  }
-}
+
 .canvas-layer-count {
   font-size: 11px;
   color: #7b837d;

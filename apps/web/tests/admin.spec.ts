@@ -175,8 +175,38 @@ async function mock(page: Page, role = 'SUPER_ADMIN') {
       };
       return ok(state.settings);
     }
-    if (path === '/admin/jobs')
-      return ok({ items: state.jobs, next_cursor: null });
+    if (path === '/admin/jobs') {
+      const scoped = state.jobs.filter(
+        (job) =>
+          (!url.searchParams.get('user_id') ||
+            job.owner_id === url.searchParams.get('user_id')) &&
+          (!url.searchParams.get('q') ||
+            `${job.id} ${job.email} ${job.display_name}`
+              .toLowerCase()
+              .includes(url.searchParams.get('q')!.toLowerCase())),
+      );
+      const counts: Record<string, number> = { ALL: scoped.length };
+      for (const status of [
+        'QUEUED',
+        'ROUTING',
+        'RUNNING',
+        'STORING',
+        'SUCCEEDED',
+        'PARTIAL',
+        'CANCELLED',
+        'FAILED',
+      ])
+        counts[status] = scoped.filter((job) => job.status === status).length;
+      return ok({
+        items: scoped.filter(
+          (job) =>
+            !url.searchParams.get('status') ||
+            job.status === url.searchParams.get('status'),
+        ),
+        next_cursor: null,
+        counts,
+      });
+    }
     if (path === `/admin/jobs/${jobId}/refund`) {
       state.keys.push(req.headers()['idempotency-key']);
       state.bodies.push(req.postDataJSON());
@@ -314,10 +344,20 @@ test('ordinary users cannot mount admin requests and can see only own usage', as
 test('administrator has no settings or audit surface', async ({ page }) => {
   const state = await mock(page, 'ADMIN');
   await page.goto('/admin/settings');
+  await expect(page.getByText('管理员专属', { exact: true })).toHaveCount(3);
+  await expect(page.getByText('超级管理员专属', { exact: true })).toHaveCount(
+    0,
+  );
   await expect(page.getByRole('heading', { name: '无权访问' })).toBeVisible();
   await expect(
     page.getByRole('link', { name: '平台设置', exact: true }),
   ).toHaveCount(0);
+  await expect(
+    page.getByRole('region', { name: '系统管理', exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('link', { name: '上游账号池', exact: true }),
+  ).toBeVisible();
   await page.goto('/admin/audit');
   await expect(page.getByRole('heading', { name: '无权访问' })).toBeVisible();
   expect(state.requests.some((p) => p.includes('/admin/'))).toBe(false);
@@ -339,10 +379,24 @@ test('user pagination search and credit confirmation preserve financial retry', 
   await page.getByRole('button', { name: '调整积分', exact: true }).click();
   const modal = page.getByRole('dialog', { name: '调整积分', exact: true });
   await modal.getByLabel('调整积分', { exact: false }).fill('7');
-  await modal.getByLabel('处理说明').fill('补充验收积分');
+  await modal.getByRole('button', { name: '扣减', exact: true }).click();
+  await modal.getByLabel('调整积分', { exact: true }).fill('36');
+  await expect(
+    modal.getByRole('button', { name: '核对调整', exact: true }),
+  ).toBeDisabled();
+  await modal.getByRole('button', { name: '+10', exact: true }).click();
+  await expect(
+    modal.getByRole('button', { name: '增加', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await modal.getByLabel('调整积分', { exact: true }).fill('7');
+  await modal.getByRole('combobox', { name: '调整原因' }).click();
+  await page.getByRole('option', { name: '运营奖励', exact: true }).click();
+  await modal.getByLabel('补充说明').fill('补充验收积分');
   await modal.getByRole('button', { name: '核对调整', exact: true }).click();
   expect(state.keys).toHaveLength(0);
-  await expect(modal).toContainText('调整后预计可用 42');
+  await expect(modal.locator('.credit-confirm-balance')).toContainText('35');
+  await expect(modal.locator('.credit-confirm-balance')).toContainText('42');
+  await expect(modal).toContainText('运营奖励');
   await modal
     .getByRole('button', { name: '确认调整积分', exact: true })
     .click();
@@ -512,4 +566,181 @@ test('dashboard and settings remain contained on desktop and mobile', async ({
     path: test.info().outputPath('m9-settings-mobile.png'),
     fullPage: true,
   });
+});
+
+test('job status cards filter the list and preserve counts in the search scope', async ({
+  page,
+}) => {
+  const state = await mock(page);
+  await page.goto('/admin/jobs');
+  const cards = page.getByRole('region', { name: '任务状态筛选' });
+  await expect(cards.getByRole('button')).toHaveCount(9);
+  expect(
+    await cards
+      .getByRole('button')
+      .evaluateAll((buttons) =>
+        buttons.map((button) => button.getAttribute('aria-label')),
+      ),
+  ).toEqual([
+    '全部任务',
+    '已完成',
+    '已取消',
+    '已失败',
+    '部分完成',
+    '排队中',
+    '正在分配',
+    '生成中',
+    '正在保存',
+  ]);
+
+  await expect(
+    cards.getByRole('button', { name: '全部任务', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await expect(
+    cards
+      .getByRole('button', { name: '已完成', exact: true })
+      .locator('strong'),
+  ).toHaveText('1');
+  await cards.getByRole('button', { name: '已失败', exact: true }).click();
+  await expect
+    .poll(() => state.requests.some((r) => r.includes('status=FAILED')))
+    .toBe(true);
+  await expect(
+    page.getByRole('table').getByText('Studio Image', { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    cards
+      .getByRole('button', { name: '已完成', exact: true })
+      .locator('strong'),
+  ).toHaveText('1');
+  await expect(
+    cards
+      .getByRole('button', { name: '已失败', exact: true })
+      .locator('strong'),
+  ).toHaveText('0');
+  await cards.getByRole('button', { name: '全部任务', exact: true }).click();
+  await expect(
+    page.getByRole('table').getByText('Studio Image', { exact: true }),
+  ).toBeVisible();
+  await page.getByRole('searchbox', { name: '搜索任务' }).fill('nonexistent');
+  await page.getByRole('button', { name: '搜索', exact: true }).click();
+  await expect(
+    cards
+      .getByRole('button', { name: '全部任务', exact: true })
+      .locator('strong'),
+  ).toHaveText('0');
+});
+
+test('clipboard success uses an unobtrusive toast on pages and inside user details', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: async () => {} },
+    });
+  });
+  await mock(page);
+  await page.goto('/admin/jobs');
+  const copy = page.getByRole('button', {
+    name: `复制任务 ID ${jobId}`,
+    exact: true,
+  });
+  await copy.click();
+  await expect(page.locator('.app-toast [role="status"]')).toHaveText(
+    '任务 ID 已复制',
+  );
+  await expect(page.locator('.app-toast-viewport')).toHaveAttribute(
+    'data-position',
+    'top-center',
+  );
+  await expect(page.locator('.app-toast-progress')).toBeVisible();
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
+  await expect(copy).toBeFocused();
+  await copy.click();
+  await expect(page.locator('.app-toast')).toHaveCount(1);
+  await page
+    .getByRole('searchbox', { name: '搜索任务' })
+    .fill('still editable');
+  await expect(page.locator('.app-toast')).toHaveCount(0, { timeout: 6000 });
+  await page.goto('/admin/users');
+  await page.getByRole('button', { name: '查看用户', exact: true }).click();
+  const details = page.getByRole('dialog', { name: '用户详情', exact: true });
+  const copyUser = details.getByRole('button', {
+    name: '复制用户 ID',
+    exact: true,
+  });
+  await copyUser.click();
+  await expect(details.locator('.app-toast [role="status"]')).toHaveText(
+    '用户 ID 已复制',
+  );
+  await expect(details.locator('.app-toast-viewport')).toHaveJSProperty(
+    'popover',
+    'manual',
+  );
+  await expect(copyUser).toBeFocused();
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
+  await details.getByRole('button', { name: '关闭提示', exact: true }).click();
+  await expect(page.locator('.app-toast')).toHaveCount(0);
+  await expect(details).toBeVisible();
+});
+
+test('job email opens user details in place and has a separate copy action', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: async (text: string) => {
+          Object.assign(window, { copiedEmail: text });
+        },
+      },
+    });
+  });
+  const state = await mock(page);
+  await page.goto(`/admin/jobs?user=${owner}`);
+  const cards = page.getByRole('region', { name: '任务状态筛选' });
+  await cards.getByRole('button', { name: '已完成', exact: true }).click();
+  await page.getByRole('searchbox', { name: '搜索任务' }).fill('creator');
+  await page.getByRole('button', { name: '搜索', exact: true }).click();
+  await page
+    .getByRole('button', { name: `复制邮箱 ${person.email}`, exact: true })
+    .click();
+  await expect(page.locator('.app-toast [role="status"]')).toHaveText(
+    '邮箱已复制',
+  );
+  expect(await page.evaluate(() => Reflect.get(window, 'copiedEmail'))).toBe(
+    person.email,
+  );
+  await expect(
+    page.getByRole('dialog', { name: '用户详情', exact: true }),
+  ).toHaveCount(0);
+  expect(
+    state.requests.some((request) => request.includes(`/admin/users/${owner}`)),
+  ).toBe(false);
+  const before = page.url();
+  await page
+    .getByRole('button', { name: `查看用户 ${person.email}`, exact: true })
+    .click();
+  const details = page.getByRole('dialog', { name: '用户详情', exact: true });
+  await expect(
+    details.getByRole('heading', { name: '创作者', exact: true }),
+  ).toBeVisible();
+  expect(page.url()).toBe(before);
+  expect(
+    state.requests.some((request) => request.startsWith('GET /admin/users?')),
+  ).toBe(false);
+  await details.getByRole('button', { name: '关闭弹窗', exact: true }).click();
+  await expect(details).toHaveCount(0);
+  await expect(page.getByRole('searchbox', { name: '搜索任务' })).toHaveValue(
+    'creator',
+  );
+  await expect(
+    cards.getByRole('button', { name: '已完成', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await expect(
+    page.getByRole('button', { name: `查看用户 ${person.email}`, exact: true }),
+  ).toBeFocused();
+  expect(page.url()).toBe(before);
 });

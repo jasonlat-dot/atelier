@@ -17,6 +17,8 @@ pub enum WalletError {
     InvalidCode,
     #[error("Wallet not found")]
     NotFound,
+    #[error("This legacy redeem code has no recoverable copy")]
+    CodeNotRecoverable,
     #[error("Wallet service unavailable")]
     Store,
 }
@@ -35,6 +37,7 @@ impl From<sqlx::Error> for WalletError {
 #[derive(Clone)]
 pub struct WalletService {
     pool: PgPool,
+    code_cipher: Option<RedeemCodeCipher>,
 }
 pub enum Operation<'a> {
     Grant { amount: i64, key: &'a str },
@@ -44,7 +47,14 @@ pub enum Operation<'a> {
 }
 impl WalletService {
     pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+        Self {
+            pool,
+            code_cipher: None,
+        }
+    }
+    pub fn with_code_cipher(mut self, cipher: RedeemCodeCipher) -> Self {
+        self.code_cipher = Some(cipher);
+        self
     }
     /// Run after migrations using the owning deployment role. FK row locks work;
     /// financial-column updates, deletes and truncation remain denied, and the
@@ -429,19 +439,22 @@ impl WalletService {
         {
             return Err(WalletError::Validation);
         }
+        let cipher = self.code_cipher.as_ref().ok_or(WalletError::Store)?;
         let mut tx = self.pool.begin().await?;
         let mut codes = Vec::new();
         for _ in 0..params.count {
             let mut bytes = [0u8; 32];
             getrandom::fill(&mut bytes).map_err(|_| WalletError::Store)?;
             let code = URL_SAFE_NO_PAD.encode(bytes);
+            let id = Uuid::new_v4();
+            let encrypted = cipher.seal(id, &code)?;
             let id = repo::insert_code(
                 &mut tx,
+                id,
                 actor,
                 &Sha256::digest(code.as_bytes()),
-                params.credits,
-                params.max_uses,
-                params.expires_at,
+                &encrypted,
+                params,
             )
             .await?;
             codes.push(CreatedCode { id, code });
@@ -452,6 +465,38 @@ impl WalletService {
     }
     pub async fn codes(&self, cursor: Option<Uuid>) -> Result<Vec<CodeInfo>, WalletError> {
         repo::codes(&mut *self.pool.acquire().await?, cursor).await
+    }
+    pub async fn reveal_code(&self, actor: Uuid, id: Uuid) -> Result<CreatedCode, WalletError> {
+        let cipher = self.code_cipher.as_ref().ok_or(WalletError::Store)?;
+        let mut tx = self.pool.begin().await?;
+        let (encrypted, hash): (Option<Vec<u8>>, Vec<u8>) =
+            sqlx::query_as("SELECT code_enc,code_hash FROM redeem_codes WHERE id=$1")
+                .bind(id)
+                .fetch_optional(&mut *tx)
+                .await?
+                .ok_or(WalletError::NotFound)?;
+        let encrypted = encrypted.ok_or(WalletError::CodeNotRecoverable)?;
+        let code = cipher.open(id, &encrypted)?;
+        if Sha256::digest(code.as_bytes()).as_slice() != hash {
+            return Err(WalletError::Store);
+        }
+        repo::audit(
+            &mut tx,
+            actor,
+            "REDEEM_CODE_REVEALED",
+            &id.to_string(),
+            json!({"code_id":id}),
+        )
+        .await?;
+        tx.commit().await?;
+        Ok(CreatedCode {
+            id,
+            code: code.to_string(),
+        })
+    }
+    pub async fn adjustments(&self) -> Result<Vec<CreditAdjustment>, WalletError> {
+        Ok(sqlx::query_as("SELECT a.id,a.target_id AS user_id,u.display_name,u.email,o.email AS operator,(a.after->>'amount')::bigint AS amount,a.after->>'reason' AS reason,a.created_at FROM audit_logs a JOIN users u ON u.id::text=a.target_id JOIN users o ON o.id=a.actor_id WHERE a.action='WALLET_ADJUST' AND a.target_type='wallet' ORDER BY a.id DESC LIMIT 5")
+            .fetch_all(&self.pool).await?)
     }
     pub async fn reconcile(&self) -> Result<Vec<Uuid>, WalletError> {
         repo::reconcile(&mut *self.pool.acquire().await?).await

@@ -1,3 +1,4 @@
+import Select from '../../components/Select';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
@@ -14,7 +15,7 @@ import {
 import type { AdminProps } from '../upstream/upstreamApi';
 import { adminApi as api, integer, statuses, when } from './adminApi';
 import { AdminAccess, AdminFeedback } from './AdminUI';
-import UsageCharts from './UsageCharts';
+import UsageCharts, { GenerationDistribution } from './UsageCharts';
 import './AdminDashboardPage.css';
 
 export default function AdminDashboardPage(props: AdminProps) {
@@ -57,7 +58,7 @@ function Dashboard(props: AdminProps) {
         </div>
         <div className="ops-controls">
           <label htmlFor="ops-period">统计时段</label>
-          <select
+          <Select
             id="ops-period"
             value={days}
             onChange={(e) => setDays(Number(e.target.value))}
@@ -66,7 +67,7 @@ function Dashboard(props: AdminProps) {
             <option value={14}>最近 14 天</option>
             <option value={30}>最近 30 天</option>
             <option value={90}>最近 90 天</option>
-          </select>
+          </Select>
           <button
             className="ops-button"
             disabled={query.isFetching}
@@ -156,28 +157,31 @@ function Dashboard(props: AdminProps) {
             )}
           </section>
           <section className="ops-metrics" aria-label="平台运营指标">
-            <article className="ops-card ops-metric">
-              <h2>
-                平台注册用户 <Users size={17} aria-hidden="true" />
-              </h2>
-              <strong>{integer(d.users_total)}</strong>
-              <p>本期新增 {integer(d.new_users)}</p>
-            </article>
-            <article className="ops-card ops-metric">
-              <h2>
-                今日活跃用户 <Activity size={17} aria-hidden="true" />
-              </h2>
-              <strong>{integer(d.active_users_today)}</strong>
-              <p>按 UTC 自然日统计</p>
-            </article>
+            <div className="ops-user-metrics">
+              <article className="ops-card ops-metric ops-metric-compact">
+                <h2>
+                  平台注册用户 <Users size={17} aria-hidden="true" />
+                </h2>
+                <strong>{integer(d.users_total)}</strong>
+                <p>本期新增 {integer(d.new_users)}</p>
+              </article>
+              <article className="ops-card ops-metric ops-metric-compact">
+                <h2>
+                  今日活跃用户 <Activity size={17} aria-hidden="true" />
+                </h2>
+                <strong>{integer(d.active_users_today)}</strong>
+                <p>按 UTC 自然日统计</p>
+              </article>
+            </div>
             <article className="ops-card ops-metric">
               <h2>
                 本期生成任务 <Server size={17} aria-hidden="true" />
               </h2>
               <strong>{integer(d.jobs_total)}</strong>
               <div
+                tabIndex={0}
                 className="ops-task-stack"
-                title="绿色为成功（含部分完成），红色为失败，灰色为其余任务（含取消和未结束）。"
+                data-tip="绿色为成功（含部分完成），红色为失败，灰色为其余任务（含取消和未结束）。"
                 aria-label={`本期成功 ${integer(d.succeeded_jobs)}，失败 ${integer(d.failed_jobs)}，共 ${integer(d.jobs_total)} 个任务`}
               >
                 <i
@@ -196,13 +200,17 @@ function Dashboard(props: AdminProps) {
               <p>
                 成功 {integer(d.succeeded_jobs)} · 失败 {integer(d.failed_jobs)}{' '}
                 <span
+                  tabIndex={0}
                   className="ops-success-rate"
-                  title="成功含部分完成；仅按成功与失败计算，不计取消及进行中的任务。"
+                  data-tip="成功含部分完成；仅按成功与失败计算，不计取消及进行中的任务。"
                 >
                   成功率 {successRate}
                 </span>
               </p>
-              <p title="当前进行中为全平台未结束任务，不限于所选创建时段。">
+              <p
+                tabIndex={0}
+                data-tip="当前进行中为全平台未结束任务，不限于所选创建时段。"
+              >
                 当前进行中 {integer(d.active_jobs)}（全平台）
               </p>
             </article>
@@ -216,73 +224,76 @@ function Dashboard(props: AdminProps) {
                 {integer(d.compensated_credits)}
               </p>
             </article>
+            <GenerationDistribution qualities={d.qualities} />
           </section>
-          <UsageCharts daily={d.daily} qualities={d.qualities} />
           <div className="ops-content-row">
-            <section className="ops-card" aria-labelledby="ops-pool-title">
-              <header className="ops-card-heading">
-                <div>
-                  <h2 id="ops-pool-title">账号池健康</h2>
-                  <p>当前有效租约与可用额度，按账号状态汇总。</p>
+            <div className="ops-main-column">
+              <UsageCharts daily={d.daily} />
+              <section className="ops-card" aria-labelledby="ops-pool-title">
+                <header className="ops-card-heading">
+                  <div>
+                    <h2 id="ops-pool-title">账号池健康</h2>
+                    <p>当前有效租约与可用额度，按账号状态汇总。</p>
+                  </div>
+                  <Link to="/admin/accounts" className="ops-link">
+                    管理账号池 →
+                  </Link>
+                </header>
+                <div className="ops-pool-summary">
+                  <span>共 {integer(totalAccounts)} 个账号</span>
+                  <span className="ops-tag-ok">
+                    正常 {integer(activeAccounts)}
+                  </span>
+                  <span>非正常 {integer(totalAccounts - activeAccounts)}</span>
                 </div>
-                <Link to="/admin/accounts" className="ops-link">
-                  管理账号池 →
-                </Link>
-              </header>
-              <div className="ops-pool-summary">
-                <span>共 {integer(totalAccounts)} 个账号</span>
-                <span className="ops-tag-ok">
-                  正常 {integer(activeAccounts)}
-                </span>
-                <span>非正常 {integer(totalAccounts - activeAccounts)}</span>
-              </div>
-              <div className="ops-table-scroll">
-                <table className="ops-table">
-                  <thead>
-                    <tr>
-                      <th>状态</th>
-                      <th>账号</th>
-                      <th>并发占用</th>
-                      <th>剩余额度</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {d.health.map((h) => (
-                      <tr key={h.status}>
-                        <td>
-                          <span
-                            className={`ops-tag ${h.status === 'ACTIVE' ? 'ops-tag-ok' : h.status === 'COOLDOWN' || h.status === 'QUOTA_EXHAUSTED' ? 'ops-tag-warning' : 'ops-tag-bad'}`}
-                          >
-                            {statuses[h.status] || h.status}
-                          </span>
-                        </td>
-                        <td>{integer(h.accounts)}</td>
-                        <td>
-                          <div className="ops-concurrency">
-                            <span>
-                              {integer(h.live_slots)} / {integer(h.capacity)}
-                            </span>
-                            <progress
-                              aria-label={`${statuses[h.status] || h.status}账号并发占用`}
-                              max={Math.max(1, h.capacity)}
-                              value={h.live_slots}
-                            />
-                          </div>
-                        </td>
-                        <td>{integer(h.quota_remaining)}</td>
-                      </tr>
-                    ))}
-                    {!d.health.length && (
+                <div className="ops-table-scroll">
+                  <table className="ops-table">
+                    <thead>
                       <tr>
-                        <td colSpan={4}>
-                          <div className="ops-empty">尚未接入账号</div>
-                        </td>
+                        <th>状态</th>
+                        <th>账号</th>
+                        <th>并发占用</th>
+                        <th>剩余额度</th>
                       </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </section>
+                    </thead>
+                    <tbody>
+                      {d.health.map((h) => (
+                        <tr key={h.status}>
+                          <td>
+                            <span
+                              className={`ops-tag ${h.status === 'ACTIVE' ? 'ops-tag-ok' : h.status === 'COOLDOWN' || h.status === 'QUOTA_EXHAUSTED' ? 'ops-tag-warning' : 'ops-tag-bad'}`}
+                            >
+                              {statuses[h.status] || h.status}
+                            </span>
+                          </td>
+                          <td>{integer(h.accounts)}</td>
+                          <td>
+                            <div className="ops-concurrency">
+                              <span>
+                                {integer(h.live_slots)} / {integer(h.capacity)}
+                              </span>
+                              <progress
+                                aria-label={`${statuses[h.status] || h.status}账号并发占用`}
+                                max={Math.max(1, h.capacity)}
+                                value={h.live_slots}
+                              />
+                            </div>
+                          </td>
+                          <td>{integer(h.quota_remaining)}</td>
+                        </tr>
+                      ))}
+                      {!d.health.length && (
+                        <tr>
+                          <td colSpan={4}>
+                            <div className="ops-empty">尚未接入账号</div>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
             <section
               className="ops-card ops-finance"
               aria-labelledby="ops-cost-title"

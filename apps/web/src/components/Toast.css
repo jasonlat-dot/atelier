@@ -1,0 +1,284 @@
+:root {
+  --tt-bg: #fff;
+  --tt-border: #e8e5dd;
+  --tt-ink: #1a1a18;
+  --tt-ink-2: #55534c;
+  --tt-ink-3: #76736b;
+  --tt-hover: var(--control-hover-surface, #f1efe9);
+  --tt-radius: 14px;
+  --tt-width: 380px;
+  --tt-gap: 10px;
+  --tt-offset: 20px;
+  --tt-shadow: 0 10px 30px #1a1a181f, 0 1px 3px #1a1a1814;
+  --tt-font:
+    system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei',
+    sans-serif;
+  --tt-success-fg: #1b6535;
+  --tt-success-bg: #e3f3e8;
+  --tt-success-bar: #2e9e5b;
+  --tt-error-fg: #a12a22;
+  --tt-error-bg: #fbe6e4;
+  --tt-error-bar: #d9453b;
+  --tt-warning-fg: #80530a;
+  --tt-warning-bg: #fbefd2;
+  --tt-warning-bar: #d9930d;
+  --tt-info-fg: #1f4e95;
+  --tt-info-bg: #e4eefb;
+  --tt-info-bar: #3b7bdb;
+  --tt-loading-fg: #1a1a18;
+  --tt-loading-bg: #eeece6;
+  --tt-loading-bar: #76736b;
+  --tt-focus: #c8481f;
+}
+:root[data-theme='dark'] {
+  --tt-bg: #262624;
+  --tt-border: #3a3935;
+  --tt-ink: #f4f2ec;
+  --tt-ink-2: #bdbab1;
+  --tt-ink-3: #9d9a91;
+  --tt-hover: #33322f;
+  --tt-shadow: 0 10px 30px #0007;
+  --tt-success-fg: #7fd49e;
+  --tt-success-bg: #2e9e5b2e;
+  --tt-error-fg: #ff9a92;
+  --tt-error-bg: #d9453b33;
+  --tt-warning-fg: #f2c265;
+  --tt-warning-bg: #d9930d33;
+  --tt-info-fg: #9cc0f5;
+  --tt-info-bg: #3b7bdb38;
+  --tt-loading-fg: #f4f2ec;
+  --tt-loading-bg: #3a3935;
+}
+.app-toast-viewport {
+  position: fixed;
+  inset: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--tt-gap);
+  width: min(var(--tt-width), calc(100vw - 32px));
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--tt-ink);
+  overflow: visible;
+  pointer-events: none;
+  font-family: var(--tt-font);
+  z-index: 100;
+}
+.app-toast-viewport::backdrop {
+  background: transparent;
+  pointer-events: none;
+}
+.app-toast-viewport[data-position^='top'] {
+  top: max(var(--tt-offset), env(safe-area-inset-top));
+  --tt-dir: -1;
+}
+.app-toast-viewport[data-position^='bottom'] {
+  bottom: max(var(--tt-offset), env(safe-area-inset-bottom));
+  flex-direction: column-reverse;
+  --tt-dir: 1;
+}
+.app-toast-viewport[data-position$='center'] {
+  left: 50%;
+  transform: translateX(-50%);
+}
+.app-toast-viewport[data-position$='left'] {
+  left: max(var(--tt-offset), env(safe-area-inset-left));
+}
+.app-toast-viewport[data-position$='right'] {
+  right: max(var(--tt-offset), env(safe-area-inset-right));
+}
+.app-toast {
+  --tt-fg: var(--tt-ink);
+  --tt-icon-bg: var(--tt-hover);
+  --tt-bar: var(--tt-ink-3);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-start;
+  flex: none;
+  gap: 12px;
+  padding: 12px 10px 14px 12px;
+  border: 1px solid var(--tt-border);
+  border-radius: var(--tt-radius);
+  background: var(--tt-bg);
+  color: var(--tt-ink);
+  box-shadow: var(--tt-shadow);
+  font: 14px/1.4 var(--tt-font);
+  pointer-events: auto;
+  animation: tt-in 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.app-toast.is-leaving {
+  animation: tt-out 180ms ease-in forwards;
+  pointer-events: none;
+}
+.app-toast[data-variant='success'] {
+  --tt-fg: var(--tt-success-fg);
+  --tt-icon-bg: var(--tt-success-bg);
+  --tt-bar: var(--tt-success-bar);
+}
+.app-toast[data-variant='error'] {
+  --tt-fg: var(--tt-error-fg);
+  --tt-icon-bg: var(--tt-error-bg);
+  --tt-bar: var(--tt-error-bar);
+}
+.app-toast[data-variant='warning'] {
+  --tt-fg: var(--tt-warning-fg);
+  --tt-icon-bg: var(--tt-warning-bg);
+  --tt-bar: var(--tt-warning-bar);
+}
+.app-toast[data-variant='info'] {
+  --tt-fg: var(--tt-info-fg);
+  --tt-icon-bg: var(--tt-info-bg);
+  --tt-bar: var(--tt-info-bar);
+}
+.app-toast[data-variant='loading'] {
+  --tt-fg: var(--tt-loading-fg);
+  --tt-icon-bg: var(--tt-loading-bg);
+  --tt-bar: var(--tt-loading-bar);
+}
+.app-toast-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--tt-icon-bg);
+  color: var(--tt-fg);
+}
+.app-toast-icon svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.app-toast[data-variant='loading'] .app-toast-icon svg {
+  animation: tt-spin 800ms linear infinite;
+}
+.app-toast-body {
+  flex: 1;
+  min-width: 0;
+  padding-top: 5px;
+}
+.app-toast-title {
+  font-size: 14px;
+  line-height: 1.4;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.app-toast-description {
+  margin-top: 2px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--tt-ink-2);
+  overflow-wrap: anywhere;
+}
+.app-toast-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.app-toast-action {
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--tt-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--tt-ink);
+  font: 600 13px var(--tt-font);
+  cursor: pointer;
+}
+.app-toast-close {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  margin-top: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--tt-ink-3);
+  cursor: pointer;
+}
+.app-toast :is(.app-toast-action, .app-toast-close):hover:not(:disabled) {
+  background: var(--tt-hover);
+  color: var(--tt-ink);
+}
+.app-toast button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+.app-toast :focus-visible {
+  outline: 2px solid var(--tt-focus);
+  outline-offset: 2px;
+}
+.app-toast-progress {
+  position: absolute;
+  inset: auto 0 0;
+  height: 3px;
+  pointer-events: none;
+}
+.app-toast-progress::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--tt-bar);
+  transform-origin: left;
+  opacity: 0.85;
+  animation: tt-shrink var(--tt-dur, 3000ms) linear forwards;
+}
+.app-toast.is-paused .app-toast-progress::after {
+  animation-play-state: paused;
+}
+@keyframes tt-in {
+  from {
+    opacity: 0;
+    transform: translateY(calc(var(--tt-dir, -1) * 14px)) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes tt-out {
+  to {
+    opacity: 0;
+    transform: translateY(calc(var(--tt-dir, -1) * 8px)) scale(0.97);
+  }
+}
+@keyframes tt-shrink {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+@keyframes tt-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-toast,
+  .app-toast.is-leaving,
+  .app-toast-progress::after,
+  .app-toast[data-variant='loading'] .app-toast-icon svg {
+    animation: none;
+  }
+}
+@media (max-width: 600px) {
+  .app-toast-viewport[data-position] {
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+  }
+}

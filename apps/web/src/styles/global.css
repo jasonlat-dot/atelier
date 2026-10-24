@@ -1,5 +1,8 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 :root {
+  --control-hover-ink: #36373e;
+  --control-hover-surface: #eeece6;
+  --control-hover-duration: 140ms;
   font-family:
     Inter,
     'Segoe UI',
@@ -26,12 +29,24 @@ body,
 }
 button,
 input,
-select,
+.app-select,
 textarea {
   font: inherit;
 }
 button {
   cursor: pointer;
+}
+button,
+.btn {
+  transition:
+    background-color var(--control-hover-duration) ease,
+    border-color var(--control-hover-duration) ease,
+    color var(--control-hover-duration) ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --control-hover-duration: 0ms;
+  }
 }
 button:disabled {
   cursor: not-allowed;
@@ -44,7 +59,7 @@ a {
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
-select:focus-visible,
+.app-select:focus-visible,
 textarea:focus-visible {
   outline: 2px solid #7a9bc5;
   outline-offset: 2px;
@@ -146,10 +161,10 @@ small {
   margin: 0 15px 18px;
   font-weight: 600;
 }
-.new-space:hover,
-.btn-light:hover,
-.icon-btn:hover {
-  background: #edf0f2;
+.new-space:hover:where(:not(:disabled)),
+.btn-light:hover:where(:not(:disabled)),
+.icon-btn:hover:where(:not(:disabled)) {
+  background: var(--control-hover-surface);
 }
 .navigation {
   flex: 1;
@@ -452,8 +467,8 @@ small {
   color: #fff;
   border-color: #242a32;
 }
-.btn-dark:hover {
-  background: #414b57;
+.btn-dark:hover:not(:disabled) {
+  background: var(--control-hover-ink);
 }
 .btn-light {
   background: #fff;
@@ -481,7 +496,6 @@ small {
 }
 .quick-cards > a:hover {
   border-color: #bac5cd;
-  transform: translateY(-1px);
 }
 .quick-cards > a strong {
   font-size: 14px;
@@ -1256,22 +1270,6 @@ small {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 11px;
-}
-.toast-message {
-  position: sticky;
-  bottom: 14px;
-  margin: 14px;
-  background: #2d353f;
-  color: #fff;
-  border-radius: 8px;
-  padding: 12px;
-  font-size: 11px;
-  line-height: 1.5;
-  box-shadow: 0 8px 18px #0002;
-  cursor: pointer;
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
 }
 /* Chat */
 .chat-layout {

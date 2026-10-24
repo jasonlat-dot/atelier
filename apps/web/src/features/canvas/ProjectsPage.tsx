@@ -1,3 +1,4 @@
+import Select from '../../components/Select';
 import Feedback from '../../components/Feedback';
 import { useCallback, useState, useRef } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
@@ -78,7 +79,7 @@ export function ProjectGrid({
           ? a.name.localeCompare(b.name, 'zh-CN')
           : b.revision - a.revision,
     )
-    .slice(0, home ? 2 : undefined);
+    .slice(0, home ? 3 : undefined);
   const importFile = useRef<HTMLInputElement>(null);
   const importing = useRef<{ file: File; key: string }>();
   const failed = useCallback(
@@ -199,7 +200,7 @@ export function ProjectGrid({
                 ? '正在读取画布…'
                 : `${filter.trim() ? '匹配' : '已加载'} ${visible.length} 个画布`}
             </span>
-            <select
+            <Select
               aria-label="画布排序"
               value={sort}
               onChange={(event) => setSort(event.target.value)}
@@ -207,7 +208,7 @@ export function ProjectGrid({
               <option value="updated">最近更新</option>
               <option value="name">名称</option>
               <option value="version">修订号</option>
-            </select>
+            </Select>
             <div
               className="canvas-library-view"
               role="group"
@@ -260,37 +261,17 @@ export function ProjectGrid({
               className="live-project-link"
               aria-label={`打开 ${p.name}`}
             >
-              {home ? (
-                <div className="live-project-art">
-                  <GalleryHorizontal size={32} strokeWidth={1} />
-                </div>
-              ) : (
-                <ProjectPreview project={p} userId={me.user.id} />
-              )}
-              {home ? (
-                <div className="home-project-caption">
-                  <div>
-                    <strong>{p.name}</strong>
-                    <small>
-                      更新于{' '}
-                      {new Date(p.updated_at).toLocaleString('zh-CN', {
-                        month: '2-digit',
-                        day: '2-digit',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        hour12: false,
-                      })}
-                    </small>
-                  </div>
-                  <span className="home-project-version">v{p.revision}</span>
-                </div>
-              ) : (
+              <ProjectPreview project={p} userId={me.user.id} compact={home} />
+              {!home && (
                 <div className="canvas-library-meta">
-                  <strong title={p.name}>{p.name}</strong>
+                  <strong tabIndex={0} data-tip={p.name}>
+                    {p.name}
+                  </strong>
                   <div>
                     <time
+                      tabIndex={0}
                       dateTime={p.updated_at}
-                      title={new Date(p.updated_at).toLocaleString('zh-CN')}
+                      data-tip={new Date(p.updated_at).toLocaleString('zh-CN')}
                     >
                       {updatedLabel(p.updated_at)}
                     </time>
@@ -355,30 +336,38 @@ export function ProjectGrid({
             >
               <span />
               <span />
+              <span />
             </div>
           ) : (
             <div className="canvas-library-loading" role="status">
               正在加载项目…
             </div>
           ))}
-        {!query.isPending && !query.isError && visible.length === 0 && (
-          <div className="workspace-empty">
-            <GalleryHorizontal size={30} strokeWidth={1.2} />
-            <h3>
-              {filter.trim() ? '没有匹配的画布' : '留一片空间，给下一个好想法'}
-            </h3>
-            <p>
-              {filter.trim()
-                ? '试试其他名称，或加载更多画布后继续筛选。'
-                : '创建画布，连接文字、参考图与生成结果。'}
-            </p>
-            {filter.trim() && (
-              <button className="text-action" onClick={() => setFilter('')}>
-                清除筛选
-              </button>
-            )}
-          </div>
-        )}
+        {!query.isPending &&
+          !query.isError &&
+          visible.length === 0 &&
+          (home ? (
+            <p className="home-project-empty">还没有项目，从一个想法开始吧。</p>
+          ) : (
+            <div className="workspace-empty">
+              <GalleryHorizontal size={30} strokeWidth={1.2} />
+              <h3>
+                {filter.trim()
+                  ? '没有匹配的画布'
+                  : '留一片空间，给下一个好想法'}
+              </h3>
+              <p>
+                {filter.trim()
+                  ? '试试其他名称，或加载更多画布后继续筛选。'
+                  : '创建画布，连接文字、参考图与生成结果。'}
+              </p>
+              {filter.trim() && (
+                <button className="text-action" onClick={() => setFilter('')}>
+                  清除筛选
+                </button>
+              )}
+            </div>
+          ))}
       </div>
       {!home && query.hasNextPage && (
         <div className="canvas-library-more">

@@ -1,3 +1,4 @@
+import { chooseSelect } from './selectTestHelpers';
 import { dismissFeedback } from './feedbackTestHelpers';
 import { test, expect, type Page } from '@playwright/test';
 const sampleAccount = {
@@ -348,7 +349,7 @@ test('models need bindings and pricing; price drafts survive tabs and native ide
   await page.getByRole('button', { name: '新增模型' }).click();
   await d.getByLabel('公开模型标识').fill('video-one');
   await d.getByLabel('展示名称').fill('Video One');
-  await d.getByLabel('模型类型').selectOption('video');
+  await chooseSelect(d.getByLabel('模型类型'), 'video');
   await expect(d.getByLabel('支持时长（秒）')).toHaveValue('4, 8, 12');
   await d.getByLabel('上游模型标识').fill('private-native-video');
   await d.getByRole('button', { name: '保存模型' }).click();

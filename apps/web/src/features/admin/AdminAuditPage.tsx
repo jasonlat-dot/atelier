@@ -13,6 +13,7 @@ import {
   useAdminCursor,
 } from './AdminUI';
 import '../upstream/AdminUpstream.css';
+import { auditActionLabel } from './auditLabels';
 export default function AdminAuditPage(props: AdminProps) {
   return (
     <AdminAccess props={props} superOnly>
@@ -75,7 +76,10 @@ function Audit(props: AdminProps) {
                   <tr key={a.id}>
                     <td>{when(a.created_at)}</td>
                     <td>{a.email || '系统自动处理'}</td>
-                    <td>{a.action}</td>
+                    <td>
+                      <strong>{auditActionLabel(a.action)}</strong>
+                      <small>{a.action}</small>
+                    </td>
                     <td>
                       {a.target_type}
                       <small className="admin-id">{a.target_id || '—'}</small>
@@ -111,7 +115,8 @@ function Audit(props: AdminProps) {
           onClose={() => setSelected(undefined)}
         >
           <p className="admin-note">
-            {selected.action} · {when(selected.created_at)}
+            {auditActionLabel(selected.action)} · {selected.action} ·{' '}
+            {when(selected.created_at)}
           </p>
           <p>{selected.email || '系统自动处理'}</p>
           <h3>变更前</h3>

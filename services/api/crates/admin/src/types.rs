@@ -27,6 +27,7 @@ pub struct AdminUserPage {
 #[derive(Serialize, ToSchema)]
 pub struct AdminUserDetail {
     pub adjust_limit: i64,
+    pub pending_review: bool,
     pub user: AdminUser,
     pub ledger: atelier_wallet::LedgerPage,
     pub jobs: Vec<AdminJob>,
@@ -69,6 +70,8 @@ pub struct AdminJob {
 }
 #[derive(Serialize, ToSchema)]
 pub struct AdminJobPage {
+    /// Counts by status, plus ALL, within q/owner scope; independent of status/cursor.
+    pub counts: std::collections::BTreeMap<String, i64>,
     pub items: Vec<AdminJob>,
     pub next_cursor: Option<Uuid>,
 }

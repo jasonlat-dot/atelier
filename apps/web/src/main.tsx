@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import './styles/global.css';
 import { FeedbackHost } from './components/Feedback';
+import { TooltipHost } from './components/Tooltip';
+import { ToastHost } from './components/Toast';
 
 // Replaced with a literal by Vite: the unused entry is eliminated at build time.
 const App = __MOCK__
@@ -18,6 +20,8 @@ const router = createBrowserRouter([
           <App />
         </Suspense>
         <FeedbackHost />
+        <TooltipHost />
+        <ToastHost />
       </>
     ),
   },

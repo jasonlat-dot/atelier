@@ -122,7 +122,7 @@
 }
 
 .login-google-button:hover:not(:disabled) {
-  background: #36342e;
+  background: var(--control-hover-ink);
 }
 
 .login-google-button:active:not(:disabled) {

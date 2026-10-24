@@ -160,6 +160,11 @@ export default function WalletPage({
       setBusy(false);
     }
   };
+  const checkinProgress = summary
+    ? summary.checked_in_today && summary.streak > 0
+      ? ((summary.streak - 1) % 7) + 1
+      : summary.streak % 7
+    : 0;
   const balanceCard = summary && (
     <section
       className={home ? 'wallet-hero' : 'wallet-card wallet-balance'}
@@ -184,6 +189,11 @@ export default function WalletPage({
       {summary.available < 10 && (
         <p>可用积分较少，可以签到或使用兑换码补充。</p>
       )}
+      {home && (
+        <Link className="home-wallet-link" to="/wallet">
+          查看积分明细 →
+        </Link>
+      )}
       {!home && (
         <button className="btn btn-light" onClick={() => setTab('plans')}>
           获取更多积分
@@ -207,11 +217,6 @@ export default function WalletPage({
             {summary.checked_in_today ? '明日' : '本次'}可得{' '}
             {summary.next_reward} 积分
           </p>
-          {home && (
-            <small>
-              {summary.local_date} · {summary.timezone} 日界
-            </small>
-          )}
         </div>
         {home && (
           <button
@@ -219,7 +224,11 @@ export default function WalletPage({
             disabled={busy || loading || summary.checked_in_today}
             onClick={() => void mutate('checkin')}
           >
-            {summary.checked_in_today ? '今日已签到' : '领取今日积分'}
+            {busy
+              ? '签到中…'
+              : summary.checked_in_today
+                ? '今日已签到'
+                : '签到领积分'}
           </button>
         )}
       </div>
@@ -232,7 +241,13 @@ export default function WalletPage({
           {Array.from({ length: 7 }, (_, i) => (
             <span
               key={i}
-              className={i < Math.min(summary.streak, 7) ? 'is-complete' : ''}
+              className={
+                i < checkinProgress
+                  ? 'is-complete'
+                  : i === checkinProgress
+                    ? 'is-next'
+                    : ''
+              }
             />
           ))}
         </div>
@@ -265,7 +280,11 @@ export default function WalletPage({
           >
             {summary.checked_in_today ? '今日已签到' : '领取今日积分'}
           </button>
-          <small className="wallet-timezone" title={summary.local_date}>
+          <small
+            tabIndex={0}
+            className="wallet-timezone"
+            data-tip={summary.local_date}
+          >
             每天 0 点刷新 · {summary.timezone}
           </small>
         </>
@@ -308,20 +327,33 @@ export default function WalletPage({
   );
   if (home)
     return (
-      <section className="dashboard-wallet">
-        {loading && !summary && <p role="status">正在读取积分…</p>}
+      <div className="home-wallet-card" aria-busy={loading || busy}>
+        {loading && !summary && (
+          <div
+            className="home-wallet-loading"
+            role="status"
+            aria-label="正在读取积分"
+          >
+            <span />
+            <span />
+            <span />
+          </div>
+        )}
         {balanceCard}
         {checkinCard}
         {feedback}
         <div className="home-wallet-actions">
           {summary && (
-            <Link className="text-action" to="/wallet">
-              查看完整积分账本 →
-            </Link>
+            <small
+              tabIndex={0}
+              data-tip={`${summary.local_date} · 按 ${summary.timezone} 每天 0 点刷新`}
+            >
+              每天 0 点刷新 · {summary.timezone}
+            </small>
           )}
           {refresh}
         </div>
-      </section>
+      </div>
     );
   return (
     <main className="account-shell wallet-page">

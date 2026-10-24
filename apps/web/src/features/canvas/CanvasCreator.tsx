@@ -1,3 +1,4 @@
+import Select from '../../components/Select';
 import Feedback from '../../components/Feedback';
 import { useEffect, useState, type CSSProperties } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -238,9 +239,9 @@ export default function CanvasCreator({
           <label className="field-label" htmlFor="canvas-model">
             生成模型
           </label>
-          <select
+          <Select
             id="canvas-model"
-            className="select"
+
             value={value.modelId}
             onChange={(e) => {
               const next = models.find((m) => m.id === e.target.value);
@@ -258,7 +259,7 @@ export default function CanvasCreator({
                   {m.display_name}
                 </option>
               ))}
-          </select>
+          </Select>
           {!catalog.isPending &&
             !catalog.isError &&
             !models.some((m) => m.kind === actualKind) && (
@@ -382,9 +383,9 @@ export default function CanvasCreator({
                 <label className="field-label" htmlFor="canvas-resolution">
                   分辨率
                 </label>
-                <select
+                <Select
                   id="canvas-resolution"
-                  className="select"
+
                   value={value.resolution}
                   onChange={(e) => change({ resolution: e.target.value })}
                 >
@@ -397,7 +398,7 @@ export default function CanvasCreator({
                     .map((r) => (
                       <option key={r}>{r}</option>
                     ))}
-                </select>
+                </Select>
               </div>
             </div>
             <label className="field-label">画幅比例</label>
@@ -419,9 +420,9 @@ export default function CanvasCreator({
                 <label className="field-label" htmlFor="canvas-seconds">
                   视频时长
                 </label>
-                <select
+                <Select
                   id="canvas-seconds"
-                  className="select"
+
                   value={value.seconds || 4}
                   onChange={(e) => change({ seconds: Number(e.target.value) })}
                 >
@@ -430,16 +431,16 @@ export default function CanvasCreator({
                       {s} 秒
                     </option>
                   ))}
-                </select>
+                </Select>
               </>
             ) : (
               <>
                 <label className="field-label" htmlFor="canvas-count">
                   生成数量
                 </label>
-                <select
+                <Select
                   id="canvas-count"
-                  className="select"
+
                   value={value.n}
                   onChange={(e) => change({ n: Number(e.target.value) })}
                 >
@@ -451,7 +452,7 @@ export default function CanvasCreator({
                       {n} 张
                     </option>
                   ))}
-                </select>
+                </Select>
               </>
             )}
           </div>

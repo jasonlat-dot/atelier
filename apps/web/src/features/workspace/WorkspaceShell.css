@@ -64,17 +64,43 @@
 }
 .live-workspace .navigation {
   padding: 0 14px 16px;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   scrollbar-width: thin;
 }
 .live-workspace .navigation section {
-  margin-bottom: 22px;
+  margin-bottom: 18px;
+}
+.live-workspace .navigation section:last-child {
+  margin-bottom: 0;
 }
 .live-workspace .nav-group {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 20px;
   margin: 6px 12px 6px;
   color: #6b6f76;
   font-size: 11px;
   font-weight: 400;
   letter-spacing: 0.04em;
+}
+.live-workspace .nav-role-badge {
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: #f5e4da;
+  color: #a44724;
+  font-size: 9px;
+  line-height: 16px;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+.live-workspace .nav-role-badge[data-role='ADMIN'] {
+  background: #e6ebe3;
+  color: #536b59;
 }
 .live-workspace .nav-link {
   height: 38px;
@@ -100,34 +126,6 @@
 }
 .live-workspace .nav-link.active::before {
   display: none;
-}
-.workspace-more summary {
-  list-style: none;
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  min-height: 38px;
-  padding: 0 12px;
-  color: #6b6f76;
-  font-size: 13px;
-  cursor: pointer;
-  border-radius: 10px;
-}
-.workspace-more summary::-webkit-details-marker {
-  display: none;
-}
-.workspace-more summary:hover {
-  background: #eceae4;
-}
-.workspace-more[open] summary svg {
-  transform: rotate(90deg);
-}
-.workspace-more > div {
-  padding-top: 3px;
-}
-.workspace-more summary:focus-visible {
-  outline: 2px solid #c2410c;
-  outline-offset: 2px;
 }
 .live-workspace .sidebar-footer {
   padding: 0 14px 20px;

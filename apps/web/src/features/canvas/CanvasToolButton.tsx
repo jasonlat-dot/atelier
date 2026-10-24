@@ -1,4 +1,5 @@
-import { useId, type ButtonHTMLAttributes } from 'react';
+import type { ButtonHTMLAttributes } from 'react';
+import Tooltip from '../../components/Tooltip';
 
 /** Screen-sized hints remain legible at every canvas zoom level. */
 export default function CanvasToolButton({
@@ -6,17 +7,14 @@ export default function CanvasToolButton({
   children,
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & { hint: string }) {
-  const id = useId();
   return (
-    <button
-      {...props}
-      className={`${props.className || ''} canvas-hint-button`}
-      aria-describedby={id}
-    >
-      {children}
-      <span id={id} role="tooltip" className="canvas-tool-hint">
-        {hint}
-      </span>
-    </button>
+    <Tooltip content={hint}>
+      <button
+        {...props}
+        className={`${props.className || ''} canvas-hint-button`}
+      >
+        {children}
+      </button>
+    </Tooltip>
   );
 }

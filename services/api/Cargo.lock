@@ -323,6 +323,7 @@ dependencies = [
  "atelier-common",
  "axum",
  "base64 0.22.1",
+ "chacha20poly1305",
  "chrono",
  "getrandom 0.4.3",
  "serde",
@@ -334,6 +335,7 @@ dependencies = [
  "tracing",
  "utoipa",
  "uuid",
+ "zeroize",
 ]
 
 [[package]]

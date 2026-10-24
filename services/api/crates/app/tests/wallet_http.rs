@@ -213,3 +213,98 @@ async fn real_wallet_http_authorization_csrf_rate_limit_and_receipts(pool: PgPoo
         StatusCode::SERVICE_UNAVAILABLE
     );
 }
+
+#[sqlx::test(migrations = "../../migrations")]
+#[ignore = "Requires isolated PostgreSQL and TEST_REDIS_URL"]
+async fn code_copy_is_admin_csrf_protected_audited_and_excludes_plaintext_from_lists(pool: PgPool) {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    let (_, user) = session(&pool, false).await;
+    let (_, admin) = session(&pool, true).await;
+    let mut state = AppState::test();
+    state.db = pool.clone();
+    state.auth = SessionService::new(
+        Arc::new(PostgresSessions::new(pool.clone())),
+        PublicOrigin::parse("https://atelier.test").unwrap(),
+    );
+    state.code_cipher =
+        Some(atelier_wallet::RedeemCodeCipher::from_base64(&STANDARD.encode([71; 32])).unwrap());
+    state.limits = Some(Arc::new(
+        RedisTransient::connect(&std::env::var("TEST_REDIS_URL").unwrap())
+            .await
+            .unwrap(),
+    ));
+    let base = "/api/v1/admin/redeem-codes";
+    let body = r#"{"count":1,"credits":7,"max_uses":2,"expires_at":null}"#;
+    assert_eq!(
+        call(&state, &user, "POST", base, true, None, body).await.0,
+        StatusCode::FORBIDDEN
+    );
+    let (status, created) = call(&state, &admin, "POST", base, true, None, body).await;
+    assert_eq!(status, StatusCode::OK);
+    let id = created["codes"][0]["id"].as_str().unwrap();
+    let code = created["codes"][0]["code"].as_str().unwrap();
+    let copy_path = format!("{base}/{id}/copy");
+    assert_eq!(
+        call(&state, &user, "POST", &copy_path, true, None, "")
+            .await
+            .0,
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        call(&state, &admin, "POST", &copy_path, false, None, "")
+            .await
+            .0,
+        StatusCode::FORBIDDEN
+    );
+    let (status, copied) = call(&state, &admin, "POST", &copy_path, true, None, "").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(copied["code"], code);
+    let (status, list) = call(&state, &admin, "GET", base, false, None, "").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(list[0]["copyable"], true);
+    assert!(!list.to_string().contains(code));
+    let audit: serde_json::Value = sqlx::query_scalar(
+        "SELECT after FROM audit_logs WHERE action='REDEEM_CODE_REVEALED' AND target_id=$1",
+    )
+    .bind(id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(!audit.to_string().contains(code));
+    sqlx::query("UPDATE redeem_codes SET code_enc=NULL WHERE id=$1")
+        .bind(Uuid::parse_str(id).unwrap())
+        .execute(&pool)
+        .await
+        .unwrap();
+    let (status, response) = call(&state, &admin, "POST", &copy_path, true, None, "").await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(response["error"]["code"], "CODE_NOT_RECOVERABLE");
+    assert_eq!(
+        call(
+            &state,
+            &user,
+            "GET",
+            "/api/v1/admin/credits/adjustments",
+            false,
+            None,
+            ""
+        )
+        .await
+        .0,
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        call(
+            &state,
+            &admin,
+            "GET",
+            "/api/v1/admin/credits/adjustments",
+            false,
+            None,
+            ""
+        )
+        .await
+        .0,
+        StatusCode::OK
+    );
+}

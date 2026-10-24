@@ -1,3 +1,4 @@
+import { chooseSelect } from './selectTestHelpers';
 import { dismissFeedback } from './feedbackTestHelpers';
 import { test, expect, type Page } from '@playwright/test';
 import { createHmac } from 'node:crypto';
@@ -65,7 +66,7 @@ test('real database and Redis login reaches workspace, survives reload and revok
   await page.getByLabel('显示名').fill('Live account');
   await page.getByRole('button', { name: '保存资料' }).click();
   await expect(page.getByText('显示名已更新')).toBeVisible();
-  await dismissFeedback(page);
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
   await page.reload();
   await expect(page.getByLabel('显示名')).toHaveValue('Live account');
   await page.getByRole('link', { name: '积分与订阅', exact: true }).click();
@@ -203,7 +204,6 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   });
   expect(replay.status()).toBe(401);
   expect((await replay.json()).error.code).toBe('MFA_INVALID');
-  await page.getByLabel('更多管理功能').click();
   await page.getByRole('link', { name: '上游账号池', exact: true }).click();
   await page.getByRole('button', { name: '新增账号', exact: true }).click();
   const dialog = page.getByRole('dialog');
@@ -547,8 +547,10 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
   const archive = Buffer.concat(chunks);
   expect(archive.subarray(0, 2).toString()).toBe('PK');
-  await expect(page.getByRole('alertdialog')).toContainText('项目 ZIP 已导出');
-  await dismissFeedback(page);
+  await expect(page.locator('.app-toast [role="status"]')).toContainText(
+    '项目 ZIP 已导出',
+  );
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
   const beforeBalance = (
     await (await page.request.get('/api/v1/wallet')).json()
   ).balance;
@@ -677,8 +679,10 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
     await (await page.request.get('/api/v1/generation/jobs?limit=100')).json()
   ).items.length;
   await page.getByRole('link', { name: '在画布中生成', exact: true }).click();
-  await expect(page.getByRole('alertdialog')).toContainText('已填入对话草稿');
-  await dismissFeedback(page);
+  await expect(page.locator('.app-toast [role="status"]')).toContainText(
+    '已填入对话草稿',
+  );
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
   await expect(page.getByLabel('创意描述')).toHaveValue('生成一张海岸海报');
   expect(
     (await (await page.request.get('/api/v1/generation/jobs?limit=100')).json())
@@ -753,7 +757,7 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
   await page.getByRole('link', { name: '套餐与订单', exact: true }).click();
   await page.getByRole('button', { name: '新增套餐', exact: true }).click();
   await page.getByLabel('套餐名称', { exact: true }).fill('Live Studio');
-  await page.getByLabel('类型', { exact: true }).selectOption('MONTHLY');
+  await chooseSelect(page.getByLabel('类型', { exact: true }), 'MONTHLY');
   await page.getByLabel('价格（分）', { exact: true }).fill('1900');
   await page.getByLabel('发放积分', { exact: true }).fill('100');
   await page.getByLabel('上架，允许用户创建新订单', { exact: true }).check();
@@ -869,7 +873,9 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
     exact: true,
   });
   await manageDialog.getByLabel('调整积分', { exact: false }).fill('7');
-  await manageDialog.getByLabel('处理说明').fill('真实管理回归增加七积分');
+  await manageDialog.getByRole('combobox', { name: '调整原因' }).click();
+  await page.getByRole('option', { name: '运营奖励', exact: true }).click();
+  await manageDialog.getByLabel('补充说明').fill('真实管理回归增加七积分');
   await manageDialog
     .getByRole('button', { name: '核对调整', exact: true })
     .click();
@@ -910,12 +916,6 @@ test('bootstrap administrator binds real encrypted TOTP and cannot replay the ac
     page.getByRole('button', { name: '禁用账号', exact: true }),
   ).toBeVisible();
   await page.getByRole('button', { name: '关闭弹窗', exact: true }).click();
-  if (
-    !(await page
-      .getByRole('link', { name: '平台设置', exact: true })
-      .isVisible())
-  )
-    await page.getByLabel('更多管理功能').click();
   await page.getByRole('link', { name: '平台设置', exact: true }).click();
   await page.getByRole('radio', { name: '仅限邀请', exact: false }).check();
   await page.getByRole('button', { name: '核对并保存', exact: true }).click();

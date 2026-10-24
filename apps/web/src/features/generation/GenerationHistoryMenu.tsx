@@ -95,7 +95,11 @@ export default function GenerationHistoryMenu({
         }
       }}
     >
-      <div className="gen-history-menu-heading" title={menu.job.prompt}>
+      <div
+        tabIndex={0}
+        className="gen-history-menu-heading"
+        data-tip={menu.job.prompt}
+      >
         {menu.job.prompt}
       </div>
       <button role="menuitem" onClick={onView}>

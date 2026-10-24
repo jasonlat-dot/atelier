@@ -1,24 +1,29 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeSanitize from 'rehype-sanitize';
-import { Copy, Check } from 'lucide-react';
+import { Copy } from 'lucide-react';
+import { useToast } from '../../components/Toast';
 function CodeBlock({ children }: { children: ReactNode }) {
-  const code = useRef<HTMLPreElement>(null),
-    [copied, setCopied] = useState(false);
+  const code = useRef<HTMLPreElement>(null);
+  const toast = useToast();
   return (
     <div className="chat-code">
       <button
         className="text-action"
-        onClick={() =>
-          void navigator.clipboard
-            .writeText(code.current?.textContent || '')
-            .then(() => setCopied(true))
-            .catch(() => setCopied(false))
-        }
+        type="button"
+        onClick={async () => {
+          try {
+            await navigator.clipboard.writeText(
+              code.current?.textContent || '',
+            );
+            toast('代码已复制');
+          } catch {
+            toast.error('复制未完成', { description: '请选中代码手动复制。' });
+          }
+        }}
       >
-        {copied ? <Check size={13} /> : <Copy size={13} />}{' '}
-        {copied ? '已复制' : '复制代码'}
+        <Copy size={13} /> 复制代码
       </button>
       <pre ref={code}>{children}</pre>
     </div>

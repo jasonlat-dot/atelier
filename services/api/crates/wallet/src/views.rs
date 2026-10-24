@@ -27,6 +27,8 @@ pub struct LedgerEntry {
     pub r#type: String,
     pub balance_delta: i64,
     pub held_delta: i64,
+    pub ref_type: Option<String>,
+    pub ref_id: Option<String>,
     pub reason: Option<String>,
     pub created_at: DateTime<Utc>,
 }
@@ -75,5 +77,18 @@ pub struct CodeInfo {
     pub max_uses: i32,
     pub used_count: i32,
     pub expires_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub copyable: bool,
+}
+
+#[derive(Serialize, sqlx::FromRow, ToSchema)]
+pub struct CreditAdjustment {
+    pub id: i64,
+    pub user_id: String,
+    pub display_name: String,
+    pub email: String,
+    pub operator: String,
+    pub amount: i64,
+    pub reason: String,
     pub created_at: DateTime<Utc>,
 }

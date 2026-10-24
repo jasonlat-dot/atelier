@@ -1,0 +1,574 @@
+.live-workspace .admin-credits-page {
+  max-width: 1280px;
+  padding: 40px 48px 64px;
+  color: #1b1d1f;
+  font-variant-numeric: tabular-nums;
+}
+.admin-credit-page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.admin-credit-page-head h1 {
+  margin: 6px 0 4px;
+  font-size: 32px;
+  letter-spacing: -0.02em;
+}
+.admin-credit-page-head p {
+  margin: 0;
+  color: #7a7872;
+  font-size: 14px;
+  line-height: 1.7;
+}
+.admin-credits-page .btn {
+  min-height: 40px;
+  border-radius: 10px;
+  border-color: #e8e5de;
+  background: #fff;
+  color: #1b1d1f;
+  font-size: 13px;
+}
+.admin-credits-page .btn-dark {
+  background: #17181d;
+  color: #fff;
+  border-color: #17181d;
+}
+.admin-credits-page .btn:not(.btn-dark):hover:not(:disabled) {
+  background: var(--control-hover-surface);
+}
+.admin-credits-page .btn-dark:hover:not(:disabled) {
+  background: var(--control-hover-ink);
+}
+.admin-credit-tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid #e8e5de;
+  margin: 24px 0 20px;
+}
+.admin-credit-tabs button {
+  padding: 10px 14px;
+  margin-bottom: -1px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: #7a7872;
+  font-size: 14px;
+}
+.admin-credit-tabs button[aria-pressed='true'] {
+  border-bottom-color: #b5461f;
+  color: #17181d;
+  font-weight: 600;
+}
+.admin-credits-page .credit-adjustment-panel {
+  max-width: none;
+  margin-top: 0;
+  border: 1px solid #e8e5de;
+  border-radius: 16px;
+  background: #fff;
+}
+.admin-credit-description {
+  color: #7a7872;
+  line-height: 1.7;
+  font-size: 13px;
+}
+.admin-code-card {
+  padding: 28px;
+  border: 1px solid #e8e5de;
+  border-radius: 16px;
+  background: #fff;
+}
+.admin-code-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.admin-code-heading h2 {
+  margin: 0 0 6px;
+  font-size: 18px;
+}
+.admin-code-heading p {
+  margin: 0;
+  color: #7a7872;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.admin-code-actions,
+.admin-code-dialog-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.admin-code-card .btn,
+.redeem-code-dialog .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid #e8e5de;
+  border-radius: 10px;
+  background: #fff;
+  color: #17181d;
+  font-size: 13px;
+}
+.admin-code-card .btn-dark,
+.redeem-code-dialog .btn-dark {
+  border-color: #17181d;
+  background: #17181d;
+  color: #fff;
+}
+.admin-code-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 18px 0 14px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #fbf1dd;
+  color: #8b651d;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.admin-code-note svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.admin-code-empty {
+  padding: 40px 12px;
+  text-align: center;
+  color: #8b8982;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.admin-code-empty h3 {
+  color: #52554e;
+  font-size: 16px;
+}
+.admin-code-empty p {
+  margin: 0;
+}
+.admin-code-table-scroll {
+  overflow-x: auto;
+  overscroll-behavior: contain;
+  border: 1px solid #e8e5de;
+  border-radius: 12px;
+}
+.admin-code-table {
+  width: 100%;
+  min-width: 790px;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.admin-code-table :is(th, td) {
+  padding: 14px 12px;
+  border-bottom: 1px solid #eeece6;
+  white-space: nowrap;
+}
+.admin-code-table th {
+  background: #faf9f6;
+  color: #7a7872;
+  font-weight: 500;
+}
+.admin-code-table td {
+  color: #3f434a;
+}
+.admin-code-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.admin-code-table tbody tr:hover {
+  background: #fbfaf8;
+}
+.admin-code-status {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #f0eee8;
+  color: #858780;
+  font-size: 11px;
+}
+.admin-code-status[data-active='true'] {
+  background: #e6ebe3;
+  color: #536b59;
+}
+.admin-code-status[data-state='expired'] {
+  background: #fbf1dd;
+  color: #8b651d;
+}
+.admin-code-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-top: 18px;
+  color: #8b8982;
+}
+.admin-code-pagination small {
+  font-size: 12px;
+}
+.redeem-code-dialog {
+  width: min(580px, calc(100vw - 32px));
+}
+.admin-code-form > p,
+.admin-code-result > p {
+  color: #7a7872;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.admin-code-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 16px;
+}
+.admin-credit-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.admin-credit-card {
+  min-width: 0;
+  padding: 28px;
+  border: 1px solid #e8e5de;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 1px 2px #17181d04;
+}
+.admin-credit-card h2 {
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: 0;
+}
+.admin-credit-card .admin-credit-description {
+  margin: 4px 0 22px;
+  color: #6b6f6a;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.admin-credit-user {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #e8e5de;
+  border-radius: 12px;
+  background: #fbfaf8;
+  min-width: 0;
+}
+.admin-credit-avatar {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #e6ebe3;
+  color: #5b7160;
+  font-weight: 700;
+  font-size: 18px;
+}
+.admin-credit-user-info {
+  display: grid;
+  flex: 1;
+  min-width: 100px;
+  gap: 3px;
+}
+.admin-credit-user-info strong {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.admin-credit-user-info :is(span, code) {
+  font-size: 11px;
+  color: #9a9d97;
+  overflow-wrap: anywhere;
+}
+.admin-credit-user-balance {
+  display: grid;
+  gap: 2px;
+}
+.admin-credit-user-balance strong {
+  font-size: 24px;
+  line-height: 1.2;
+}
+.admin-credit-user-balance span {
+  color: #9a9d97;
+  font-size: 11px;
+}
+.admin-credit-text-button {
+  border: 0;
+  background: none;
+  padding: 4px;
+  color: #6b6f6a;
+  font-size: 12px;
+}
+.admin-credit-text-button:hover:not(:disabled) {
+  color: #b5461f;
+}
+.admin-credit-submit,
+.credit-adjustment-panel .tooltip-disabled-trigger {
+  width: 100%;
+}
+.admin-credit-section-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  justify-content: space-between;
+}
+.admin-credit-records article {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 0;
+  border-top: 1px solid #e8e5de;
+}
+.admin-credit-records article > div {
+  min-width: 0;
+}
+.admin-credit-records article strong {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.admin-credit-records article p {
+  font-size: 12px;
+  line-height: 1.7;
+  color: #6b6f6a;
+  margin: 4px 0;
+  overflow-wrap: anywhere;
+}
+.admin-credit-records article small {
+  color: #9a9d97;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.admin-credit-records article b {
+  font-size: 16px;
+  white-space: nowrap;
+}
+.admin-credit-audit-link {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 16px;
+  color: #6b6f6a;
+  font-size: 12px;
+}
+.admin-credit-audit-link:hover {
+  color: #b5461f;
+}
+.admin-code-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 20px;
+}
+.admin-code-stats > div {
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #f0eee8;
+  min-width: 0;
+}
+.admin-code-stats span {
+  color: #6b6f6a;
+  font-size: 12px;
+}
+.admin-code-stats strong {
+  display: block;
+  font-size: 24px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.admin-code-scope {
+  font-size: 12px;
+  color: #9a9d97;
+  margin: 10px 0 16px;
+}
+.admin-code-filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.admin-code-filters > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.admin-code-filters button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 13px;
+  border: 1px solid #e8e5de;
+  border-radius: 99px;
+  background: #fff;
+  color: #6b6f6a;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.admin-code-filters button:where(:hover) {
+  background: var(--control-hover-surface);
+}
+.admin-code-filters button[aria-pressed='true'] {
+  background: #17181d;
+  border-color: #17181d;
+  color: #fff;
+}
+.admin-code-filters button span {
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+.admin-code-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  border: 1px solid #e8e5de;
+  border-radius: 10px;
+  padding: 0 12px;
+  color: #9a9d97;
+  width: 220px;
+  min-width: 0;
+  background: #fbfaf8;
+}
+.admin-code-search input {
+  border: 0;
+  outline: none;
+  width: 100%;
+  min-width: 0;
+  padding: 10px 0;
+  background: none;
+  color: #1b1d1f;
+}
+.admin-code-search:focus-within {
+  border-color: #b5461f;
+  box-shadow: 0 0 0 3px #b5461f24;
+}
+.admin-code-usage-track {
+  display: inline-block;
+  margin-left: 8px;
+  width: 48px;
+  height: 5px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #e6ebe3;
+  vertical-align: middle;
+}
+.admin-code-usage-track i {
+  display: block;
+  height: 100%;
+  background: #9bb39e;
+}
+.admin-code-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  background: none;
+  border-radius: 6px;
+  padding: 5px 7px;
+  color: #5b7160;
+  font-size: 12px;
+}
+.admin-code-copy:hover:not(:disabled) {
+  background: #e6ebe3;
+  color: #344f3b;
+}
+.admin-code-issuance {
+  margin: 20px 0 0;
+}
+@media (max-width: 1100px) {
+  .admin-credit-layout {
+    grid-template-columns: 1fr;
+  }
+}
+.admin-code-fields label,
+.admin-code-result label {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  color: #565a61;
+  font-size: 13px;
+}
+.redeem-code-dialog .input {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #e8e5de;
+  border-radius: 10px;
+  background: #fbfaf8;
+  font: inherit;
+}
+.admin-code-fields small {
+  color: #8b8982;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.admin-code-dialog-actions {
+  margin-top: 24px;
+  justify-content: flex-end;
+}
+.admin-code-result textarea {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+  resize: vertical;
+}
+.admin-credits-page :is(button, a, [tabindex]):focus-visible,
+.redeem-code-dialog :is(input, textarea, button):focus-visible {
+  outline: 2px solid #b5461f;
+  outline-offset: 3px;
+}
+@media (max-width: 700px) {
+  .live-workspace .admin-credits-page {
+    padding: 26px 18px 36px;
+  }
+  .admin-code-card {
+    padding: 18px;
+  }
+  .admin-code-actions {
+    width: 100%;
+  }
+  .admin-code-actions .btn {
+    flex: 1;
+  }
+  .admin-code-fields {
+    grid-template-columns: 1fr;
+  }
+  .admin-credit-card {
+    padding: 20px;
+  }
+  .admin-code-stats {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .admin-code-stats > div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .admin-code-search {
+    width: 100%;
+    margin-left: 0;
+  }
+  .admin-credit-page-head > .btn {
+    align-self: flex-start;
+  }
+}
+
+.admin-credits-page [data-direction='increase'] {
+  color: #2f7d4f;
+}
+.admin-credits-page [data-direction='decrease'],
+.admin-credits-page [data-direction='invalid'] {
+  color: #c0392b;
+}

@@ -97,6 +97,64 @@
         ]
       }
     },
+    "/api/v1/admin/credits/adjustments": {
+      "get": {
+        "tags": [
+          "crate::wallet_http"
+        ],
+        "operationId": "adjustments",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CreditAdjustment"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
     "/api/v1/admin/dashboard": {
       "get": {
         "tags": [
@@ -2567,6 +2625,93 @@
             }
           },
           "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "csrf": [],
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/redeem-codes/{id}/copy": {
+      "post": {
+        "tags": [
+          "crate::wallet_http"
+        ],
+        "operationId": "copy_code",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedCode"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
             "description": "",
             "content": {
               "application/json": {
@@ -9256,9 +9401,21 @@
       "AdminJobPage": {
         "type": "object",
         "required": [
+          "counts",
           "items"
         ],
         "properties": {
+          "counts": {
+            "type": "object",
+            "description": "Counts by status, plus ALL, within q/owner scope; independent of status/cursor.",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
           "items": {
             "type": "array",
             "items": {
@@ -9707,6 +9864,7 @@
         "type": "object",
         "required": [
           "adjust_limit",
+          "pending_review",
           "user",
           "ledger",
           "jobs",
@@ -9725,6 +9883,9 @@
           },
           "ledger": {
             "$ref": "#/components/schemas/LedgerPage"
+          },
+          "pending_review": {
+            "type": "boolean"
           },
           "sessions": {
             "type": "array",
@@ -10462,9 +10623,13 @@
           "credits",
           "max_uses",
           "used_count",
-          "created_at"
+          "created_at",
+          "copyable"
         ],
         "properties": {
+          "copyable": {
+            "type": "boolean"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -10664,6 +10829,48 @@
             "items": {
               "$ref": "#/components/schemas/CreatedCode"
             }
+          }
+        }
+      },
+      "CreditAdjustment": {
+        "type": "object",
+        "required": [
+          "id",
+          "user_id",
+          "display_name",
+          "email",
+          "operator",
+          "amount",
+          "reason",
+          "created_at"
+        ],
+        "properties": {
+          "amount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "operator": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "string"
           }
         }
       },
@@ -11455,6 +11662,18 @@
             "format": "int64"
           },
           "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ref_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ref_type": {
             "type": [
               "string",
               "null"

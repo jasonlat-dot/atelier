@@ -97,7 +97,7 @@
   margin-bottom: 16px;
   color: #5b6068;
 }
-.gen-controls select,
+.gen-controls .app-select,
 .gen-controls textarea {
   display: block;
   width: 100%;
@@ -109,7 +109,7 @@
   margin-top: 6px;
   min-width: 0;
 }
-.gen-controls select {
+.gen-controls .app-select {
   height: 44px;
   font-size: 14px;
   font-weight: 500;
@@ -849,7 +849,7 @@
     height: 100px;
     margin-bottom: 12px;
   }
-  .gen-controls select {
+  .gen-controls .app-select {
     height: 40px;
   }
   .gen-kind button {
@@ -919,12 +919,14 @@
   color: #166534;
   line-height: 1.8;
 }
-.generation-page :is(button, a, select, textarea):focus-visible {
+.generation-page :is(button, a, .app-select, textarea):focus-visible {
   outline: 2px solid #c2410c;
   outline-offset: 2px;
 }
 .generation-page
-  :is(.gen-kind button, .gen-suggestions button):hover:not(:disabled),
+  :is(.gen-kind button:not(.active), .gen-suggestions button):hover:not(
+    :disabled
+  ),
 .generation-page .gen-outputs a:hover,
 .generation-page .gen-actions .btn:not(.btn-dark):hover:not(:disabled) {
   background: #f6f5f1;

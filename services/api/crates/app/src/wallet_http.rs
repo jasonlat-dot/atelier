@@ -31,7 +31,11 @@ fn key(headers: &HeaderMap) -> Result<Uuid, ApiError> {
     Ok(key)
 }
 fn service(state: &AppState) -> WalletService {
-    WalletService::new(state.db.clone())
+    let wallet = WalletService::new(state.db.clone());
+    match &state.code_cipher {
+        Some(cipher) => wallet.with_code_cipher(cipher.clone()),
+        None => wallet,
+    }
 }
 #[utoipa::path(get,path="/api/v1/wallet",security(("session"=[])),responses((status=200,body=WalletSummary),(status=401,body=ErrorResponse),(status=403,body=ErrorResponse),(status=503,body=ErrorResponse)))]
 pub async fn summary(
@@ -144,4 +148,23 @@ pub async fn codes(
 ) -> Result<Json<Vec<CodeInfo>>, ApiError> {
     let Query(query) = query.map_err(|_| invalid())?;
     Ok(Json(service(&state).codes(query.before).await?))
+}
+
+#[utoipa::path(post,path="/api/v1/admin/redeem-codes/{id}/copy",params(("id"=Uuid,Path)),security(("session"=[],"csrf"=[])),responses((status=200,body=CreatedCode),(status=401,body=ErrorResponse),(status=403,body=ErrorResponse),(status=404,body=ErrorResponse),(status=409,body=ErrorResponse),(status=503,body=ErrorResponse)))]
+pub async fn copy_code(
+    State(state): State<AppState>,
+    RequireRole(actor): RequireRole<false>,
+    path: Result<Path<Uuid>, PathRejection>,
+) -> Result<Json<CreatedCode>, ApiError> {
+    let Path(id) = path.map_err(|_| invalid())?;
+    Ok(Json(
+        service(&state).reveal_code(actor.user().id, id).await?,
+    ))
+}
+#[utoipa::path(get,path="/api/v1/admin/credits/adjustments",security(("session"=[])),responses((status=200,body=Vec<CreditAdjustment>),(status=401,body=ErrorResponse),(status=403,body=ErrorResponse),(status=503,body=ErrorResponse)))]
+pub async fn adjustments(
+    State(state): State<AppState>,
+    _actor: RequireRole<false>,
+) -> Result<Json<Vec<CreditAdjustment>>, ApiError> {
+    Ok(Json(service(&state).adjustments().await?))
 }

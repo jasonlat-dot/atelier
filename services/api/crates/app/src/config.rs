@@ -19,6 +19,7 @@ pub struct Config {
     pub media_signer: atelier_assets::signing::MediaSigner,
     pub video: Option<atelier_assets::video::VideoProcessor>,
     pub upstream_cipher: atelier_upstream::crypto::SecretCipher,
+    pub code_cipher: atelier_wallet::RedeemCodeCipher,
     pub upstream_egress: atelier_upstream::egress::EgressPolicy,
 }
 
@@ -63,6 +64,8 @@ impl Config {
         let google_client_id = required("GOOGLE_CLIENT_ID")?;
         let google_client_secret = required("GOOGLE_CLIENT_SECRET")?;
         let master_cipher = atelier_auth::mfa::MfaCipher::from_base64(&required("MASTER_KEY")?)
+            .map_err(|_| ConfigError("MASTER_KEY"))?;
+        let code_cipher = atelier_wallet::RedeemCodeCipher::from_base64(&required("MASTER_KEY")?)
             .map_err(|_| ConfigError("MASTER_KEY"))?;
         let upstream_cipher =
             atelier_upstream::crypto::SecretCipher::from_base64(&required("MASTER_KEY")?)
@@ -111,6 +114,7 @@ impl Config {
             }
         }
         Ok(Self {
+            code_cipher,
             upstream_cipher,
             upstream_egress,
             media,

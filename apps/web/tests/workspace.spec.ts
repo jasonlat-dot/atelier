@@ -96,10 +96,11 @@ test('production workspace preserves prototype shell and synchronizes real walle
   await expect(page.getByText('即将开放', { exact: true })).toHaveCount(0);
   await expect(page.getByText('MOCK DEMO')).toHaveCount(0);
   await expect(page.getByText('切换演示账号')).toHaveCount(0);
+  await expect(page.locator('.nav-role-badge')).toHaveCount(0);
   await expect(
     page.getByRole('link', { name: '积分管理', exact: true }),
   ).toHaveCount(0);
-  await page.getByRole('button', { name: '领取今日积分' }).dblclick();
+  await page.getByRole('button', { name: '签到领积分' }).dblclick();
   await expect(page.getByRole('alertdialog')).toContainText('签到成功');
   await dismissFeedback(page);
   await expect(page.getByRole('button', { name: '今日已签到' })).toBeDisabled();
@@ -131,8 +132,12 @@ test('administrator sees operational navigation and reaches the existing credits
   await workspace(page, 'SUPER_ADMIN');
   await page.goto('/');
   await expect(page.getByText('运营管理', { exact: true })).toBeVisible();
-  await expect(page.locator('a[href="/admin/credits"]')).toBeHidden();
-  await page.getByLabel('更多管理功能').click();
+  await expect(page.getByText('管理员专属', { exact: true })).toHaveCount(3);
+  await expect(page.getByText('超级管理员专属', { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('region', { name: '财务管理', exact: true }),
+  ).toBeVisible();
+  await expect(page.locator('a[href="/admin/credits"]')).toBeVisible();
   await page.getByRole('link', { name: '积分管理', exact: true }).click();
   await expect(
     page.getByRole('heading', { name: '积分管理', exact: true }),
@@ -174,9 +179,15 @@ test('reference home layout uses server projects and compact navigation on deskt
     await cards.evaluate(
       (el) => getComputedStyle(el).gridTemplateColumns.split(' ').length,
     ),
-  ).toBe(3);
-  await expect(page.getByLabel('更多管理功能')).toBeVisible();
-  await expect(page.locator('a[href="/admin/accounts"]')).toBeHidden();
+  ).toBe(4);
+  await expect(page.getByLabel('更多管理功能')).toHaveCount(0);
+  await expect(
+    page.getByRole('region', { name: '生成服务', exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('region', { name: '系统管理', exact: true }),
+  ).toBeVisible();
+  await expect(page.locator('a[href="/admin/accounts"]')).toBeVisible();
   await page.screenshot({
     path: test.info().outputPath('workspace-reference-desktop.png'),
     fullPage: true,
@@ -194,7 +205,7 @@ test('reference home layout uses server projects and compact navigation on deskt
     )
     .toBe(true);
   await expect(page.getByLabel('描述你想创作的内容')).toBeVisible();
-  await page.getByRole('button', { name: '领取今日积分' }).click();
+  await page.getByRole('button', { name: '签到领积分' }).click();
   await expect(page.getByRole('alertdialog')).toContainText('签到成功');
   await dismissFeedback(page);
   await expect(
@@ -219,9 +230,9 @@ test('small screens scroll and navigation closes after selecting a real page', a
     page.getByRole('navigation', { name: '主导航' }),
   ).not.toBeVisible();
   await page
-    .getByRole('button', { name: '领取今日积分' })
+    .getByRole('button', { name: '签到领积分' })
     .scrollIntoViewIfNeeded();
-  await page.getByRole('button', { name: '领取今日积分' }).click();
+  await page.getByRole('button', { name: '签到领积分' }).click();
   await expect(page.getByRole('alertdialog')).toContainText('签到成功');
   await dismissFeedback(page);
   await expect(page.getByRole('button', { name: '今日已签到' })).toBeDisabled();

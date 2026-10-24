@@ -1,4 +1,4 @@
-import Feedback from '../../components/Feedback';
+import { useToast } from '../../components/Toast';
 import { useEffect, useRef, useState } from 'react';
 import { Check, QrCode } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
@@ -107,7 +107,7 @@ export default function MfaPage({
   const [feedback, setFeedback] = useState<MfaNotice | null>(null);
   const [enrollmentExpired, setEnrollmentExpired] = useState(false);
   const [showSecret, setShowSecret] = useState(false);
-  const [copyMessage, setCopyMessage] = useState('');
+  const toast = useToast();
   const fail = (reason: unknown, operation: 'setup' | 'verify' | 'logout') => {
     if (reason instanceof SessionError && reason.code === 'UNAUTHENTICATED')
       onExpired();
@@ -137,7 +137,6 @@ export default function MfaPage({
     ) {
       setUri('');
       setCode('');
-      setCopyMessage('');
       setEnrollmentExpired(true);
       setFeedback({
         kind: 'expired',
@@ -167,7 +166,6 @@ export default function MfaPage({
         setUri(result.otpauth_uri);
         setEnrollmentExpired(false);
         setShowSecret(false);
-        setCopyMessage('');
       })
       .catch((reason: unknown) => fail(reason, 'setup'))
       .finally(finish);
@@ -186,7 +184,6 @@ export default function MfaPage({
           .then(() => {
             setUri('');
             setCode('');
-            setCopyMessage('');
             onVerified();
           })
           .catch((reason: unknown) => fail(reason, 'verify'))
@@ -310,28 +307,16 @@ export default function MfaPage({
                           onClick={async () => {
                             try {
                               await navigator.clipboard.writeText(secret);
-                              setCopyMessage('密钥已复制。');
+                              toast('密钥已复制');
                             } catch {
-                              setCopyMessage(
-                                '暂时无法复制，请点击密钥全选后手动复制。',
-                              );
+                              toast.error('复制未完成', {
+                                description: '请点击密钥全选后手动复制。',
+                              });
                             }
                           }}
                         >
                           复制密钥
                         </button>
-                        {copyMessage && (
-                          <Feedback
-                            onDismiss={() => setCopyMessage('')}
-                            variant={
-                              copyMessage === '密钥已复制。'
-                                ? 'success'
-                                : 'error'
-                            }
-                          >
-                            {copyMessage}
-                          </Feedback>
-                        )}
                       </div>
                     ) : (
                       <figure className="mfa-qr">
@@ -353,7 +338,6 @@ export default function MfaPage({
                     aria-controls="mfa-enrollment"
                     onClick={() => {
                       setShowSecret((value) => !value);
-                      setCopyMessage('');
                     }}
                   >
                     {showSecret ? '返回二维码绑定' : '无法扫码？使用密钥'}

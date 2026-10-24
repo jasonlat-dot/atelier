@@ -92,6 +92,8 @@ impl AdminService {
         let sessions=sqlx::query_as("SELECT id,created_at,last_seen_at,host(ip) AS ip,user_agent FROM sessions WHERE user_id=$1 AND revoked_at IS NULL AND expires_at>clock_timestamp() AND last_seen_at>clock_timestamp()-interval '7 days' ORDER BY last_seen_at DESC LIMIT 20").bind(id).fetch_all(&self.db).await?;
         Ok(AdminUserDetail {
             adjust_limit,
+            pending_review: sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM admin_notifications WHERE user_id=$1 AND reviewed_at IS NULL)")
+                .bind(id).fetch_one(&self.db).await?,
             user: u,
             ledger,
             jobs,

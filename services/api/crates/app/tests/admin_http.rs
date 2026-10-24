@@ -126,6 +126,19 @@ async fn every_admin_surface_rejects_users_and_super_settings_remain_protected(d
             result.1
         );
     }
+    let jobs = call(
+        &s,
+        &admin,
+        "GET",
+        "/api/v1/admin/jobs?status=FAILED",
+        false,
+        serde_json::json!({}),
+    )
+    .await;
+    assert_eq!(jobs.0, StatusCode::OK);
+    assert!(jobs.1["items"].as_array().unwrap().is_empty());
+    assert_eq!(jobs.1["counts"]["ALL"], 0);
+    assert_eq!(jobs.1["counts"].as_object().unwrap().len(), 9);
     let usage = call(
         &s,
         &user,
