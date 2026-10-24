@@ -63,7 +63,7 @@ test('real database and Redis login reaches workspace, survives reload and revok
   expect(me.user.role).toBe('USER');
   expect(JSON.stringify(me)).not.toMatch(/token_hash|mfa_secret|id_token/);
   await page.getByLabel('显示名').fill('Live account');
-  await page.getByRole('button', { name: '保存显示名' }).click();
+  await page.getByRole('button', { name: '保存资料' }).click();
   await expect(page.getByText('显示名已更新')).toBeVisible();
   await dismissFeedback(page);
   await page.reload();

@@ -71,7 +71,7 @@ test('settings uses server session, sends CSRF, confirms revocation and clears l
   await page.goto('/settings');
   await expect(page.getByRole('heading', { name: '账号设置' })).toBeVisible();
   await page.getByLabel('显示名').fill('Renamed');
-  await page.getByRole('button', { name: '保存显示名' }).click();
+  await page.getByRole('button', { name: '保存资料' }).click();
   await expect(page.getByText('显示名已更新')).toBeVisible();
   await dismissFeedback(page);
   await expect(
