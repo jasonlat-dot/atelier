@@ -78,7 +78,6 @@ export default function AdminRedeemCodes({
     id: string;
     action: 'disable' | 'enable' | 'delete';
   }>();
-  const [success, setSuccess] = useState('');
   const confirm = useConfirmNotice();
   const queryClient = useQueryClient();
   const [manualCopy, setManualCopy] = useState<{ code: string; id: string }>();
@@ -218,9 +217,11 @@ export default function AdminRedeemCodes({
             ),
           },
       );
-      setSuccess(
-        `兑换码已${label}${action === 'delete' ? '，已有兑换和积分记录保留。' : '。'}`,
-      );
+      toast.success(`兑换码已${label}`, {
+        id: 'redeem-code-operation',
+        description:
+          action === 'delete' ? '已有兑换和积分记录保留。' : undefined,
+      });
     } catch (failure) {
       const changed =
         failure instanceof SessionError &&
@@ -801,11 +802,6 @@ export default function AdminRedeemCodes({
             </footer>
           </div>
         </AdminDialog>
-      )}
-      {success && (
-        <Feedback variant="success" onDismiss={() => setSuccess('')}>
-          {success}
-        </Feedback>
       )}
       {error && (
         <Feedback variant="error" onDismiss={() => setError('')}>

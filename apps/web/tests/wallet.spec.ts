@@ -496,8 +496,13 @@ test('code copy keeps rows and column widths stable; lifecycle actions require c
     .getByRole('dialog')
     .getByRole('button', { name: '确认停用', exact: true })
     .click();
-  await expect(page.getByRole('alertdialog')).toContainText('兑换码已停用');
-  await dismissFeedback(page);
+  await expect(
+    page
+      .locator('.app-toast [role="status"]')
+      .filter({ hasText: '兑换码已停用' }),
+  ).toBeVisible();
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(
     page.getByRole('button', { name: `启用兑换码 ${id}`, exact: true }),
   ).toBeVisible();
@@ -513,8 +518,13 @@ test('code copy keeps rows and column widths stable; lifecycle actions require c
     .getByRole('dialog')
     .getByRole('button', { name: '确认启用', exact: true })
     .click();
-  await expect(page.getByRole('alertdialog')).toContainText('兑换码已启用');
-  await dismissFeedback(page);
+  await expect(
+    page
+      .locator('.app-toast [role="status"]')
+      .filter({ hasText: '兑换码已启用' }),
+  ).toBeVisible();
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   expect(writes[1]).toEqual({
     method: 'PATCH',
     body: { revision: 2, disabled: false },
@@ -529,8 +539,13 @@ test('code copy keeps rows and column widths stable; lifecycle actions require c
     .getByRole('dialog')
     .getByRole('button', { name: '确认删除', exact: true })
     .click();
-  await expect(page.getByRole('alertdialog')).toContainText('兑换码已删除');
-  await dismissFeedback(page);
+  await expect(
+    page
+      .locator('.app-toast [role="status"]')
+      .filter({ hasText: '兑换码已删除' }),
+  ).toBeVisible();
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   expect(writes[2]).toEqual({ method: 'DELETE', body: { revision: 3 } });
   await expect(table.locator('tbody tr')).toHaveCount(1);
   await expect(page.getByText('已加载 1 个兑换码')).toBeVisible();
